@@ -201,9 +201,13 @@ try {
     await drag(page,await shapePoint(page,'FlightTimeout'),to);const after=await state(page);
     assert.equal(after.byId.FlightTimeout.attachedToRef,after.byId.ReserveHotel);assert.equal(after.byId.FlightTimeout.$parent,after.byId.BookingTransaction);assert.equal(after.byId.FlightTimeout.eventDefinitions[0].timeDuration.body,'PT1H');
     near({x:after.di('FlightTimeout').bounds.x+18,y:after.di('FlightTimeout').bounds.y+18},{x:480,y:260});
+    // The attached event overlaps ReservationFlow2 at its centre. Use its
+    // unobstructed visible ring; separate differential tests cover overlap
+    // priority instead of assuming a different z-order from pinned bpmn-js.
+    await hit(page,await shapePoint(page,'FlightTimeout',{x:18,y:6}),'FlightTimeout');
     const hosts=await page.evaluate(()=>({old:window.modeler.getElement('ReserveFlight').attachers.map(n=>n.id),next:window.modeler.getElement('ReserveHotel').attachers.map(n=>n.id)}));
     assert.ok(!hosts.old.includes('FlightTimeout'));assert.ok(hosts.next.includes('FlightTimeout'));await historyCycle(page,before,after);
-    const invalid=await screen(page,{x:1300,y:800});await drag(page,await shapePoint(page,'FlightTimeout'),invalid);await unchanged(page,after,'outside-host boundary drop does not detach');
+    const invalid=await screen(page,{x:1300,y:800}),invalidFrom=await shapePoint(page,'FlightTimeout',{x:18,y:6});await hit(page,invalidFrom,'FlightTimeout');await drag(page,invalidFrom,invalid);await unchanged(page,after,'outside-host boundary drop does not detach');
     await reopen(page,after);
   });
 
@@ -251,7 +255,23 @@ try {
     const before=await state(page);await selectEdge(page,'OrderMessage');
     const count=await page.evaluate(()=>window.modeler.getElement('OrderMessage').waypoints.length),from=await control(page,`.bpmn-xyflow-bendpoint[data-bend-index="${count-1}"]`),to=await screen(page,{x:200,y:430});
     await drag(page,from,to);const after=await state(page);assert.equal(after.byId.OrderMessage.$type,'bpmn:MessageFlow');assert.equal(after.byId.OrderMessage.$parent,after.byId.OrderCollaboration);assert.equal(after.byId.OrderMessage.sourceRef,after.byId.SubmitOrder);assert.equal(after.byId.OrderMessage.targetRef,after.byId.ValidateOrder);near(after.di('OrderMessage').waypoint.at(-1),{x:200,y:430},2);await historyCycle(page,before,after);
-    await selectEdge(page,'OrderMessage');const last=await page.evaluate(()=>window.modeler.getElement('OrderMessage').waypoints.length-1);await drag(page,await control(page,`.bpmn-xyflow-bendpoint[data-bend-index="${last}"]`),await screen(page,{x:1210,y:110}));await unchanged(page,after,'message reconnect within same pool is rejected');await reopen(page,after);
+    // Pinned bpmn-js reconnect rules reject a cross-pool gateway, but convert
+    // a same-pool activity target from MessageFlow into SequenceFlow.
+    await selectEdge(page,'OrderMessage');let last=await page.evaluate(()=>window.modeler.getElement('OrderMessage').waypoints.length-1);
+    const invalid=await shapePoint(page,'FulfillmentFork');await hit(page,invalid,'FulfillmentFork');
+    await drag(page,await control(page,`.bpmn-xyflow-bendpoint[data-bend-index="${last}"]`),invalid);await unchanged(page,after,'message reconnect to a cross-pool gateway is rejected');
+    await selectEdge(page,'OrderMessage');last=await page.evaluate(()=>window.modeler.getElement('OrderMessage').waypoints.length-1);
+    const samePool=await shapePoint(page,'ReceiveDelivery',{x:0,y:20});await hit(page,samePool,'ReceiveDelivery');
+    await drag(page,await control(page,`.bpmn-xyflow-bendpoint[data-bend-index="${last}"]`),samePool);
+    const converted=await state(page),flow=converted.byId.OrderMessage;
+    assert.equal(flow.$type,'bpmn:SequenceFlow');assert.equal(flow.$parent,converted.byId.BuyerProcess);
+    assert.equal(flow.sourceRef,converted.byId.SubmitOrder);assert.equal(flow.targetRef,converted.byId.ReceiveDelivery);assert.equal(flow.name,after.byId.OrderMessage.name);
+    assert.ok(converted.byId.BuyerProcess.flowElements.includes(flow));assert.ok(!converted.byId.OrderCollaboration.messageFlows.includes(flow));
+    assert.ok(converted.byId.SubmitOrder.outgoing.includes(flow));assert.ok(converted.byId.ReceiveDelivery.incoming.includes(flow));
+    assert.equal(converted.di('OrderMessage').id,after.di('OrderMessage').id);near(converted.di('OrderMessage').waypoint[0],after.di('OrderMessage').waypoint[0],1e-8);
+    near(converted.di('OrderMessage').waypoint.at(-1),{x:1160,y:95},1.5);
+    assert.equal(converted.history.size,after.history.size+1,'message-to-sequence conversion is one undoable command');
+    await historyCycle(page,after,converted);await reopen(page,converted);
   });
 
   await run('data-association-source-and-owner-reconnect',cases['order-payment-delivery'],async page=>{

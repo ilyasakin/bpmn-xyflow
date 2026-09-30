@@ -21,9 +21,9 @@ async function fixture() {
     };
     restore.push(() => { target.addEventListener = add; });
   }
-  trace(dom.window.HTMLElement.prototype);
+  trace(dom.window.HTMLElement.prototype); trace(dom.window.SVGElement.prototype);
   const m = new Modeler({ container: dom.createContainer(), fitViewOnInit: false, palette: false, editorActions: false, snap: false });
-  trace(m.getSvg()); trace(window);
+  trace(window);
   await m.importXML(await readFile('test/fixtures/bpmn/basic.bpmn', 'utf8'));
   const hit = document.elementsFromPoint;
   let target = null;
@@ -275,4 +275,19 @@ test('fractional native selection of diagonal message/data edges is a no-op befo
       for(let i=0;i<3;i++){m.undo();assert.equal(await m.getXML(),before);m.redo();assert.equal(await m.getXML(),after);}
     }
   }finally{h.close();}
+});
+
+test('selected connection endpoints outrank colliding hover-create ports without hiding other valid ports',async()=>{
+ const h=await fixture(),{m}=h;
+ try{
+  const a=m.addShape('bpmn:Task',{x:400,y:300}),b=m.addShape('bpmn:Task',{x:800,y:300}),edge=m.connect(a,b);
+  const hover=node=>h.invoke(m.getSvg(),'pointermove',h.event(h.gfx(node),{x:node.x+node.width-2,y:node.y+node.height/2}));
+  const before=await m.getXML(),size=m.commandStack.size();
+  m.clearSelection();hover(a);assert.ok(m.getContainer().querySelector('.bpmn-xyflow-connect-handle'));
+  m.select(edge.id);assert.equal(m.getContainer().querySelector('.bpmn-xyflow-connect-handle'),null);
+  hover(b);assert.ok(m.getContainer().querySelector('.bpmn-xyflow-connect-handle'),'nonoverlapping valid port remains available');
+  hover(a);assert.equal(m.getContainer().querySelector('.bpmn-xyflow-connect-handle'),null,'selected endpoint is not covered');
+  assert.equal(await m.getXML(),before);assert.equal(m.commandStack.size(),size);
+  m.clearSelection();const group=m.addShape('bpmn:Group',{x:1000,y:500});hover(group);assert.equal(m.getContainer().querySelector('.bpmn-xyflow-connect-handle'),null,'ineligible source has no create port');
+ }finally{h.close();}
 });

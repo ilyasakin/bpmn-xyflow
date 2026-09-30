@@ -4,122 +4,149 @@ This is an implementation and verification ledger, not a claim of full bpmn-js
 compatibility. The XYFlow engine and direct API remain intentional. Passing a
 round-trip through this project's own parser is insufficient evidence of validity.
 
+## Current checkpoint — 2026-09-30
+
+**Published library `2c9296645f88d039078537612e23d3677089dd8f` corresponds to reviewed
+source checkpoint `6bec456f`. Its hosted rerun is not green.** All 19 core-control,
+27 connection, nine contextual-action and ten touch-differential groups pass.
+Three later assertions still fail: smoke double-click bendpoint deletion (three
+points remain three), an outside-host boundary drop, and a same-pool message
+reconnect in the advanced suite. These are under diagnosis, not three established
+implementation defects: smoke setup had stale graph/DI/render geometry and hit
+the wrong endpoint; the same-pool message operation permits an upstream-valid
+connection-type change; boundary-center overlap awaits native upstream comparison.
+
+The preceding published library `59cd24e5feb2d3af9506333db10abdd4bd523b12` passed the 27 connection,
+nine contextual-action and ten touch-differential groups, plus the existing
+smoke/framework/viewer/business-scenario gates. It nevertheless had **six failing
+cases across the 19 core-control and 17 advanced-interaction groups**. Those
+failures prevented treating that checkpoint as fully green. The current run
+progresses beyond those six assertions but exposes the three failures above.
+
+The current correction addresses process-only lane membership, boundary drop
+snapping, absent label-DI restoration on replacement undo, and no-motion diagonal
+connection selection. Reopen assertions now compare independently parsed
+canonical models, exact DI and resolved references rather than redundant waypoint
+`xsi:type` spelling; Undo and cancellation remain byte-exact. Independent focused
+reproductions pass. Current tracked-source gates pass **248 unit tests and 115
+XSD-valid generated exports**, lint and build. Unintegrated helper prototypes are
+excluded from those counts and from the capability claims below.
+
+Site `f94828d` pins `59cd24e` and passed its production browser CI. Published site
+`d0b904a488172be26b142e62a28d08e6ce1a5653` pins `2c929664`; its production CI
+(run 36788799750) and Ready preview passed. Manual preview QA already verified the requested source port, target drop Y, orthogonal
+shape movement, fractional near-axis segment editing and exact Undo at library
+`e925a51` / site `79b4643`. That evidence is revision-bound, not a substitute for
+resolution of the current failures. See [VERIFICATION.md](VERIFICATION.md) for
+history and reproduction commands.
+
 ## References and scope
 
-- Retained upstream renderer/importer provenance: bpmn-js **18.16.1**,
-  commit `86aa391d222228e442b11b81584a817a14becb13`
-- Current upstream reference as checked 2026-09-30: bpmn-js **18.30.1**
+- Retained upstream renderer/importer provenance: bpmn-js **18.16.1**, commit
+  `86aa391d222228e442b11b81584a817a14becb13`
+- Pinned comparison reference: bpmn-js **18.30.1**
   (<https://github.com/bpmn-io/bpmn-js/releases/tag/v18.30.1>)
 - Independent semantic oracle: development-only bpmn-moddle **10.3.1**
-- No bpmn-js engine substitution or runtime bpmn-moddle dependency; saxen 11.2.0 supplies inert XML tokenization
+- No bpmn-js engine substitution or runtime bpmn-moddle dependency; saxen
+  **11.2.0** supplies inert XML tokenization
 - API/plugin compatibility, properties panels, engine-specific execution,
-  external auto-layout and third-party extension UI are not core equivalence
-  claims. Unknown extension XML must nevertheless survive editing.
+  external auto-layout and third-party extension UI are outside core equivalence
+  claims. Unknown extension XML must nevertheless survive editing
 
-## Gates
+## Acceptance ledger
 
-| Core area | Required evidence | Current status |
-| --- | --- | --- |
-| BPMN/DI parse/write | Upstream oracle accepts exported XML and equivalent typed semantics | 100 corpus fixtures + alternate descriptor + 3 business scenarios pass; independent adversarial review passed; official XSD export validation passes |
-| Opaque extensions and namespaces | Script whitespace, xsi:type, timer expressions, Camunda elements/attributes retained | Oracle regression pass including QName collisions, unknown xsi subtype and mixed-content ordering |
-| Identity/references | No duplicate IDs, missing source/target refs or dangling semantic/DI refs after edits | Schema-declared IDs and opaque vendor IDs distinguished; copy/replacement/reconnect/reference regressions and XSD pass |
-| Malformed/hostile input | No DTD/entity fetch, actionable error, prior graph preserved | XML rejection, inert markup/network browser checks and prior-diagram recovery pass at published checkpoint |
-| Renderer BPMN types | Events/tasks/gateways/data/artifacts/subprocess/pool/lane fixture coverage | Retained renderer/helpers byte-match upstream 18.30.1; structural type corpus passes; Chrome gate passes at published checkpoint |
-| Fit/pan/zoom/resize | Pixel padding, default options, repeated resize and diagrams with zero/large bounds | Usable-area fit avoids palette/toolbar/minimap; large-diagram/mobile tests pass; Chrome gate passes at published checkpoint |
-| Creation/append/replacement | Parent ownership, references, markers, event definitions, cancellation | Explicit remove-contents replacement, metadata/IO ownership and exact recovery pass; contextual catalog/API and resulting-edge cleanup independently reviewed; native action suite pending |
-| Move/resize/containment | Descendants, attached boundaries, external labels, edges follow; undo restores | Exact HR DI undo passes; native QA exposed adjacent-bend repair missing when connected shapes move/resize; active correction |
-| Connection/reconnection | Same-flow-scope sequence flow, message participants, event semantics, invalid drop rollback | 110,500 upstream differential inference comparisons pass with both custom/upstream semantic models; semantic inference passes, but native user QA exposed discarded source/drop anchors; routing/preview/gesture corrections are active |
-| Delete | Semantic/DI/reference cleanup including descendants/lanes/pools, undo | Cross-plane/subtree/lane/pool/label/reference cleanup and exact recovery pass |
-| Undo/redo/transactions | Atomic rollback, branching history, selected deleted element cleanup, navigation | Atomic rollback, history branching, multi-view histories and interrupted gestures tested |
-| Copy/paste | Deep semantics, hierarchy, namespace extensions, ID/reference remap, DI bounds/waypoints | Hierarchy, metadata, declared-ID remap, opaque data preservation and collaboration copy rules tested |
-| Labels/bendpoints | Edit/move labels, endpoint docking, bend editing/cancellation, no duplicate labels | Label lifecycle passes; native QA exposed two-point segment dragging no-op and undersized hit targets; expanded pointer gates pending |
-| Pools/lanes/subprocesses | Creation, move, resize, containment, collaboration ownership, expand/drill/back | Nested/vertical lane split/add/rebalance, active planes, child-view mirroring/hydration and exact history tested |
-| Selection/keyboard/lasso | Single/multi/select-all, focus restrictions, delete, escape and repeated flows | Existing browser smoke and structural repeat/cancel tests pass; published interaction gate passes; new contextual controls remain pending |
-| Touch and pinch gestures | Native touch selection/pan/pinch/modeling and cancellation | Phone layout and attribution pass only; touch modeling/pinch parity is not verified; Modeler gesture handlers currently use mouse events |
-| Align/distribute | Standard multi-element commands and undo | Geometry and accessible toolbar controls tested; fresh real-browser control gate pending |
-| Search/space tool | Locate elements and expand/compress diagram space | Search/focus and space toolbar with container expansion, compression constraints, cancel/undo tested |
-| Auto-place/snapping | Append placement, snapping and container bounds | Append, drag/palette flow insertion, docking, condition/default preservation and snapping tested structurally |
-| Export SVG | Standalone diagram export with all markers/labels and required notices | Standalone markers/labels/export tests pass; existing real-browser export gate passed |
-| Lifecycle/frameworks | Latest import wins, destroy during import, failed import recovery, React/Vue/Svelte | Node lifecycle/StrictMode, full wrapper bundle/type consumers and prior hosted framework tests pass |
-| Attribution | Original upstream license/source retained, visible unobscured bpmn.io link | Original LICENSE and unchanged attribution source retained; prior Chrome visibility gate passes |
-| Site integration | Matching tested library revision, contrast and all core user flows | Site PR15 pins tested library 37e9ec0; production-site native Chrome CI and refreshed preview QA pass; next contextual revision pending |
-| Packaging/CI | Frozen pnpm install, lint, semantic/unit/browser gates, library build | 216 Node tests, 88 XSD exports, strict packed root/framework consumers, build and actionlint pass locally; all configured hosted suites pass at 37e9ec0; new contextual suite pending |
+“Prior native pass” below means evidence at `59cd24e` unless otherwise stated.
+“Current local pass” means the reviewed `6bec456f` source for published `2c929664`.
+Current native results are identified explicitly. No hosted result silently
+transfers to a later revision.
 
-## Execution environment limits
+| Core area | Evidence and current status |
+| --- | --- |
+| BPMN/DI parse/write | Independent upstream oracle covers 100 corpus fixtures, an alternate descriptor and three business scenarios. Current XML/security checks and 115 generated-export XSD validations pass |
+| Opaque extensions/namespaces | QName scope, unknown xsi subtypes, mixed content, script whitespace, timer expressions, vendor elements/attributes and ordered property edits have independent regressions; current local pass |
+| Identity/references | Declared IDs versus opaque vendor data, copy/replacement/reconnect ownership and semantic/DI references have oracle/XSD regressions; current local pass |
+| Hostile/malformed input | DTD/entity/network/DOM rejection and prior-diagram recovery have 40 security cases; prior native inert-markup/recovery gate passed |
+| Renderer and viewport | Type corpus, theme overrides, safe-area fit, large diagrams, phone layout, pan/zoom and attribution have prior native passes. No general renderer-equivalence claim follows from semantic tests |
+| Creation/append/replacement | Pinned catalog covers 348 action/target comparisons. Nine contextual native groups passed. Atomic append, disabled unsafe replacement rows and explicit populated-subprocess cleanup have current local coverage; current core 19 pass; advanced has two remaining failures |
+| Move/resize/containment | Prior connection native gate and manual QA verify orthogonal end-leg repair and exact fractional DI history. Current lane-membership/boundary-position corrections pass focused repros; core lane controls now pass; advanced boundary-drop assertion remains under upstream comparison |
+| Connection/reconnection | 110,500 upstream differential inference comparisons plus 27 prior native groups cover preview, explicit ports, reconnects, near-axis segments, route repair, metadata/history and creation reopen. Current connection gate passes; advanced same-pool assertion needs to account for upstream-valid connection morphing |
+| Delete | Cross-plane/subtree/lane/pool/label/reference cleanup has local exact-recovery coverage. Six external-label Delete/Backspace paths are in the advanced native suite; its current full gate still has two failures |
+| Undo/redo/navigation | Atomic rollback, branching history, independent drill/back histories and interrupted gestures have local coverage. Current replacement-label identity/DI undo correction passes independent repros; current core navigation passes; advanced gate still has two failures |
+| Copy/paste | Deep semantics, namespaces, IDs, references, hierarchy and DI have local coverage. Native clipboard/duplicate/group-delete paths are in the core-control suite; current core 19 pass |
+| Labels/bendpoints | Rename/move/delete, endpoint/segment editing and exact cancellation have local and prior connection-native evidence. Current smoke double-click assertion fails with stale fixture geometry/wrong hit; external-label width resize is still a capability gap |
+| Pools/lanes/subprocesses | Nested/vertical lanes, active planes, child-view hydration and exact history have local coverage. Current process-only lane split correction passes; current native core lane/control group passes |
+| Selection/keyboard/lasso | Core suite uses native multi-select, lasso, clipboard, 1px/Shift-10px arrows, Tab traversal and focus guards. Current full 19-group gate passes; no-motion edge selection has a new exact XML/history guard |
+| Touch/pinch | Ten differential groups pass at the current published revision against actual pinned upstream: includes tap, pan, pinch, context-connect, partial release and mouse recovery. Shared non-activation of ordinary touch shape drag/resize is recorded as a limitation, not certified support |
+| Align/distribute/search/space | Geometry, toolbar, focus, space expansion/compression and cancellation have local coverage; prior contextual controls passed. The advanced suite still has two failures on the current revision |
+| Auto-place/snapping/insertion | Atomic append, palette/existing-shape insertion and condition/default preservation have local coverage and native core assertions. Current full core 19-group gate passes |
+| Export SVG/XML | Standalone marker/label export, removal of interaction hit overlays, independent semantic reopen and notices have local/prior native coverage. Reopen canonical equivalence does not replace byte-exact Undo/cancel |
+| Lifecycle/frameworks | Latest-import wins, failed-import recovery, destroy, StrictMode and wrappers have local/prior native passes. Packed root/React/Vue/Svelte Bundler/NodeNext types, Vite bundles and runtime pass in the current hosted package gate |
+| Attribution | Original LICENSE/source retained; prior Chrome tests verify visible, unobscured bpmn.io link including phone layout |
+| Site | Production native CI passed at site `f94828d` / library `59cd24e`; site `d0b904a` pins `2c929664`, with production CI and Ready preview passed |
+| Packaging/CI | Current tracked units 248 and XSD exports 115 pass; hosted source, build and packed consumers also pass. Hosted CI runs each browser suite independently and retains failures/artifacts; `2c929664` has three remaining native failures despite the core/connection/context/touch passes |
 
-Local Chromium launch is blocked by the environment (`socket() failed: Operation
-not permitted`), including a reviewed execution escalation. Browser security
-settings must not be disabled to work around this. The configured browser suites have now passed in GitHub CI using the runner’s
-preinstalled official Google Chrome, with its sandbox enabled. New tests remain
-unverified until that supported environment executes them. DOM-only
-and semantic tests do not count as real-browser passes.
+## Remaining capabilities and acceptance gates
 
-## Completion rule
+1. **External-label width resize.** Upstream supports east/west label resizing;
+   current label handles/API do not yet provide it. Label rename, movement and
+   deletion do not close this gap.
+2. **IO-bearing cross-family replacement.** Unsupported Activity/Event and
+   catch/throw conversions safely refuse mutation; disabled menu rows explain
+   this. Explicit, undoable IO cleanup/migration remains open. Compatible
+   Activity-to-Activity replacements preserve owned IO/association identities.
+3. **Flow-owned annotation append and dependent routing.** The raw pinned
+   catalogue includes annotation append from SequenceFlow/MessageFlow, but the
+   executable controls/private append preflight defer it. Changing an owner
+   route must propagate docking to its dependent association through
+   move/resize/waypoint/reconnect edits, preserving metadata and exact undo.
+   Node annotation append remains enabled. Imported flow-owned associations do
+   not establish complete editing support.
+4. **Current native acceptance.** Correct the stale smoke fixture and same-pool
+   expectation using the upstream-valid connection behavior; compare the boundary
+   overlap gesture with actual upstream before deciding whether production code
+   needs a change. Retain the 19 core, 27 connection, nine contextual and ten touch
+   passes and rerun the affected exact revision. Site `d0b904a` is green within its
+   own production assertions. Reviewed source/DOM tests are not native passes.
 
-A gate is complete only when its exact final revision has passed the listed
-checks. Any remaining core gap stays visible here. Hosted CI and preview QA are
-required before describing end-to-end parity as verified. Upstream's 18.30 theme
-token changes are distinct from the older retained renderer implementation and
-must not be implied merely by passing semantic tests.
+Touch shape dragging/resizing did not activate in either pinned engine in the
+recorded baseline. The differential pass establishes the measured behavior only;
+it does not imply general touch modeling support or successful rollback of a
+resize gesture that never activated. Modeler handlers still use mouse events.
 
-## Open core gates after the published checkpoint
+## Intentional API and safety behavior
 
-- **Flow-owned annotation append remains open.** The raw pinned upstream catalogue includes this action, but editor controls and private append preflight exclude SequenceFlow/MessageFlow sources for now: changing the owner route does not yet propagate docking to its dependent association. Node annotation append remains enabled. Completion requires move/resize/waypoint/reconnect propagation with exact undo and DI metadata preservation.
+This is a direct XYFlow API, not an upstream API/plugin clone. Populated
+subprocess-to-noncontainer replacement is refused by default. The fourth argument
+`{ removeContents: true }` or **Replace and remove contents** confirmation enables
+atomic, undoable removal, including disclosed incompatible boundaries/edges.
+Unsafe compensation changes similarly require explicit cleanup confirmation.
+Task resizing is an intentional fork extension, enabled by default;
+`taskResize: false` uses the pinned upstream resize policy.
 
-- **Priority: basic arrow interaction fidelity.** Preserve chosen source port and target drop point through preview/create/reconnect, including backwards right-to-right routes; repair orthogonal routes after shape move/resize; support two-point segment editing and usable hit areas. Earlier tests checked refs/existence too narrowly; native user QA disproved complete interaction parity.
-- Finish the contextual browser rerun: new boundary selection overlay fixed; empty-plane assertion helper corrected; existing assertions remain enabled
-- Native touch/pinch and touch modeling remain unverified; desktop mouse/keyboard gates do not establish them
-- Real-browser verification of new lane/space/flow-insertion/replacement-confirmation controls and current theme overrides
-- Repeat the production-site browser gate on the next contextual library revision
+Framework constructor options are mount-time settings; XML and callbacks have
+their documented update behavior. Scenario tests mix native gestures with API
+semantic setup/checks and an independent upstream browser reopen; each evidence
+kind is identified rather than treated as interchangeable. See
+[contextual usage](CONTEXTUAL_MODELING.md), [business corpus](SCENARIOS.md) and
+[XML security design](XML_SECURITY.md).
 
-See [contextual control and API usage](CONTEXTUAL_MODELING.md).
+## Environment and completion rule
 
-## Intentional API safety behavior
+Local Chromium launch is blocked (`socket() failed: Operation not permitted`),
+including a reviewed execution escalation. Browser security settings must not be
+disabled to bypass this. Hosted suites use the runner's installed official Google
+Chrome with its sandbox enabled. Newly prepared assertions count only after that
+supported environment executes them.
 
-This is a direct XYFlow API, not an upstream API/plugin clone. A populated
-subprocess-to-noncontainer replacement is refused by default. The explicit
-fourth argument `{ removeContents: true }` or **Replace and remove contents** UI
-confirmation enables an atomic, fully undoable operation. Incompatible attached
-boundaries and their edges are included in that disclosed removal. Unsupported
-IO-bearing Activity/Event-family conversions return without mutation; compatible
-Activity-to-Activity replacement preserves owned IO/association identities.
-
-Constructor options in framework wrappers are mount-time settings; XML and event
-callbacks have their documented update behavior. Browser scenario tests combine
-native task drag/undo with API-driven semantic commands and a separate upstream
-viewer open/save; neither type of check substitutes for the other. See the
-[business corpus](SCENARIOS.md) and [XML security design](XML_SECURITY.md).
-
-## Published evidence checkpoint
-
-Library PR1 head `37e9ec053190516c4c9fb52abe01c58650baac7a` passed all
-configured source/schema/unit, smoke/framework/viewer/business-scenario, packed
-consumer and build checks, plus CodeQL with no new alerts. In particular, native
-approval-task hit-testing, exact HR move/undo, and live theme overrides now pass.
-Site PR15 head `0c86270e3d70ea0f6d6a0b55fe975202efa855b3` pins that revision
-and passed CI and its normal preview build. These are draft review checkpoints;
-the open gates above still prevent a full-core completion claim.
-
-Site follow-up `98be8faacf872554d458cc8ac14f0045cb795e55` adds a served-production
-Next.js browser gate, passed in CI run 36775989922. It verifies native sample
-switching, navigation/search/palette, repeated XML export, safe fit and phone
-attribution. The ordinary preview refresh also passed.
-
-## Contextual source checkpoint (awaiting hosted action execution)
-
-The pinned catalog covers 348 full menu target/action comparisons; the separate
-pure-rule adapter covers create/drop/move/attachment/insertion/copy scopes. Real
-Modeler probes independently verify resulting-edge validity, sibling-plane edge
-cleanup, event-subprocess normalization, loop expression identities, data-object
-ownership, invalid target no-ops and exact XML/history undo. Local gates pass:
-177 unit tests, 87 XSD-valid generated exports, packed consumers, lint and build.
-The new native Chrome suite aggregates nine action groups independently. Touch
-modeling/pan/pinch is active remaining work and is not covered by desktop tests.
+A gate is complete only at its verified revision and within its asserted scope.
+Remaining capabilities stay visible even if every configured suite becomes green.
+Hosted CI and preview QA are required before any end-to-end completion statement.
+Historical results are retained in [VERIFICATION.md](VERIFICATION.md).
 
 ### Shared reference limitation: atypical event dimensions
 
 For a non-square imported event (for example, 80×40), the retained upstream
 renderer paints a circle using `round((width + height) / 4)` while its docking
-path uses `width / 2`. This is a visible-outline mismatch in the pinned upstream
-reference too. Standard square BPMN event dimensions are covered by the routing
-gates. A separate renderer/path consistency change is not implied by those tests.
+path uses `width / 2`. This visible-outline mismatch also exists in the pinned
+reference. Standard square events are covered by routing gates; a separate
+renderer/path consistency change is not implied by those results.

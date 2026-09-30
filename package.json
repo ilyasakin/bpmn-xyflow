@@ -17,7 +17,7 @@
     "start": "node lib/demo/serve.mjs",
     "dev": "vite",
     "build": "vite build",
-    "test": "pnpm run test:smoke && pnpm run test:react && pnpm run test:multi && pnpm run test:browser:viewer && pnpm run test:browser:scenarios && pnpm run test:browser:actions && pnpm run test:browser:connections && pnpm run test:browser:touch && pnpm run test:browser:core && pnpm run test:browser:advanced",
+    "test": "pnpm run test:smoke && pnpm run test:react && pnpm run test:multi && pnpm run test:browser:viewer && pnpm run test:browser:scenarios && pnpm run test:browser:actions && pnpm run test:browser:connections && pnpm run test:browser:touch && pnpm run test:browser:core && pnpm run test:browser:advanced && pnpm run test:browser:hits",
     "test:smoke": "node lib/demo/modeler/smoke-test.mjs",
     "test:react": "node lib/demo/react/smoke-test.mjs",
     "test:multi": "node lib/demo/multi-framework-smoke-test.mjs",
@@ -35,7 +35,8 @@
     "test:browser:connections": "node test/modeling/browser-connections.mjs",
     "test:browser:touch": "node test/modeling/browser-touch.mjs",
     "test:browser:core": "node test/modeling/browser-core-controls.mjs",
-    "test:browser:advanced": "node test/modeling/browser-advanced-interactions.mjs"
+    "test:browser:advanced": "node test/modeling/browser-advanced-interactions.mjs",
+    "test:browser:hits": "node test/modeling/browser-hit-priority.mjs"
   },
   "engines": {
     "node": ">=20"
