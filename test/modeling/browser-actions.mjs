@@ -42,7 +42,7 @@ async function readModel(page) {
   const parsed = await oracle.fromXML(xml);
   assert.deepEqual(parsed.warnings,[],'independent bpmn-moddle must reopen exported XML without warnings');
   return {xml,parsed,byId:parsed.elementsById,di(id) {
-    return parsed.rootElement.diagrams.flatMap(diagram=>diagram.plane.planeElement).find(element=>element.bpmnElement?.id===id);
+    return parsed.rootElement.diagrams.flatMap(diagram=>diagram.plane.planeElement || []).find(element=>element.bpmnElement?.id===id);
   }};
 }
 async function graphPoint(page,x,y) {
