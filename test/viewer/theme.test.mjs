@@ -36,7 +36,8 @@ test('viewer leaves inherited theme variables unshadowed and selection uses sema
     parent.style.setProperty('--bio-text', 'rgb(1, 2, 3)');
     assert.equal(container.style.getPropertyValue('--bio-text'), '');
     assert.equal(parent.style.getPropertyValue('--bio-text'), 'rgb(1, 2, 3)');
-    assert.ok(modeler.getSvg().querySelector('style').textContent.includes(themeToken('canvas-accent')));
+    const selectionCss=modeler.getSvg().querySelector('style').textContent;
+    assert.ok(selectionCss.includes(`stroke: ${themeToken('canvas-accent')} !important`), 'selection must override renderer inline SVG stroke styles without changing DI');
     modeler.select('Task_1');
     assert.equal(container.querySelectorAll('.bjs-powered-by').length, 1);
     assert.ok(container.querySelector('.bpmn-xyflow-context-pad'));
