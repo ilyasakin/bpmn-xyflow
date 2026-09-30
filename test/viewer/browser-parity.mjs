@@ -164,7 +164,7 @@ try {
     const task = window.modeler.getGraph().nodes.find(node => node.type === 'bpmn:Task');
     return {id:task.id,name:task.businessObject.name || '',zoom:window.modeler.getViewport().zoom};
   });
-  await page.click(`[data-element-id="${before.id}"]`, {clickCount:2});
+  await page.click(`[data-element-id="${before.id}"]`, {count:2,delay:50});
   await page.waitForSelector('[contenteditable]');
   await page.keyboard.type('Cancelled rename');
   await page.keyboard.press('Escape');

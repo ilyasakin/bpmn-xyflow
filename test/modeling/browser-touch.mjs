@@ -1,6 +1,6 @@
 /**
  * Real-touch differential baseline: bpmn-xyflow vs pinned bpmn-js 18.30.1.
- * Inputs use Puppeteer TouchHandles (native Chromium CDP) and touchCancel,
+ * Inputs use one public CDP session matching Puppeteer touch payloads,
  * never DOM dispatchEvent. Per-contact end follows installed Puppeteer 24.43.0
  * CdpTouchHandle.end(), which sends the released point, not the remaining set.
  * Docs: https://chromedevtools.github.io/devtools-protocol/tot/Input/#method-dispatchTouchEvent
@@ -78,18 +78,30 @@ async function setup(engine) {
       },{capture:true});
     }
   });
+  // Touch state belongs to the CDP session's InputHandler. Keep start, move,
+  // per-contact end and cancel on this one public session; mixing page.touchscreen
+  // with a separate CDPSession leaves cancel with no active TouchStart.
+  // Per-contact payloads match installed Puppeteer 24.43 CdpTouchHandle.
   const contacts=new Map();
   const send=async(type,points=[])=>{
     if(type==='touchCancel') {
       await cdp.send('Input.dispatchTouchEvent',{type,touchPoints:[]});contacts.clear();
     } else if(type==='touchEnd') {
       const ids=points.length?points.map(point=>point.id):[...contacts.keys()];
-      for(const id of ids) {assert.ok(contacts.has(id),`ending active contact ${id}`);await contacts.get(id).end();contacts.delete(id);}
+      for(const id of ids) {
+        assert.ok(contacts.has(id),`ending active contact ${id}`);
+        await cdp.send('Input.dispatchTouchEvent',{type,touchPoints:[contacts.get(id)]});contacts.delete(id);
+      }
     } else {
       for(const [index,point] of points.entries()) {
-        const id=point.id??index+1;
-        if(type==='touchStart'&&!contacts.has(id))contacts.set(id,await page.touchscreen.touchStart(point.x,point.y));
-        else {assert.ok(contacts.has(id),`moving active contact ${id}`);await contacts.get(id).move(point.x,point.y);}
+        const id=point.id??index+1,contact={id,x:Math.round(point.x),y:Math.round(point.y),radiusX:0.5,radiusY:0.5,force:0.5};
+        if(type==='touchStart'&&!contacts.has(id)) {
+          await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[contact]});
+        } else {
+          assert.ok(contacts.has(id),`moving active contact ${id}`);
+          await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[contact]});
+        }
+        contacts.set(id,contact);
       }
     }
     await pause(35); // allow Chromium's native touch coalescing and paint
@@ -162,6 +174,13 @@ function assertNative(state) {
 function supportedParity(upstream,local,operation) {
   if(upstream.activated)assert.equal(local.activated,true,`${operation}: local must support the same native gesture as upstream`);
   return !upstream.activated&&!local.activated ? `${operation} did not activate in either pinned native engine; shared limitation, not certified support` : null;
+}
+function cancellationParity(upstream,local,operation) {
+  const normal=results.find(result=>result.name==='resize-touch-drag');
+  if(normal?.status==='passed'&&!normal.upstream.activated&&!normal.local.activated) {
+    return `${operation}: neither engine completed the ordinary native resize gesture; cancellation/no-mutation is checked, but resize support is not certified`;
+  }
+  return supportedParity(upstream,local,operation);
 }
 async function differential(name,run,compare) {
   const outcomes={};
@@ -251,7 +270,7 @@ try {
     assert.ok(after.evidence.some(event=>event.type==='touchcancel'&&event.isTrusted));
     assert.equal(after.xml,before.xml,'touchcancel rolls back semantic geometry');assert.deepEqual(after.history,before.history,'touchcancel adds no command');
     return{activated,rolledBack:activated?true:null,during,viewportMoved:viewportChanged(before,after),selection:after.selection};
-  },(u,l)=>supportedParity(u,l,'activated resize cancellation'));
+  },(u,l)=>cancellationParity(u,l,'activated resize cancellation'));
 
   await differential('second-pointer-interruption',async s=>{
     await s.tap(await s.point('Sub',{x:30,y:30}));const before=await s.state(),first=await s.resizePoint(),second=await s.blank(1000,600);
@@ -263,14 +282,14 @@ try {
     await s.send('touchCancel');const after=await s.state();
     assert.equal(after.xml,before.xml,'multi-pointer interruption must not commit half a modeling gesture');assert.deepEqual(after.history,before.history);
     return{activated,rolledBack:activated?true:null,during,viewportMoved:viewportChanged(before,after)};
-  },(u,l)=>supportedParity(u,l,'activated resize second-pointer interruption'));
+  },(u,l)=>cancellationParity(u,l,'activated resize second-pointer interruption'));
 
   await differential('multi-pointer-no-accidental-selection',async s=>{
     await s.tap(await s.point('Task_A'));const before=await s.state(),a=await s.point('Task_A'),b=await s.point('Task_B');
     await s.send('touchStart',[{...a,id:1}]);await s.send('touchStart',[{...a,id:1},{...b,id:2}]);
     const ids=await s.page.evaluate(()=>window.touchEvidence.filter(event=>event.type==='pointerdown'&&event.pointerType==='touch').slice(-2).map(event=>event.pointerId));
     assert.equal(ids.length,2);assert.notEqual(ids[0],ids[1]);
-    // End B through its public TouchHandle while A remains physically active.
+    // End only B on the same CDP stream while A remains physically active.
     await s.send('touchEnd',[{id:2}]);
     const releasedB=await s.page.evaluate(id=>window.touchEvidence.findLast(event=>event.type==='pointerup'&&event.pointerId===id),ids[1]);
     assert.ok(releasedB?.isTrusted,'native pointerup for B was observed');

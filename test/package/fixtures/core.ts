@@ -1,8 +1,9 @@
 import DefaultViewer, {
   Viewer, Modeler, Renderer, CommandStack, buildGraph, parseBpmnXML,
-  type Alignment, type Axis, type Graph, type GraphNode, type ImportResult,
+  type Alignment, type Axis, type Graph, type GraphNode, type GraphEdge, type ImportResult,
   type ModdleExtensions, type ViewerEvents, type Viewport,
-  type ReplacementTarget, type SequenceFlowType, type AddShapeOptions
+  type ReplacementTarget, type SequenceFlowType, type AddShapeOptions,
+  type ModelerOptions, type NavigationEvent
 } from 'bpmn-xyflow';
 
 const extensions: ModdleExtensions = {
@@ -12,7 +13,24 @@ const extensions: ModdleExtensions = {
 };
 const container = document.createElement('div');
 const viewer: Viewer = new DefaultViewer({ container, moddleExtensions: extensions, minimap: { position: 'top-right' }, fitInsets: { bottom: 20 }, ariaLabel: 'Process diagram' });
-const modeler = new Modeler({ container, palette: false, snap: true });
+const modelerOptions: ModelerOptions = { container, palette: false, snap: true, taskResize: false };
+const modeler = new Modeler(modelerOptions);
+// @ts-expect-error task resize policy is boolean
+new Modeler({ container, taskResize: 'upstream' });
+const navigationListener = (state: NavigationEvent) => {
+  const diagramId: string | null = state.diagramId;
+  const depth: number = state.depth;
+  const busy: boolean = state.pending;
+  console.log(diagramId, depth, busy, state.canNavigateBack);
+};
+modeler.on('navigation.change', navigationListener);
+modeler.off('navigation.change', navigationListener);
+modeler.on('navigation.change', state => {
+  const pending: boolean = state.pending;
+  // @ts-expect-error navigation depth is a number
+  const depth: string = state.depth;
+  console.log(pending, depth);
+});
 const stop = viewer.on('element.click', ({ id, element, event }) => {
   const maybeId: string | null = id;
   if (element) viewer.select(element.id);
@@ -45,6 +63,9 @@ if (node) {
   // @ts-expect-error both coordinates are required for an explicit docking
   modeler.connect(node, node, { connectionEnd: { x: 90 } });
   if (edge) {
+    const source: GraphNode | GraphEdge = edge.source;
+    if (source.waypoints) console.log(source.waypoints[0]);
+    else console.log(source.x, source.y);
     modeler.updateWaypoints(edge, [{ x: 0, y: 0 }, { x: 10, y: 10 }]);
     modeler.reconnect(edge, 'target', node);
     modeler.insertShape('bpmn:Task', edge, { x: 100, y: 100 });

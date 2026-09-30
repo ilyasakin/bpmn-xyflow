@@ -83,3 +83,23 @@ when repairing routes after shape movement or resizing.
 Native pointer tests verify these behaviors separately from connection-rule
 inference. See the current acceptance state in PARITY.md before interpreting
 these commands as fully verified.
+
+## Rule-aligned controls and explicit differences
+
+The context pad, menus and command preflight share executable action policy.
+Append variants retain the pinned upstream target types, including event-based
+and compensation-specific choices; invalid appends do not create orphan tasks.
+Back navigation is available in the editor toolbar and exposes `navigation.change`
+for hosts. Failed imports preserve the previous navigation/history state.
+
+Ordinary Task resizing is an intentional fork extension, enabled by default for
+compatibility. `taskResize: false` uses upstream resize eligibility. Event/gateway,
+collapsed-subprocess and data-reference resize is not advertised accidentally;
+annotation resizing is horizontal. External-label width resize is still an open
+core capability, separate from annotation resize.
+
+Two replacement/append capabilities remain explicitly open in this checkpoint:
+IO-bearing catch/throw conversions safely refuse incompatible data migration,
+and annotation append from a connection is withheld until dependent association
+routing follows owner-flow edits. Node annotation append remains available. These
+are not marked complete merely because their unsafe controls are absent/disabled.

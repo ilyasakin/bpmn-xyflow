@@ -119,8 +119,9 @@ export interface GraphNode extends BaseElement, Bounds {
 }
 export interface GraphEdge extends BaseElement {
   isRoot?: false;
-  source: GraphNode;
-  target: GraphNode;
+  /** Associations may attach to another connection, such as a flow annotation. */
+  source: GraphNode | GraphEdge;
+  target: GraphNode | GraphEdge;
   waypoints: Point[];
 }
 export interface GraphRoot extends BaseElement {
@@ -145,12 +146,20 @@ export interface ElementEvent {
 }
 export interface SelectionEvent { ids: string[]; elements: GraphElement[] }
 export interface ViewportEvent { viewport: Viewport }
+export interface NavigationEvent {
+  canNavigateBack: boolean;
+  pending: boolean;
+  diagramId: string | null;
+  depth: number;
+}
 export interface ViewerEvents {
   'element.click': ElementEvent;
   'element.hover': ElementEvent;
   'element.out': ElementEvent;
   'selection.change': SelectionEvent;
   'viewport.change': ViewportEvent;
+  /** Emitted by Modeler through its viewer when entering or leaving a child diagram. */
+  'navigation.change': NavigationEvent;
   'import.parse.start': { xml: string };
   'import.parse.complete': { definitions: Definitions; warnings: Warning[]; error?: never } | { error: ImportError; warnings: Warning[]; definitions?: never };
   'import.render.start': { definitions: Definitions; graph: Graph };
@@ -245,7 +254,13 @@ export interface ReplacementTarget {
   instantiate?: boolean;
   eventGatewayType?: string;
 }
-export interface ModelerOptions extends ViewerOptions { palette?: boolean; snap?: boolean; editorActions?: boolean }
+export interface ModelerOptions extends ViewerOptions {
+  palette?: boolean;
+  snap?: boolean;
+  editorActions?: boolean;
+  /** Allow task resizing in addition to the upstream core resize policy. Defaults to true. */
+  taskResize?: boolean;
+}
 export interface AddShapeOptions extends Omit<ReplacementTarget, 'type'> {
   businessObject?: ModdleElement;
   di?: ModdleElement;

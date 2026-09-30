@@ -102,7 +102,7 @@ try {
       try {
         const api = await import(pathToFileURL(bundleFile).href);
         const viewer = new api.Viewer({ container: dom.createContainer(), fitViewOnInit: false });
-        const modeler = new api.Modeler({ container: dom.createContainer(), fitViewOnInit: false, palette: false });
+        const modeler = new api.Modeler({ container: dom.createContainer(), fitViewOnInit: false, palette: false, taskResize: false });
         try {
           for (const [className, instance] of [['Viewer', viewer], ['Modeler', modeler]]) {
             assert.deepEqual(Object.keys(instance).filter(key => !key.startsWith('_')).sort(), declaredProperties(rootProgram, className), `${className}: declared surface differs from runtime`);
@@ -116,6 +116,10 @@ try {
             modeler.addShape('bpmn:Task', { x: 900, y: 450 })
           ];
           assert.ok(nodes.every(Boolean));
+          const beforeResize = await modeler.getXML(), resizeHistory = modeler.commandStack.size();
+          assert.equal(modeler.resizeShape(nodes[0], { x: nodes[0].x, y: nodes[0].y, width: 140, height: 100 }), false);
+          assert.equal(await modeler.getXML(), beforeResize);
+          assert.equal(modeler.commandStack.size(), resizeHistory);
           modeler.updateLabel(nodes[0], 'Packed consumer task');
           assert.equal(modeler.findElements('packed consumer')[0], nodes[0]);
           assert.equal(modeler.focusElement(nodes[0].id), true);
@@ -168,10 +172,28 @@ try {
           assert.ok(pool);
           assert.equal(modeler.toggleParticipantMultiplicity(pool), pool);
           assert.equal(pool.businessObject.participantMultiplicity.$parent, pool.businessObject);
+          const sub = modeler.addShape('bpmn:SubProcess', { x: 500, y: 850 }, { parent: pool });
+          assert.ok(sub);
+          const child = modeler.addShape('bpmn:Task', { x: 500, y: 850 }, { parent: sub });
+          assert.ok(child);
+          const navigation = [], stopNavigation = modeler.on('navigation.change', state => navigation.push({ ...state }));
+          assert.equal(await modeler.drillInto(sub), true);
+          assert.equal(modeler.canNavigateBack(), true);
+          assert.equal(navigation.at(-1).depth, 1);
+          assert.equal(navigation.at(-1).pending, false);
+          assert.equal(navigation.at(-1).canNavigateBack, true);
+          assert.equal(typeof navigation.at(-1).diagramId, 'string');
+          assert.ok(modeler.getElement(child.id));
+          assert.equal(await modeler.navigateBack(), true);
+          assert.equal(navigation.at(-1).depth, 0);
+          assert.equal(navigation.at(-1).pending, false);
+          assert.equal(navigation.at(-1).canNavigateBack, false);
+          assert.ok(navigation.some(state => state.pending));
+          stopNavigation();
           assert.match((await modeler.saveSVG()).svg, /<svg/);
           await viewer.importXML(await modeler.getXML());
           assert.equal(viewer.findElements('packed consumer').length, 1);
-          console.log('PASS packed consumer DOM runtime: import, model, align, distribute, space, search, replacements, attachments, flow/header variants, SVG/XML, undo/redo');
+          console.log('PASS packed consumer DOM runtime: import, model, align, distribute, space, search, replacements, attachments, flow/header variants, resize policy, navigation events, SVG/XML, undo/redo');
         } finally {
           viewer.destroy();
           modeler.destroy();

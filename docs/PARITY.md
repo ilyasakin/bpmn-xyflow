@@ -64,6 +64,8 @@ must not be implied merely by passing semantic tests.
 
 ## Open core gates after the published checkpoint
 
+- **Flow-owned annotation append remains open.** The raw pinned upstream catalogue includes this action, but editor controls and private append preflight exclude SequenceFlow/MessageFlow sources for now: changing the owner route does not yet propagate docking to its dependent association. Node annotation append remains enabled. Completion requires move/resize/waypoint/reconnect propagation with exact undo and DI metadata preservation.
+
 - **Priority: basic arrow interaction fidelity.** Preserve chosen source port and target drop point through preview/create/reconnect, including backwards right-to-right routes; repair orthogonal routes after shape move/resize; support two-point segment editing and usable hit areas. Earlier tests checked refs/existence too narrowly; native user QA disproved complete interaction parity.
 - Finish the contextual browser rerun: new boundary selection overlay fixed; empty-plane assertion helper corrected; existing assertions remain enabled
 - Native touch/pinch and touch modeling remain unverified; desktop mouse/keyboard gates do not establish them

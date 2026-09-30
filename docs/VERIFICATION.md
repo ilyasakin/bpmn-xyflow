@@ -127,3 +127,23 @@ edited segment is normalized; original fractional DI remains exact on cancellati
 and undo. Local follow-up passes 222 unit tests. The native suite now has 27 groups,
 including the exact horizontal case, a vertical counterpart and actual viewer
 reimport of all 12 creation variants. These new assertions await hosted execution.
+
+## Core control and touch checkpoint
+
+The prior near-axis correction passed all 27 native connection groups, production
+site tests and manual replay of the reported fractional Conditional segment,
+including exact Undo. The next checkpoint adds 19 native core-control groups and
+17 advanced groups for navigation, append/lane/insertion, clipboard/lasso/keyboard,
+labels, containers and association interactions. Their prepared assertions do not
+count as native passes until the hosted result is recorded.
+
+The first touch baseline established tap selection, pan, pinch and context-connect
+behavior; ordinary touch shape dragging/resizing did not complete in either
+pinned engine. Cancellation initially mixed CDP sessions, which is corrected in
+the harness. A real second-finger selection defect is addressed with per-viewer
+pointer IDs and gesture suppression; native rerun remains required.
+
+Known remaining capabilities: external-label width resize, explicit undoable
+IO-bearing catch/throw migration, and flow-linked annotation append with dependent
+association-route repair. Task resize is a retained configurable fork extension,
+not attributed to the upstream baseline.

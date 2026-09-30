@@ -46,3 +46,16 @@ test('insertion/copy adapters retain connection and organizational constraints',
  for(const shape of shapes)for(const selected of [[],[shape],[shape,shape.parent]])assert.equal(adapter.canCopy(selected,shape),!!oracle.canCopy(selected,shape));
  assert.equal(adapter.canCreate(null,pool),false);assert.equal(adapter.canDrop(a,null),false);assert.equal(adapter.canMove([a],null),false);
 });
+
+test('resize adapter matches pinned type, expansion, bounds and direction policy',()=>{
+ const label={...node('Task',process),type:'label',labelTarget:shapes[0]};
+ const candidates=[...shapes,...targets,label];
+ const bounds=[undefined,{x:100,y:100,width:99,height:80},{x:100,y:100,width:100,height:79},{x:100,y:100,width:100,height:80},{x:90,y:80,width:400,height:300}];
+ for(const shape of candidates)for(const next of bounds)for(const direction of [undefined,'n','s','e','w','ne','nw','se','sw']) {
+  assert.equal(adapter.canResize(shape,next,direction),!!oracle.canResize(shape,next,direction),`${shape.type}/${shape.di?.isExpanded}/${JSON.stringify(next)}/${direction}`);
+ }
+ assert.equal(adapter.canResize(null),false);
+ assert.equal(adapter.canResize(node('Task',process)),false,'ordinary task resize is an extra, not an upstream rule');
+ assert.equal(adapter.canResize(node('TextAnnotation',process),undefined,'e'),true);
+ assert.equal(adapter.canResize(node('TextAnnotation',process),undefined,'se'),false);
+});
