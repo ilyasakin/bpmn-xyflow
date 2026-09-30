@@ -38,7 +38,7 @@ const xml = await modeler.getXML();
 ```js
 import { BpmnViewer } from 'bpmn-xyflow/lib/react';   // React 18+
 import { BpmnViewer } from 'bpmn-xyflow/lib/vue';     // Vue 3
-import BpmnViewer from 'bpmn-xyflow/lib/svelte/BpmnViewer.svelte';  // Svelte 4
+import BpmnViewer from 'bpmn-xyflow/lib/svelte/BpmnViewer.svelte';  // Svelte 5
 ```
 
 `react`, `react-dom`, `vue`, and `svelte` are declared as **optional
@@ -48,6 +48,20 @@ Each wrapper takes the same `xml` prop, forwards every viewer event
 (`onElementClick` / `onSelectionChange` / `onViewportChange` / etc.)
 and exposes the imperative API (`fitView`, `select`, `setViewport`,
 …) via the framework's standard ref / `bind:this` mechanism.
+
+`xml` and `bpmnDiagramId` are reactive inputs. Constructor options such as
+`config`, `moddleExtensions`, `minZoom`, `maxZoom`, `fitPadding`, keyboard,
+selection, minimap, and resize behavior are read only when the wrapper mounts.
+Changing those props does not reconfigure an existing viewer: remount it (for
+example with a new framework `key`), or use a supported imperative method such
+as `setViewport` or `setMinimap`. Callback props use their latest values.
+
+React's `useBpmnViewer(options)` returns `{ containerRef, viewer, getViewer }`.
+Attach `containerRef` to the host element; `viewer` is initially `null` and
+updates after mounting, so effects depending on `[viewer]` can import a diagram.
+The hook's constructor options are also mount-only, and unmounting destroys the
+instance.
+
 
 ## Modeler features
 
@@ -68,7 +82,7 @@ and exposes the imperative API (`fitView`, `select`, `setViewport`,
 - SubProcess drill-in / collapse, with a per-level command stack
 - Snap to siblings + 5px grid + alignment guides; `Shift` constrains
   to dominant axis
-- BPMN XML round-trip via `bpmn-moddle`'s writer
+- Descriptor-driven BPMN XML parse/write with independent upstream validation
 
 ## Demo
 
@@ -122,6 +136,8 @@ lib/
 
 ## License
 
-[MIT](./LICENSE). Forked from the original [bpmn-js](https://github.com/bpmn-io/bpmn-js)
-under its MIT-style license; the original Camunda Services GmbH
-copyright is preserved in `LICENSE`.
+See [LICENSE](./LICENSE). Retained source from [bpmn-js](https://github.com/bpmn-io/bpmn-js) is subject to its original notice and visible bpmn.io watermark requirements. The upstream watermark source is retained unchanged. BPMN descriptor data has its own [MIT notice](./lib/bpmn/schema.LICENSE).
+
+## Parity status
+
+The [verification ledger](./docs/PARITY.md) distinguishes implemented and tested core behavior from pending gates and optional extensions. This package does not claim drop-in upstream API/plugin compatibility.

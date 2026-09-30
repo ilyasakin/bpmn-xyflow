@@ -6,6 +6,7 @@
     xml = '',
     bpmnDiagramId = '',
     config = undefined,
+    moddleExtensions = undefined,
     minZoom = undefined,
     maxZoom = undefined,
     fitPadding = undefined,
@@ -25,6 +26,7 @@
 
   let container;
   let viewer;
+  let loadSequence = 0;
   const offs = [];
 
   const VIEWER_EVENTS = [
@@ -46,7 +48,7 @@
   onMount(() => {
     viewer = new BpmnXyflowViewer({
       container,
-      config, minZoom, maxZoom, fitPadding,
+      config, moddleExtensions, minZoom, maxZoom, fitPadding,
       fitViewOnInit, selectOnClick, minimap,
       keyboard, refitOnResize
     });
@@ -62,6 +64,7 @@
   });
 
   onDestroy(() => {
+    ++loadSequence;
     offs.forEach(off => off());
     offs.length = 0;
     if (viewer) {
@@ -71,15 +74,19 @@
   });
 
   function importNow() {
-    if (!viewer || !xml) return;
+    const sequence = ++loadSequence;
+    if (!viewer) return;
+    if (!xml) { viewer.clear(); return; }
     viewer.importXML(xml, bpmnDiagramId || undefined)
-      .then(result => onload?.(result))
-      .catch(err => onerror?.(err));
+      .then(result => { if (sequence === loadSequence && viewer) onload?.(result); })
+      .catch(err => { if (sequence === loadSequence && viewer && err.name !== 'AbortError') onerror?.(err); });
   }
 
   $effect(() => {
     // re-import whenever xml changes
-    if (viewer && xml) importNow();
+    // Read both props before the mounted guard so Svelte tracks changes.
+    xml; bpmnDiagramId;
+    if (viewer) importNow();
   });
 
   export function fitView(padding) { return viewer?.fitView(padding); }
@@ -92,6 +99,10 @@
   export function getGraph() { return viewer?.getGraph(); }
   export function getDefinitions() { return viewer?.getDefinitions(); }
   export function setMinimap(value) { return viewer?.setMinimap(value); }
+  export function findElements(query) { return viewer?.findElements(query) || []; }
+  export function focusElement(id) { return viewer?.focusElement(id); }
+  export function saveSVG(options) { return viewer?.saveSVG(options); }
+  export function clear() { return viewer?.clear(); }
   export function getViewer() { return viewer; }
 </script>
 

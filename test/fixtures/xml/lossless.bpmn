@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<model:definitions xmlns:model="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:draw="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" xmlns:vendor="https://example.test/bpmn" xmlns:color="http://www.omg.org/spec/BPMN/non-normative/color/1.0" id="Definitions_1" targetNamespace="https://example.test/process" vendor:version="2">
+  <model:itemDefinition id="Item_1" structureRef="xsd:string" xmlns:xsd="http://www.w3.org/2001/XMLSchema" />
+  <model:message id="Message_1" name="Request" itemRef="Item_1" />
+  <model:error id="Error_1" name="Failure" errorCode="E42" structureRef="Item_1" />
+  <model:process id="Process_1" name="Original" isExecutable="true">
+    <model:documentation textFormat="text/plain">  exact documentation
+second line  </model:documentation>
+    <model:extensionElements>
+      <vendor:config vendor:mode="safe"><vendor:item key="&quot;&amp;&lt;"> retained </vendor:item></vendor:config>
+    </model:extensionElements>
+    <model:laneSet id="Lanes_1"><model:lane id="Lane_1"><model:flowNodeRef>Start_1</model:flowNodeRef><model:flowNodeRef>Script_1</model:flowNodeRef></model:lane></model:laneSet>
+    <model:startEvent id="Start_1"><model:outgoing>Flow_1</model:outgoing><model:messageEventDefinition id="EventDefinition_1" messageRef="Message_1" /></model:startEvent>
+    <model:scriptTask id="Script_1" name="Run script" scriptFormat="javascript" camunda:asyncBefore="true" vendor:flag="yes">
+      <model:extensionElements><camunda:executionListener event="start" class="com.example.Listener"><camunda:field name="payload"><camunda:string>  payload  </camunda:string></camunda:field></camunda:executionListener></model:extensionElements>
+      <model:incoming>Flow_1</model:incoming><model:outgoing>Flow_2</model:outgoing>
+      <model:ioSpecification id="Io_1"><model:dataInput id="Input_1" itemSubjectRef="Item_1" /><model:dataOutput id="Output_1" /><model:inputSet id="InputSet_1"><model:dataInputRefs>Input_1</model:dataInputRefs></model:inputSet><model:outputSet id="OutputSet_1"><model:dataOutputRefs>Output_1</model:dataOutputRefs></model:outputSet></model:ioSpecification>
+      <model:multiInstanceLoopCharacteristics isSequential="true"><model:loopCardinality xsi:type="model:tFormalExpression">3</model:loopCardinality><model:completionCondition xsi:type="model:tFormalExpression">${nrOfCompletedInstances == 2}</model:completionCondition></model:multiInstanceLoopCharacteristics>
+      <model:script><![CDATA[  if (a < 2 && b > 1) {
+    execute("<&>");
+  }
+]]></model:script>
+    </model:scriptTask>
+    <model:boundaryEvent id="Timer_1" attachedToRef="Script_1" cancelActivity="false"><model:timerEventDefinition id="TimerDefinition_1"><model:timeDuration xsi:type="model:tFormalExpression">PT1H</model:timeDuration></model:timerEventDefinition></model:boundaryEvent>
+    <model:endEvent id="End_1"><model:incoming>Flow_2</model:incoming><model:errorEventDefinition id="ErrorDefinition_1" errorRef="Error_1" /></model:endEvent>
+    <model:sequenceFlow id="Flow_1" sourceRef="Start_1" targetRef="Script_1" />
+    <model:sequenceFlow id="Flow_2" sourceRef="Script_1" targetRef="End_1"><model:conditionExpression xsi:type="model:tFormalExpression" language="javascript">a &lt; 2 &amp;&amp; b &gt; 1</model:conditionExpression></model:sequenceFlow>
+    <model:textAnnotation id="Annotation_1" textFormat="text/plain"><model:text>Annotation &lt;script&gt; &amp; text</model:text></model:textAnnotation>
+  </model:process>
+  <draw:BPMNDiagram id="Diagram_1"><draw:BPMNPlane id="Plane_1" bpmnElement="Process_1">
+    <draw:BPMNShape id="Shape_Start" bpmnElement="Start_1"><dc:Bounds x="80" y="100" width="36" height="36" /></draw:BPMNShape>
+    <draw:BPMNShape id="Shape_Script" bpmnElement="Script_1" color:background-color="#abcdef"><dc:Bounds x="180" y="80" width="100" height="80" /></draw:BPMNShape>
+    <draw:BPMNEdge id="Edge_1" bpmnElement="Flow_1" sourceElement="Shape_Start" targetElement="Shape_Script"><di:waypoint x="116" y="118" /><di:waypoint x="180" y="120" /><draw:BPMNLabel><dc:Bounds x="130" y="90" width="40" height="20" /></draw:BPMNLabel></draw:BPMNEdge>
+  </draw:BPMNPlane></draw:BPMNDiagram>
+</model:definitions>

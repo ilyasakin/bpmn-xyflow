@@ -1,70 +1,37 @@
 name: CI
-on: [ push, pull_request ]
+on: [push, pull_request]
+permissions:
+  contents: read
 jobs:
-  build_browsers:
-
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ ubuntu-latest ]
-        browser: [ Firefox, ChromeHeadless ]
-
-    runs-on: ${{ matrix.os }}
-
+  verify:
+    runs-on: ubuntu-latest
     steps:
-    - name: Checkout
-      uses: actions/checkout@v6
-    - name: Use Node.js
-      uses: actions/setup-node@v6
-      with:
-        node-version: 24
-        cache: 'npm'
-    - name: Install dependencies
-      run: npm ci
-    - name: Setup project
-      uses: bpmn-io/actions/setup@latest
-    - name: Build (with coverage)
-      if: matrix.browser == 'ChromeHeadless'
-      env:
-        COVERAGE: 1
-        TEST_BROWSERS: ${{ matrix.browser }}
-      run: npm run all
-    - name: Build
-      if: matrix.browser == 'Firefox'
-      env:
-        TEST_BROWSERS: ${{ matrix.browser }}
-      run: xvfb-run npm run all
-    - name: Upload coverage
-      if: matrix.browser == 'ChromeHeadless'
-      uses: codecov/codecov-action@v6
-      with:
-        fail_ci_if_error: true
-      env:
-        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-  build_os:
-
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ macos-latest, windows-latest ]
-        browser: [ ChromeHeadless ]
-
-    runs-on: ${{ matrix.os }}
-
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v6
-    - name: Use Node.js
-      uses: actions/setup-node@v6
-      with:
-        node-version: 24
-        cache: 'npm'
-    - name: Install dependencies
-      run: npm ci
-    - name: Setup project
-      uses: bpmn-io/actions/setup@latest
-    - name: Build
-      env:
-        TEST_BROWSERS: ${{ matrix.browser }}
-      run: npm run all
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Install browser
+        run: pnpm exec puppeteer browsers install chrome-headless-shell --install-deps
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install independent XML schema validator
+        run: python -m pip install lxml==6.1.1
+      - name: Verify source and semantic parity
+        run: pnpm run lint && pnpm run test:schema && pnpm run test:unit
+      - name: Verify browser modeling and framework integration
+        run: pnpm test
+      - name: Build distributable
+        run: pnpm run build
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bpmn-browser-evidence
+          path: test-artifacts/
+          if-no-files-found: ignore
+          retention-days: 14
