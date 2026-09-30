@@ -260,3 +260,19 @@ test('near-vertical fractional segment shares the same drag classification and e
     m.undo();assert.equal(await m.getXML(),before);await valid(m);
   }finally{h.close();}
 });
+
+test('fractional native selection of diagonal message/data edges is a no-op before reconnect history', async () => {
+  const h=await fixture(),{m}=h;
+  try{
+    await m.importXML(await readFile('test/fixtures/scenarios/order-payment-delivery.bpmn','utf8'));m.setViewport({x:150,y:100,zoom:.9});
+    const parent=m.getElement('SellerPool'),a=m.addShape('bpmn:DataObjectReference',{x:1050,y:630},{parent}),b=m.addShape('bpmn:DataStoreReference',{x:1180,y:630},{parent}),data=m.connect(a,m.getElement('ValidateOrder'));
+    for(const [edge,side,target,drop]of [[m.getElement('OrderMessage'),'target',m.getElement('ValidateOrder'),{x:200,y:430}],[data,'source',b,{x:b.x,y:b.y+20}]]){
+      const before=await m.getXML(),size=m.commandStack.size(),v=m.getViewport(),r=m.getContainer().getBoundingClientRect(),p=edge.waypoints[0],q=edge.waypoints[1];
+      const point={x:(Math.round(r.left+v.x+(p.x+q.x)/2*v.zoom)-r.left-v.x)/v.zoom,y:(Math.round(r.top+v.y+(p.y+q.y)/2*v.zoom)-r.top-v.y)/v.zoom};
+      for(const jitter of [false,true]){h.target(null);h.down(h.gfx(edge),point);if(jitter){h.move({x:point.x+1,y:point.y+1});h.move(point);}h.up(point);assert.equal(await m.getXML(),before);assert.equal(m.commandStack.size(),size);}
+      const index=side==='source'?0:edge.waypoints.length-1,handle=m.getContainer().querySelector(`[data-bend-index="${index}"]`),start={...edge.waypoints[index]};assert.ok(handle);
+      h.target(target);h.down(handle,start);h.move(drop);h.up(drop);assert.equal(edge[side],target);assert.equal(m.commandStack.size(),size+1);const after=await m.getXML();await valid(m);
+      for(let i=0;i<3;i++){m.undo();assert.equal(await m.getXML(),before);m.redo();assert.equal(await m.getXML(),after);}
+    }
+  }finally{h.close();}
+});

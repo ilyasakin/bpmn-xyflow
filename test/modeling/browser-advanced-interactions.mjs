@@ -48,6 +48,7 @@ async function redo(page,xml) {assert.equal(await page.$eval('#redo-btn',e=>e.di
 async function historyCycle(page,before,after) {for(let i=0;i<2;i++){await undo(page,before.xml);await redo(page,after.xml);}}
 async function unchanged(page,before,label) {const after=await state(page);assert.equal(after.xml,before.xml,label);assert.deepEqual(after.history,before.history,label+' history');}
 async function selectEdge(page,id) {
+  const before=await state(page);
   const candidate=await page.evaluate(id=>{
     const m=window.modeler,e=m.getElement(id),v=m.getViewport(),r=m.getContainer().getBoundingClientRect();
     if(!e?.waypoints)throw Error(`Missing connection ${id}`);
@@ -58,6 +59,7 @@ async function selectEdge(page,id) {
     throw Error(`No unobstructed native segment hit for ${id}`);
   },id);
   await page.mouse.click(candidate.x,candidate.y);assert.deepEqual(await page.evaluate(()=>window.modeler.getSelection()),[id]);
+  await unchanged(page,before,'plain connection selection changes no XML, DI or history');
 }
 async function labelTarget(page,id) {
   return page.evaluate(id=>{const m=window.modeler,node=m.getElement(id),label=node.label;if(label)return{selector:`[data-element-id="${label.id}"]`,id:label.id};return{selector:`[data-element-id="${id}"] [data-connection-label]`,id};},id);
@@ -97,7 +99,19 @@ async function resize(page,id,dir,delta,relative={x:20,y:25},cancel=false) {
 async function reopen(page,expected) {
   const viewport=await page.evaluate(()=>window.modeler.getViewport());
   const warnings=await page.evaluate(async({xml,viewport})=>{const r=await window.modeler.importXML(xml);window.modeler.setViewport(viewport);return r.warnings.map(w=>w.message);},{xml:expected.xml,viewport});
-  assert.deepEqual(warnings,[]);assert.equal((await state(page)).xml,expected.xml,'actual import/save retains edited semantics and DI');
+  assert.deepEqual(warnings,[]);const actual=await state(page);
+  const diSnapshot=definitions=>(definitions.diagrams||[]).map(diagram=>({id:diagram.id,plane:diagram.plane.id,root:diagram.plane.bpmnElement?.id,
+    entries:(diagram.plane.planeElement||[]).map(entry=>({id:entry.id,type:entry.$type,element:entry.bpmnElement?.id,
+      ...(entry.bounds?{bounds:bounds(entry.bounds)}:{}),...(entry.waypoint?{waypoints:entry.waypoint.map(coords)}:{}),
+      ...(entry.label?{label:{id:entry.label.id,...(entry.label.bounds?{bounds:bounds(entry.label.bounds)}:{})}}:{})}))}));
+  const references=byId=>Object.values(byId).flatMap(object=>(object.$descriptor?.properties||[]).filter(property=>property.isReference&&!property.isVirtual)
+    .map(property=>({id:object.id,key:property.name,values:(Array.isArray(object[property.name])?object[property.name]:[object[property.name]]).filter(Boolean).map(value=>value.id||value.$type)})));
+  assert.deepEqual(diSnapshot(actual.definitions),diSnapshot(expected.definitions),'actual reopen retains exact DI geometry and label bounds');
+  assert.deepEqual(references(actual.byId),references(expected.byId),'actual reopen retains every resolved semantic reference');
+  // Newly authored dc:Point waypoints may gain redundant xsi:type/namespace
+  // declarations on first reopen. Independent upstream serialization removes
+  // that lexical distinction while retaining all semantics and extensions.
+  assert.equal((await oracle.toXML(actual.definitions)).xml,(await oracle.toXML(expected.definitions)).xml,'actual import/save retains the complete independent semantic/DI model and extension values');
 }
 async function run(name,fixture,fn) {
   const page=await browser.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));await page.setViewport({width:1800,height:1250});

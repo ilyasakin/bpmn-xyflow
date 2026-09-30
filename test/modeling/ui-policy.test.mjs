@@ -179,3 +179,29 @@ test('native-transition drop into an empty participant is an exact cancellation'
   assert.equal(await m.getXML(),before);assert.equal(m.commandStack.size(),size);
  }finally{h.close();}
 });
+
+test('splitting a process-only lane assigns semantic members even without initial graph containment',async()=>{
+ const h=await editor('test/fixtures/scenarios/approval-rejection-rework.bpmn'),{m}=h;
+ try{
+  const lane=m.getElement('ReviewerLane'),before=await m.getXML(),size=m.commandStack.size(),ids=['ReviewRequest','ApprovalDecision','ApprovedEnd'];
+  assert.equal(lane.children.length,0);const children=m.splitLane(lane,2);assert.equal(children.length,2);
+  for(const id of ids){const node=m.getElement(id);assert.equal(children.filter(child=>child.businessObject.flowNodeRef.includes(node.businessObject)).length,1);assert.ok(children.includes(node.parent));assert.equal(node.businessObject.$parent.id,'ApprovalProcess');}
+  assert.equal(m.commandStack.size(),size+1);const after=await m.getXML();await valid(m);
+  for(let i=0;i<3;i++){m.undo();assert.equal(await m.getXML(),before);m.redo();assert.equal(await m.getXML(),after);}
+ }finally{h.close();}
+});
+
+test('boundary reattachment keeps the grabbed drop point instead of unrelated alignment snapping',async()=>{
+ const h=await editor('test/fixtures/scenarios/booking-timeout-compensation.bpmn'),{m}=h;const oldHit=document.elementsFromPoint;
+ try{
+  m.setViewport({x:150,y:100,zoom:.9});const node=m.getElement('FlightTimeout'),host=m.getElement('ReserveHotel'),before=await m.getXML(),size=m.commandStack.size();
+  const screen=p=>({clientX:150+p.x*.9,clientY:100+p.y*.9}),drop=screen({x:480,y:260});
+  document.elementsFromPoint=()=>[m.getContainer().querySelector(`[data-element-id="${host.id}"]`)];
+  const start=()=>h.call(m.getSvg(),'mousedown',{handler:'onMouseDown',target:m.getContainer().querySelector(`[data-element-id="${node.id}"]`),...screen({x:node.x+18,y:node.y+18})});
+  await start();await h.call(window,'mousemove',{handler:'onMouseMove',...drop});m.cancel();assert.equal(await m.getXML(),before);assert.equal(m.commandStack.size(),size);
+  await start();await h.call(window,'mousemove',{handler:'onMouseMove',...drop});await h.call(window,'mouseup',{handler:'onMouseUp',...drop});
+  assert.equal(node.host,host);assert.deepEqual({x:node.x+18,y:node.y+18},{x:480,y:260});assert.equal(m.commandStack.size(),size+1);const after=await m.getXML();await valid(m);
+  for(let i=0;i<3;i++){m.undo();assert.equal(await m.getXML(),before);m.redo();assert.equal(await m.getXML(),after);}
+  document.elementsFromPoint=()=>[];await start();const outside=screen({x:1300,y:800});await h.call(window,'mousemove',{handler:'onMouseMove',...outside});await h.call(window,'mouseup',{handler:'onMouseUp',...outside});assert.equal(await m.getXML(),after);assert.equal(m.commandStack.size(),size+1);
+ }finally{document.elementsFromPoint=oldHit;h.close();}
+});
