@@ -14,10 +14,15 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
-      - name: Configure browser cache
-        run: echo "PUPPETEER_CACHE_DIR=$RUNNER_TEMP/puppeteer" >> "$GITHUB_ENV"
-      - name: Install browser
-        run: sudo env "PATH=$PATH" "PUPPETEER_CACHE_DIR=$PUPPETEER_CACHE_DIR" "$(command -v pnpm)" exec puppeteer browsers install chrome-headless-shell --install-deps
+      # The runner's official Chrome installation has the supported AppArmor
+      # profile; downloaded Chrome for Testing does not on Ubuntu 24.04.
+      - name: Select installed sandbox-capable Chrome
+        run: |
+          CHROME_PATH="$(command -v google-chrome)"
+          test -x "$CHROME_PATH"
+          "$CHROME_PATH" --version
+          readlink -f "$CHROME_PATH"
+          echo "PUPPETEER_EXECUTABLE_PATH=$CHROME_PATH" >> "$GITHUB_ENV"
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
