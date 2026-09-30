@@ -1,0 +1,10 @@
+{
+  "upstream": "bpmn-io/bpmn-js",
+  "version": "18.30.1",
+  "purpose": "Pure contextual rule predicates only; the XYFlow engine remains unchanged.",
+  "files": {
+    "rules/BpmnRules.js": "f6d231883613b4ebc4ecfaa8742636ed08e1adf2467f2cf2bffc5622f5313014",
+    "modeling/util/ModelingUtil.js": "459b9c18c163b9d0fe162a407dec4b51f7e11dee5ae6a4a4a5dee8bdd001b33f",
+    "snapping/BpmnSnappingUtil.js": "cd7b9604625dc487d27c63bd4ec654f4c9d7ab293098f73b6c19aac4152c6cc6"
+  }
+}

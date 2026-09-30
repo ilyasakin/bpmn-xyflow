@@ -59,3 +59,23 @@ test('body-mounted editing overlays retain consumer-scoped semantic tokens', () 
   assert.equal(overlay.style.getPropertyValue('--bpmn-xyflow-color-scheme'), 'dark');
   container.remove();overlay.remove();
 });
+
+test('selection theme is transient and SVG/XML exports retain document colors',async()=>{
+  const modeler=new Modeler({container:dom.createContainer(),fitViewOnInit:false,palette:false});
+  try {
+    await modeler.importXML(basic);
+    const task=modeler.getElement('Task_1');task.di.set('bioc:stroke','#123456');
+    modeler.viewer._internals.redrawShape(task);
+    const before=await modeler.getXML();
+    modeler.getContainer().style.setProperty('--bio-canvas-accent','rgb(230, 140, 30)');
+    modeler.select(task.id);
+    assert.equal(await modeler.getXML(),before);
+    assert.equal(task.di.get('bioc:stroke'),'#123456');
+    const {svg}=await modeler.saveSVG();
+    assert.ok(svg.includes('#123456'));
+    assert.ok(!svg.includes('is-selected')&&!svg.includes('is-hovered'));
+    assert.ok(!svg.includes('bpmn-xyflow-editor-actions')&&!svg.includes('bpmn-xyflow-resize-handles'));
+    assert.ok(svg.includes('https://bpmn.io'));
+    modeler.clearSelection();assert.equal(await modeler.getXML(),before);
+  } finally {modeler.destroy();}
+});

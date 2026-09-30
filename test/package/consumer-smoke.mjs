@@ -129,10 +129,40 @@ try {
           modeler.undo();
           assert.deepEqual(nodes.map(node => node.x), before);
           modeler.redo();
+          modeler.replace(nodes[0], { type: 'bpmn:ServiceTask' });
+          assert.equal(nodes[0].type, 'bpmn:ServiceTask');
+          assert.equal(modeler.toggleMarker(nodes[0], 'parallelMI'), nodes[0]);
+          const loop = nodes[0].businessObject.loopCharacteristics;
+          modeler.toggleMarker(nodes[0], 'sequentialMI');
+          assert.equal(nodes[0].businessObject.loopCharacteristics, loop);
+          assert.equal(loop.isSequential, true);
+          const flow = modeler.connect(nodes[0], nodes[1]);
+          assert.ok(flow);
+          modeler.setSequenceFlowType(flow, 'conditional', 'approved === true');
+          assert.equal(flow.businessObject.conditionExpression.body, 'approved === true');
+          modeler.setSequenceFlowType(flow, 'default');
+          assert.equal(nodes[0].businessObject.default, flow.businessObject);
+          assert.equal(flow.businessObject.conditionExpression, undefined);
+          const boundary = modeler.addShape('bpmn:BoundaryEvent', {
+            x: nodes[1].x + nodes[1].width, y: nodes[1].y + nodes[1].height
+          }, { host: nodes[1], eventDefinitionType: 'bpmn:TimerEventDefinition' });
+          assert.ok(boundary);
+          assert.equal(modeler.toggleEventInterrupting(boundary), boundary);
+          assert.equal(boundary.businessObject.cancelActivity, false);
+          assert.equal(modeler.attachBoundary(boundary, nodes[2]), boundary);
+          assert.equal(boundary.businessObject.attachedToRef, nodes[2].businessObject);
+          const data = modeler.addShape('bpmn:DataObjectReference', { x: 950, y: 600 });
+          assert.ok(data);
+          assert.equal(modeler.toggleCollection(data), data);
+          assert.equal(data.businessObject.dataObjectRef.isCollection, true);
+          const pool = modeler.addShape('bpmn:Participant', { x: 500, y: 850 });
+          assert.ok(pool);
+          assert.equal(modeler.toggleParticipantMultiplicity(pool), pool);
+          assert.equal(pool.businessObject.participantMultiplicity.$parent, pool.businessObject);
           assert.match((await modeler.saveSVG()).svg, /<svg/);
           await viewer.importXML(await modeler.getXML());
           assert.equal(viewer.findElements('packed consumer').length, 1);
-          console.log('PASS packed consumer DOM runtime: import, model, align, distribute, space, search, SVG/XML, undo/redo');
+          console.log('PASS packed consumer DOM runtime: import, model, align, distribute, space, search, replacements, attachments, flow/header variants, SVG/XML, undo/redo');
         } finally {
           viewer.destroy();
           modeler.destroy();

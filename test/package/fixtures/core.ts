@@ -1,7 +1,8 @@
 import DefaultViewer, {
   Viewer, Modeler, Renderer, CommandStack, buildGraph, parseBpmnXML,
   type Alignment, type Axis, type Graph, type GraphNode, type ImportResult,
-  type ModdleExtensions, type ViewerEvents, type Viewport
+  type ModdleExtensions, type ViewerEvents, type Viewport,
+  type ReplacementTarget, type SequenceFlowType, type AddShapeOptions
 } from 'bpmn-xyflow';
 
 const extensions: ModdleExtensions = {
@@ -42,14 +43,39 @@ if (node) {
     modeler.updateWaypoints(edge, [{ x: 0, y: 0 }, { x: 10, y: 10 }]);
     modeler.reconnect(edge, 'target', node);
     modeler.insertShape('bpmn:Task', edge, { x: 100, y: 100 });
+    const flowType: SequenceFlowType = 'conditional';
+    modeler.setSequenceFlowType(edge, flowType, 'approved === true');
+    modeler.setSequenceFlowType(edge, 'default');
+    // @ts-expect-error flow variants are a fixed vocabulary
+    modeler.setSequenceFlowType(edge, 'exclusive');
+    // @ts-expect-error a condition is expression text
+    modeler.setSequenceFlowType(edge, 'conditional', 42);
   }
   modeler.copy([node]);
   modeler.paste({ x: 200, y: 200 });
   modeler.replace(node, 'bpmn:ServiceTask');
+  const target: ReplacementTarget = { type: 'bpmn:BoundaryEvent', eventDefinitionType: 'bpmn:TimerEventDefinition', cancelActivity: false };
+  modeler.replace(node, target);
+  modeler.replace(node, { type: 'bpmn:SubProcess', isExpanded: true, triggeredByEvent: true });
+  modeler.attachBoundary(node, node, { x: 100, y: 120 });
+  const boundaryOptions: AddShapeOptions = { host: node, eventDefinitionType: 'bpmn:MessageEventDefinition', eventDefinitionAttrs: { name: 'Received' }, cancelActivity: false };
+  modeler.addShape('bpmn:BoundaryEvent', { x: 100, y: 120 }, boundaryOptions);
+  // @ts-expect-error a descriptor needs its target type
+  modeler.replace(node, { isExpanded: true });
+  // @ts-expect-error interrupting behavior is a boolean
+  modeler.replace(node, { type: 'bpmn:StartEvent', isInterrupting: 'false' });
+  // @ts-expect-error event-definition attributes accept scalar values only
+  modeler.replace(node, { type: 'bpmn:StartEvent', eventDefinitionType: 'bpmn:TimerEventDefinition', eventDefinitionAttrs: { nested: {} } });
+  // @ts-expect-error attachment requires a host node
+  modeler.attachBoundary(node, 'Task_1');
   modeler.replace(node, 'bpmn:Task', {}, { removeContents: true });
   // @ts-expect-error destructive replacement requires an explicit boolean
   modeler.replace(node, 'bpmn:Task', {}, { removeContents: 'yes' });
-  modeler.toggleMarker(node, 'loop');
+  const markerResult: GraphNode | false = modeler.toggleMarker(node, 'loop');
+  const collectionResult: GraphNode | false = modeler.toggleCollection(node);
+  const multiplicityResult: GraphNode | false = modeler.toggleParticipantMultiplicity(node);
+  const interruptingResult: GraphNode | false = modeler.toggleEventInterrupting(node);
+  console.log(markerResult, collectionResult, multiplicityResult, interruptingResult);
   modeler.toggleExpanded(node);
   const entered: boolean = await modeler.drillInto(node);
   console.log(entered);

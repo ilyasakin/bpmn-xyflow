@@ -234,8 +234,19 @@ export const Viewer: { new(options: ViewerOptions): Viewer };
 export default Viewer;
 
 export interface ReplaceOptions { removeContents?: boolean }
+export interface ReplacementTarget {
+  type: string;
+  eventDefinitionType?: string;
+  eventDefinitionAttrs?: Record<string, string | number | boolean>;
+  isExpanded?: boolean;
+  triggeredByEvent?: boolean;
+  isInterrupting?: boolean;
+  cancelActivity?: boolean;
+  instantiate?: boolean;
+  eventGatewayType?: string;
+}
 export interface ModelerOptions extends ViewerOptions { palette?: boolean; snap?: boolean; editorActions?: boolean }
-export interface AddShapeOptions {
+export interface AddShapeOptions extends Omit<ReplacementTarget, 'type'> {
   businessObject?: ModdleElement;
   di?: ModdleElement;
   width?: number;
@@ -252,6 +263,7 @@ export interface ConnectionOptions {
 export type Alignment = 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom';
 export type Axis = 'horizontal' | 'vertical';
 export type ActivityMarker = 'compensation' | 'loop' | 'parallelMI' | 'sequentialMI';
+export type SequenceFlowType = 'normal' | 'default' | 'conditional';
 export type LaneLocation = 'before' | 'after' | 'top' | 'bottom' | 'left' | 'right';
 export type SpaceDirection = 'e' | 'w' | 'n' | 's';
 export interface SpaceOptions {
@@ -308,7 +320,9 @@ export interface Modeler extends DiagramAPI {
   addLane(shape: GraphNode, location?: LaneLocation): GraphNode | null;
   splitLane(shape: GraphNode, count: number): GraphNode[] | null;
   deleteLane(lane: GraphNode): boolean;
-  replace(element: GraphNode, type: string, attributes?: Record<string, unknown>, options?: ReplaceOptions): GraphNode | null;
+  replace(element: GraphNode, target: string | ReplacementTarget, attributes?: Record<string, unknown>, options?: ReplaceOptions): GraphNode | null;
+  attachBoundary(element: GraphNode, host: GraphNode, position?: Point): GraphNode | null;
+  setSequenceFlowType(edge: GraphEdge, type: SequenceFlowType, condition?: string): GraphEdge | null;
   updateLabel(element: GraphNode | GraphEdge, name: string): GraphNode | GraphEdge | false;
   updateProperties<T extends GraphElement>(element: T, properties: Record<string, unknown>): T | false;
   copy(nodes?: GraphNode[]): Clipboard | null;
@@ -317,7 +331,10 @@ export interface Modeler extends DiagramAPI {
   align(nodes: (GraphNode | GraphEdge)[], direction: Alignment): void;
   distribute(nodes: (GraphNode | GraphEdge)[], axis: Axis): void;
   createSpace(elements: GraphElement[] | null | undefined, axis: Axis, coordinate: number, delta: number, options?: SpaceOptions): SpacePlan | false;
-  toggleMarker(activity: GraphNode, marker: ActivityMarker): void;
+  toggleMarker(activity: GraphNode, marker: ActivityMarker): GraphNode | false;
+  toggleCollection(element: GraphNode): GraphNode | false;
+  toggleParticipantMultiplicity(element: GraphNode): GraphNode | false;
+  toggleEventInterrupting(element: GraphNode): GraphNode | false;
   toggleExpanded(node: GraphNode): GraphNode | false;
   drillInto(node: GraphNode): Promise<boolean>;
   navigateBack(): Promise<boolean>;

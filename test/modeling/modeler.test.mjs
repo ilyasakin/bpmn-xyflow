@@ -456,7 +456,7 @@ for(const collapsed of [false,true]) test(`explicit ${collapsed?'collapsed':'exp
 test('replace contents UI requires explicit confirmation and cancel/Escape leave XML and history unchanged',async()=>{
  const m=await model('test/fixtures/scenarios/order-payment-delivery.bpmn'),sub=m.getElement('Payment');m.select(sub.id);
  const before=await m.getXML(),size=m.commandStack.size();
- const open=()=>{m.select(sub.id);m.getContainer().querySelector('button[title^="Change type"]').click();[...m.getContainer().querySelectorAll('[role="menuitem"]')].find(item=>item.textContent==='Task').click();assert.ok(m.getContainer().querySelector('[role="dialog"][aria-label="Replace and remove contents"]'));};
+ const open=()=>{m.select(sub.id);m.getContainer().querySelector('button[title="Replace and remove contents"]').click();[...m.getContainer().querySelectorAll('[role="menuitem"]')].find(item=>item.textContent==='Task').click();assert.ok(m.getContainer().querySelector('[role="dialog"][aria-label="Replace and remove contents"]'));};
  open();[...m.getContainer().querySelectorAll('[role="dialog"] button')].find(button=>button.textContent==='Cancel').click();assert.equal(await m.getXML(),before);assert.equal(m.commandStack.size(),size);
  open();window.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));assert.equal(m.getContainer().querySelector('[role="dialog"]'),null);assert.equal(await m.getXML(),before);assert.equal(m.commandStack.size(),size);
  open();[...m.getContainer().querySelectorAll('[role="dialog"] button')].find(button=>button.textContent==='Replace and remove contents').click();assert.equal(sub.type,'bpmn:Task');assert.equal(m.commandStack.size(),size+1);m.undo();assert.equal(await m.getXML(),before);m.destroy();
@@ -516,4 +516,145 @@ test('IO-bearing activity/event cross-family replacement is a safe exact no-op u
   const node=m.addShape(sourceType,{x:400,y:300}),data=m.addShape('bpmn:DataObjectReference',{x:650,y:300});const edge=input?m.connect(data,node):m.connect(node,data);assert.ok(edge);
   const before=await m.getXML(),size=m.commandStack.size();assert.equal(m.replace(node,targetType,{}, {removeContents:true}),null);assert.equal(await m.getXML(),before);assert.equal(m.commandStack.size(),size);assert.equal(m.getElement(edge.id),edge);await oracle(m);
  }m.destroy();
+});
+
+test('catalog descriptors enforce contextual event variants and persist expanded flags only on DI',async()=>{
+ const m=await model(),start=m.getGraph().nodes.find(node=>node.type==='bpmn:StartEvent');
+ const before=await m.getXML();for(const target of [{type:'bpmn:StartEvent',eventDefinitionType:'bpmn:ErrorEventDefinition'},{type:'bpmn:EndEvent',eventDefinitionType:'bpmn:TimerEventDefinition'},{type:'bpmn:EndEvent',eventDefinitionType:'bpmn:CancelEventDefinition'},{type:'bpmn:StartEvent',eventDefinitionType:'bpmn:MessageEventDefinition',isInterrupting:false}]){assert.equal(m.replace(start,target),null);assert.equal(await m.getXML(),before);}
+ assert.ok(m.replace(start,{type:'bpmn:StartEvent',eventDefinitionType:'bpmn:TimerEventDefinition'}));assert.equal(start.businessObject.eventDefinitions[0].$type,'bpmn:TimerEventDefinition');m.undo();assert.equal(await m.getXML(),before);
+ const task=m.addShape('bpmn:Task',{x:700,y:400}),old=await m.getXML();m.replace(task,{type:'bpmn:SubProcess',isExpanded:true});assert.equal(task.di.isExpanded,true);assert.equal(Object.hasOwn(task.businessObject,'isExpanded'),false);assert.ok(task.width>=350);m.undo();assert.equal(await m.getXML(),old);m.redo();
+ const child=m.addShape('bpmn:Task',{x:700,y:400},{parent:task});assert.ok(child);const expanded=await m.getXML();m.replace(task,{type:'bpmn:SubProcess',isExpanded:false});assert.equal(task.di.isExpanded,false);assert.equal(child.hidden,true);m.undo();assert.equal(await m.getXML(),expanded);
+ const sub=m.addShape('bpmn:SubProcess',{x:1100,y:700},{triggeredByEvent:true,isExpanded:true});assert.equal(m.addShape('bpmn:StartEvent',{x:1100,y:700},{parent:sub}),null);
+ const typed=m.addShape('bpmn:StartEvent',{x:1100,y:700},{parent:sub,eventDefinitionType:'bpmn:ErrorEventDefinition'});assert.ok(typed);assert.equal(m.toggleEventInterrupting(typed),false);
+ await oracle(m);m.destroy();
+});
+
+test('sequence-flow popup actions set real defaults and conditions and undo exact XML',async()=>{
+ const m=await model('test/fixtures/scenarios/approval-rejection-rework.bpmn'),edge=m.getElement('ReworkFlow'),bo=edge.businessObject,source=edge.source;
+ assert.ok(source.businessObject.$instanceOf('bpmn:Activity'));const before=await m.getXML(),count=m.commandStack.size();
+ m.setSequenceFlowType(edge,'conditional','approved === true');assert.equal(bo.conditionExpression.body,'approved === true');assert.equal(bo.conditionExpression.$parent,bo);assert.equal(bo.$parent,source.businessObject.$parent);await oracle(m);m.undo();assert.equal(await m.getXML(),before);
+ m.setSequenceFlowType(edge,'default');assert.equal(source.businessObject.default,bo);assert.equal(bo.$parent,source.businessObject.$parent);assert.equal(m.commandStack.size(),count+1);m.undo();assert.equal(await m.getXML(),before);m.redo();
+ const defaultXML=await m.getXML();m.setSequenceFlowType(edge,'normal');assert.equal(source.businessObject.default,undefined);m.undo();assert.equal(await m.getXML(),defaultXML);
+ const gatewayEdge=m.getElement('ApproveFlow');const same=await m.getXML();assert.equal(m.setSequenceFlowType(gatewayEdge,'conditional','x'),null);assert.equal(await m.getXML(),same);await oracle(m);m.destroy();
+});
+
+test('replacement headers retain multi-instance expressions and update collection/multiplicity owners',async()=>{
+ const m=await model(),task=m.addShape('bpmn:Task',{x:500,y:300});m.toggleMarker(task,'parallelMI');const loop=task.businessObject.loopCharacteristics,moddle=m.getModdle();loop.loopCardinality=moddle.create('bpmn:FormalExpression',{body:'3'});loop.loopCardinality.$parent=loop;loop.completionCondition=moddle.create('bpmn:FormalExpression',{body:'nrOfCompletedInstances > 1'});loop.completionCondition.$parent=loop;
+ const before=await m.getXML();m.toggleMarker(task,'sequentialMI');assert.equal(task.businessObject.loopCharacteristics,loop);assert.equal(loop.isSequential,true);assert.equal(loop.loopCardinality.body,'3');assert.equal(loop.completionCondition.body,'nrOfCompletedInstances > 1');m.undo();assert.equal(await m.getXML(),before);
+ const data=m.addShape('bpmn:DataObjectReference',{x:750,y:300});assert.ok(data.businessObject.dataObjectRef);const old=await m.getXML();m.toggleCollection(data);assert.equal(data.businessObject.dataObjectRef.isCollection,true);assert.equal(Object.hasOwn(data.businessObject,'isCollection'),false);m.undo();assert.equal(await m.getXML(),old);m.redo();
+ const pool=m.addShape('bpmn:Participant',{x:600,y:600}),beforePool=await m.getXML();m.toggleParticipantMultiplicity(pool);assert.equal(pool.businessObject.participantMultiplicity.$parent,pool.businessObject);m.undo();assert.equal(await m.getXML(),beforePool);m.redo();await oracle(m);m.destroy();
+});
+
+test('participant empty/expanded and data reference replacements are undoable semantic changes',async()=>{
+ const m=await model('test/fixtures/scenarios/order-payment-delivery.bpmn'),pool=m.getElement('SellerPool'),process=pool.businessObject.processRef;
+ await m.drillInto(m.getElement('Payment'));await m.navigateBack();const before=await m.getXML();assert.equal(m.replace(pool,{type:'bpmn:Participant',isExpanded:false}),null);assert.equal(await m.getXML(),before);
+ assert.equal(m.replace(pool,{type:'bpmn:Participant',isExpanded:false},{},{removeContents:true}),pool);assert.equal(pool.businessObject.processRef,undefined);assert.ok(!m.getDefinitions().rootElements.includes(process));assert.ok(!m.getElement('CapturePayment'));await oracle(m);
+ for(let i=0;i<3;i++){m.undo();assert.equal(await m.getXML(),before);m.redo();}const empty=await m.getXML();m.replace(pool,{type:'bpmn:Participant',isExpanded:true});assert.ok(pool.businessObject.processRef);assert.notEqual(pool.businessObject.processRef,process);m.undo();assert.equal(await m.getXML(),empty);m.redo();
+ const data=m.addShape('bpmn:DataObjectReference',{x:400,y:400},{parent:pool}),original=data.businessObject.dataObjectRef;const dataBefore=await m.getXML();m.replace(data,{type:'bpmn:DataStoreReference'});assert.equal(data.type,'bpmn:DataStoreReference');assert.ok(!pool.businessObject.processRef.flowElements.includes(original));await oracle(m);m.undo();assert.equal(await m.getXML(),dataBefore);m.redo();m.replace(data,{type:'bpmn:DataObjectReference'});assert.ok(data.businessObject.dataObjectRef);await oracle(m);m.destroy();
+});
+
+test('boundary creation and intermediate attach preserve host semantics, movement/deletion undo and invalid no-ops',async()=>{
+ const m=await model('test/fixtures/scenarios/booking-timeout-compensation.bpmn'),host=m.getElement('ReserveFlight'),moddle=m.getModdle();
+ const old=await m.getXML(),count=m.commandStack.size();
+ for(const eventDefinitionType of ['bpmn:CancelEventDefinition','bpmn:TerminateEventDefinition']) {assert.equal(m.addShape('bpmn:BoundaryEvent',{x:host.x+host.width,y:host.y+host.height},{host,eventDefinitionType}),null);assert.equal(await m.getXML(),old);assert.equal(m.commandStack.size(),count);}
+ assert.equal(m.addShape('bpmn:BoundaryEvent',{x:host.x+host.width,y:host.y+host.height},{host,eventDefinitionType:'bpmn:ErrorEventDefinition',cancelActivity:false}),null);
+ const typed=m.addShape('bpmn:BoundaryEvent',{x:host.x+host.width,y:host.y+host.height},{host,eventDefinitionType:'bpmn:TimerEventDefinition',cancelActivity:false});assert.ok(typed);assert.equal(typed.businessObject.cancelActivity,false);assert.equal(m.toggleEventInterrupting(typed),typed);m.undo();assert.equal(typed.businessObject.cancelActivity,false);
+ const loose=m.addShape('bpmn:IntermediateThrowEvent',{x:1000,y:850},{parent:host.parent}),before=await m.getXML();assert.equal(m.attachBoundary(loose,host),loose);assert.equal(loose.type,'bpmn:BoundaryEvent');assert.equal(loose.businessObject.eventDefinitions.length,0);assert.equal(loose.host,host);assert.equal(loose.businessObject.attachedToRef,host.businessObject);assert.ok(host.attachers.includes(loose));m.undo();assert.equal(await m.getXML(),before);m.redo();
+ m.replace(loose,{type:'bpmn:BoundaryEvent',eventDefinitionType:'bpmn:TimerEventDefinition',cancelActivity:true});const definition=loose.businessObject.eventDefinitions[0];definition.timeDuration=moddle.create('bpmn:FormalExpression',{body:'PT10M'});definition.timeDuration.$parent=definition;
+ const complete=await m.getXML(),x=loose.x;m.moveShape(host,{x:50,y:20});assert.equal(loose.x,x+50);m.undo();assert.equal(await m.getXML(),complete);m.delete(host);assert.equal(m.getElement(loose.id),null);m.undo();assert.equal(await m.getXML(),complete);await oracle(m);
+ const xml=await m.getXML();await m.importXML(xml);assert.equal(m.getElement(loose.id).host.id,host.id);m.destroy();
+});
+
+test('native DOM boundary palette, intermediate-on-host, menu variants and Escape are repeatable',async()=>{
+ const m=new Modeler({container:dom.createContainer(),fitViewOnInit:false,palette:true});await m.importXML(await readFile('test/fixtures/bpmn/basic.bpmn','utf8'));
+ const host=m.addShape('bpmn:Task',{x:500,y:300});m.select(host.id);const before=await m.getXML(),count=m.commandStack.size();
+ const mouse=(type,x,y)=>new dom.window.MouseEvent(type,{bubbles:true,cancelable:true,button:0,clientX:x,clientY:y});
+ const boundaryButton=[...m.getContainer().querySelectorAll('.bpmn-xyflow-palette button')].find(button=>button.textContent==='+ Boundary');assert.ok(boundaryButton);boundaryButton.click();assert.ok(m.getContainer().querySelector('[data-action="replace-with-timer-boundary"]'));window.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));assert.equal(await m.getXML(),before);assert.equal(m.commandStack.size(),count);
+ boundaryButton.click();m.getContainer().querySelector('[data-action="replace-with-non-interrupting-timer-boundary"]').click();const boundary=host.attachers.at(-1);assert.equal(boundary.type,'bpmn:BoundaryEvent');assert.equal(boundary.businessObject.cancelActivity,false);m.undo();assert.equal(await m.getXML(),before);
+ const loose=m.addShape('bpmn:IntermediateThrowEvent',{x:800,y:300}),looseBefore=await m.getXML(),oldHit=document.elementsFromPoint;document.elementsFromPoint=()=>[m.getContainer().querySelector(`[data-element-id="${host.id}"]`)];
+ try{m.getContainer().querySelector(`[data-element-id="${loose.id}"]`).dispatchEvent(mouse('mousedown',loose.x+18,loose.y+18));window.dispatchEvent(mouse('mousemove',host.x+host.width,host.y+host.height));window.dispatchEvent(mouse('mouseup',host.x+host.width,host.y+host.height));assert.equal(loose.type,'bpmn:BoundaryEvent');assert.equal(loose.host,host);assert.equal(loose.businessObject.eventDefinitions.length,0);m.undo();assert.equal(await m.getXML(),looseBefore);m.redo();m.select(loose.id);m.getContainer().querySelector('button[title^="Change type"]').click();m.getContainer().querySelector('[data-action="replace-with-timer-boundary"]').click();assert.equal(loose.businessObject.eventDefinitions[0].$type,'bpmn:TimerEventDefinition');}
+ finally{document.elementsFromPoint=oldHit;}await oracle(m);m.destroy();
+});
+
+test('modeling shortcuts work from palette/toolbar buttons without stealing editable-field undo',async()=>{
+ const m=new Modeler({container:dom.createContainer(),fitViewOnInit:false,palette:true});await m.importXML(await readFile('test/fixtures/bpmn/basic.bpmn','utf8'));
+ const button=[...m.getContainer().querySelectorAll('.bpmn-xyflow-palette button')].find(button=>button.textContent==='+ Task'),before=m.getGraph().nodes.length;button.click();button.focus();assert.equal(m.getGraph().nodes.length,before+1);
+ const undo=target=>{const event=new dom.window.KeyboardEvent('keydown',{key:'z',ctrlKey:true,bubbles:true,cancelable:true});target.dispatchEvent(event);return event.defaultPrevented;};
+ for(const tag of ['input','textarea','select']){const field=document.createElement(tag);m.getContainer().append(field);assert.equal(undo(field),false);assert.equal(m.getGraph().nodes.length,before+1);field.remove();}
+ const edit=document.createElement('div');edit.contentEditable='true';m.getContainer().append(edit);assert.equal(undo(edit),false);edit.remove();assert.equal(undo(button),true);assert.equal(m.getGraph().nodes.length,before);m.destroy();
+});
+
+test('contextual move applies upstream event replacements, artifact ownership and lane-copy restrictions',async()=>{
+ const m=await model(),sub=m.addShape('bpmn:SubProcess',{x:850,y:600});
+ const start=m.addShape('bpmn:StartEvent',{x:500,y:400},{eventDefinitionType:'bpmn:TimerEventDefinition'}),before=await m.getXML();
+ assert.equal(m.moveShape(start,{x:300,y:150},sub),true);assert.equal(start.businessObject.eventDefinitions.length,0);assert.equal(start.parent,sub);assert.equal(start.businessObject.$parent,sub.businessObject);m.undo();assert.equal(await m.getXML(),before);m.redo();await oracle(m);
+ const annotation=m.addShape('bpmn:TextAnnotation',{x:1100,y:750},{parent:sub}),oldOwner=annotation.businessObject.$parent,annotationBefore=await m.getXML();
+ assert.ok(m.moveShape(annotation,{x:-500,y:-500},m.getGraph().roots[0]));assert.ok(!oldOwner.artifacts.includes(annotation.businessObject));assert.equal(annotation.businessObject.$parent,m.getGraph().roots[0].businessObject);m.undo();assert.equal(await m.getXML(),annotationBefore);
+ const pool=m.addShape('bpmn:Participant',{x:1200,y:900}),lanes=m.splitLane(pool,2);assert.equal(m.copy([lanes[0]]),null);assert.equal(m.moveShape(lanes[0],{x:20,y:0}),false);await oracle(m);m.destroy();
+});
+
+test('collaboration-level data stores retain a process owner across create/move/export and exact undo',async()=>{
+ const m=await model('test/fixtures/scenarios/order-payment-delivery.bpmn'),root=m.getGraph().roots[0],pool=m.getElement('SellerPool');
+ const store=m.addShape('bpmn:DataStoreReference',{x:1600,y:300},{parent:root});assert.ok(store);assert.equal(store.parent,root);assert.ok(store.businessObject.$parent.$instanceOf('bpmn:Process'));await oracle(m);
+ const before=await m.getXML();assert.ok(m.moveShape(store,{x:-400,y:0},pool));assert.equal(store.businessObject.$parent,pool.businessObject.processRef);m.undo();assert.equal(await m.getXML(),before);await oracle(m);m.destroy();
+});
+
+test('same IO event-family replacement and attachment preserve data item and association identities',async()=>{
+ const m=await model(),host=m.addShape('bpmn:Task',{x:500,y:300}),event=m.addShape('bpmn:IntermediateCatchEvent',{x:800,y:300},{eventDefinitionType:'bpmn:MessageEventDefinition'}),data=m.addShape('bpmn:DataObjectReference',{x:1000,y:300});
+ const edge=m.connect(event,data),item=edge.businessObject.sourceRef[0],before=await m.getXML();assert.equal(m.attachBoundary(event,host),event);assert.ok(event.businessObject.dataOutputs.includes(item));assert.deepEqual(event.businessObject.dataOutputAssociations,[edge.businessObject]);assert.equal(edge.businessObject.$parent,event.businessObject);await oracle(m);m.undo();assert.equal(await m.getXML(),before);
+ const unchanged=await m.getXML(),count=m.commandStack.size();assert.equal(m.replace(event,{type:'bpmn:IntermediateThrowEvent',eventDefinitionType:'bpmn:MessageEventDefinition'}),null);assert.equal(await m.getXML(),unchanged);assert.equal(m.commandStack.size(),count);m.destroy();
+});
+
+test('replacement popup exposes pinned context entries and real checkbox header actions',async()=>{
+ const m=await model(),task=m.addShape('bpmn:Task',{x:500,y:300});
+ const open=node=>{m.select(node.id);m.getContainer().querySelector('button[title^="Change type"]').click();};
+ open(task);assert.ok(m.getContainer().querySelector('[data-action="replace-with-service-task"]'));const parallel=m.getContainer().querySelector('[data-action="toggle-parallel-mi"]');assert.equal(parallel.getAttribute('role'),'menuitemcheckbox');assert.equal(parallel.getAttribute('aria-checked'),'false');parallel.click();assert.equal(task.businessObject.loopCharacteristics.isSequential,false);open(task);assert.equal(m.getContainer().querySelector('[data-action="toggle-parallel-mi"]').getAttribute('aria-checked'),'true');m.getContainer().querySelector('[data-action="toggle-sequential-mi"]').click();assert.equal(task.businessObject.loopCharacteristics.isSequential,true);
+ const data=m.addShape('bpmn:DataObjectReference',{x:750,y:300});open(data);m.getContainer().querySelector('[data-action="toggle-is-collection"]').click();assert.equal(data.businessObject.dataObjectRef.isCollection,true);
+ const pool=m.addShape('bpmn:Participant',{x:1100,y:800});open(pool);m.getContainer().querySelector('[data-action="toggle-participant-multiplicity"]').click();assert.ok(pool.businessObject.participantMultiplicity);await oracle(m);m.destroy();
+});
+
+test('variant replacements normalize hidden child starts/cancel ends and preserve exact undo',async()=>{
+ const m=await model('test/fixtures/scenarios/booking-timeout-compensation.bpmn'),transaction=m.getElement('BookingTransaction');
+ await m.drillInto(transaction);await m.navigateBack();m.toggleExpanded(transaction);const before=await m.getXML();
+ m.replace(transaction,{type:'bpmn:SubProcess',isExpanded:false});const lookup=id=>{const walk=bo=>{if(bo.id===id)return bo;for(const child of bo.flowElements||[]){const found=walk(child);if(found)return found;}};return walk(transaction.businessObject);};
+ assert.equal(lookup('CancelBooking').eventDefinitions.length,0);assert.equal(m.getElement('BookingCancelled').businessObject.eventDefinitions.length,0);await oracle(m);m.undo();assert.equal(await m.getXML(),before);m.redo();m.undo();
+ const eventSub=m.addShape('bpmn:SubProcess',{x:1600,y:700},{triggeredByEvent:true,isExpanded:true}),start=m.addShape('bpmn:StartEvent',{x:1600,y:700},{parent:eventSub,eventDefinitionType:'bpmn:TimerEventDefinition',isInterrupting:false});assert.ok(start);const old=await m.getXML();m.replace(eventSub,{type:'bpmn:SubProcess',isExpanded:true});assert.equal(start.businessObject.eventDefinitions.length,0);assert.equal(start.businessObject.isInterrupting,true);m.undo();assert.equal(await m.getXML(),old);
+ const normal=m.addShape('bpmn:SubProcess',{x:1600,y:1000}),none=m.addShape('bpmn:StartEvent',{x:1600,y:1000},{parent:normal});assert.ok(none);const unchanged=await m.getXML(),size=m.commandStack.size();assert.equal(m.replace(normal,{type:'bpmn:SubProcess',triggeredByEvent:true,isExpanded:true}),null);assert.equal(await m.getXML(),unchanged);assert.equal(m.commandStack.size(),size);m.destroy();
+});
+
+test('replacement validates every retained edge and cleans illegal conditions/defaults atomically',async()=>{
+ const {getConnectionType}=await dom.loadModule('/lib/modeling/Rules.js');
+ const m=await model(),a=m.addShape('bpmn:Task',{x:300,y:400}),b=m.addShape('bpmn:Task',{x:550,y:400}),c=m.addShape('bpmn:Task',{x:800,y:400}),incoming=m.connect(a,b),outgoing=m.connect(b,c);
+ m.setSequenceFlowType(outgoing,'conditional','x > 0');const before=await m.getXML();m.replace(b,{type:'bpmn:StartEvent'});assert.equal(m.getElement(incoming.id),null);assert.equal(m.getElement(outgoing.id),outgoing);assert.equal(outgoing.businessObject.conditionExpression,undefined);
+ for(const edge of m.getGraph().edges)assert.equal(getConnectionType(edge.source,edge.target,edge),edge.type);await oracle(m);m.undo();assert.equal(await m.getXML(),before);
+ m.replace(b,{type:'bpmn:EndEvent'});assert.equal(m.getElement(outgoing.id),null);assert.equal(m.getElement(incoming.id),incoming);for(const edge of m.getGraph().edges)assert.equal(getConnectionType(edge.source,edge.target,edge),edge.type);m.undo();assert.equal(await m.getXML(),before);
+ m.replace(b,{type:'bpmn:ExclusiveGateway'});assert.ok(outgoing.businessObject.conditionExpression);m.setSequenceFlowType(outgoing,'default');const gateway=await m.getXML();m.replace(b,{type:'bpmn:ParallelGateway'});assert.equal(b.businessObject.default,undefined);assert.equal(outgoing.businessObject.conditionExpression,undefined);for(const edge of m.getGraph().edges)assert.equal(getConnectionType(edge.source,edge.target,edge),edge.type);m.undo();assert.equal(await m.getXML(),gateway);await oracle(m);m.destroy();
+});
+
+test('catalog target identity, definition metadata and flags reject adversarial mutations before commands',async()=>{
+ const m=await model('test/fixtures/scenarios/order-payment-delivery.bpmn'),pool=m.getElement('SellerPool'),start=m.getElement('OrderReceived');const before=await m.getXML(),size=m.commandStack.size();
+ for(const eventDefinitionAttrs of [{id:pool.id},{$type:'bpmn:Task'},{$parent:pool.businessObject},JSON.parse('{"__proto__":"value"}'),{name:NaN},{messageRef:pool.businessObject}]){assert.equal(m.replace(start,{type:'bpmn:StartEvent',eventDefinitionType:'bpmn:MessageEventDefinition',eventDefinitionAttrs}),null);assert.equal(await m.getXML(),before);assert.equal(m.commandStack.size(),size);}
+ assert.equal(m.replace(pool,{type:'bpmn:Participant',isExpanded:false},{id:''},{removeContents:true}),null);assert.equal(await m.getXML(),before);
+ for(const options of [{cancelActivity:false},{isInterrupting:false},{triggeredByEvent:true},{eventDefinitionType:'bpmn:TimerEventDefinition'},{instantiate:true}]){assert.equal(m.addShape('bpmn:Task',{x:1000,y:600},options),null);assert.equal(await m.getXML(),before);assert.equal(m.commandStack.size(),size);}
+ assert.equal(m.replace(start,{type:'bpmn:Task',cancelActivity:false}),null);assert.equal(await m.getXML(),before);m.destroy();
+});
+
+test('replacement cleans sibling-plane-only edges, conditions, defaults and DI with exact undo',async()=>{
+ const m=await model(),a=m.addShape('bpmn:Task',{x:300,y:300}),b=m.addShape('bpmn:Task',{x:550,y:300}),c=m.addShape('bpmn:Task',{x:800,y:300}),incoming=m.connect(a,b),outgoing=m.connect(b,c);m.setSequenceFlowType(outgoing,'conditional','x');
+ const original=await m.getXML(),moddle=m.getModdle(),parsed=await moddle.fromXML(original),defs=parsed.rootElement,plane=defs.diagrams[0].plane;
+ const copied=moddle.create('bpmndi:BPMNDiagram',{id:'OtherDiagram',plane:moddle.create('bpmndi:BPMNPlane',{id:'OtherPlane',bpmnElement:plane.bpmnElement,planeElement:[]})});copied.$parent=defs;copied.plane.$parent=copied;defs.diagrams.push(copied);
+ const edgeDi=plane.planeElement.find(di=>di.bpmnElement.id===outgoing.id);plane.planeElement.splice(plane.planeElement.indexOf(edgeDi),1);copied.plane.planeElement.push(edgeDi);edgeDi.$parent=copied.plane;
+ await m.importXML((await moddle.toXML(defs)).xml);assert.equal(m.getElement(outgoing.id),null);const before=await m.getXML(),node=m.getElement(b.id);
+ assert.equal(m.replace(node,{type:'bpmn:EndEvent'}),node);assert.ok(!m.getDefinitions().diagrams.some(diagram=>diagram.plane.planeElement.some(di=>di.bpmnElement.id===outgoing.id)));assert.equal((await oracle(m)).elementsById[outgoing.id],undefined);assert.ok(m.getElement(incoming.id));m.undo();assert.equal(await m.getXML(),before);
+ m.replace(node,{type:'bpmn:StartEvent'});const result=await oracle(m);assert.equal(result.elementsById[incoming.id],undefined);assert.equal(result.elementsById[outgoing.id].conditionExpression,undefined);assert.ok(result.elementsById[b.id].outgoing.includes(result.elementsById[outgoing.id]));m.undo();assert.equal(await m.getXML(),before);m.destroy();
+});
+
+test('empty participant creation honors explicit state without hiding a lone process',async()=>{
+ const m=await model(),before=await m.getXML();assert.equal(m.addShape('bpmn:Participant',{x:600,y:500},{isExpanded:false}),null);assert.equal(await m.getXML(),before);
+ m.addShape('bpmn:Participant',{x:600,y:500});const expanded=await m.getXML();const empty=m.addShape('bpmn:Participant',{x:600,y:1000},{isExpanded:false});assert.ok(empty);assert.equal(empty.businessObject.processRef,undefined);assert.equal(m.addShape('bpmn:Task',{x:600,y:1000},{parent:empty}),null);await oracle(m);m.undo();assert.equal(await m.getXML(),expanded);m.destroy();
+});
+
+test('IO-bearing throw-event attachment is a pre-mutation no-op without an uncaught transaction error',async()=>{
+ const m=await model(),host=m.addShape('bpmn:Task',{x:500,y:300}),event=m.addShape('bpmn:IntermediateThrowEvent',{x:800,y:300}),data=m.addShape('bpmn:DataObjectReference',{x:1000,y:300});assert.ok(m.connect(data,event));const before=await m.getXML(),size=m.commandStack.size();assert.equal(m.attachBoundary(event,host),null);assert.equal(await m.getXML(),before);assert.equal(m.commandStack.size(),size);
+ const mouse=(type,x,y)=>new dom.window.MouseEvent(type,{bubbles:true,cancelable:true,button:0,clientX:x,clientY:y});m.getContainer().querySelector(`[data-element-id="${event.id}"]`).dispatchEvent(mouse('mousedown',event.x+18,event.y+18));window.dispatchEvent(mouse('mousemove',host.x+host.width,host.y+host.height));window.dispatchEvent(mouse('mouseup',host.x+host.width,host.y+host.height));assert.equal(await m.getXML(),before);assert.equal(m.commandStack.size(),size);m.destroy();
 });

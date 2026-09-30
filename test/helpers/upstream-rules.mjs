@@ -3,7 +3,7 @@ import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-export async function loadUpstreamRules(entry = 'node_modules/bpmn-js/lib/features/rules/BpmnRules.js') {
+export async function loadRuleModule(entry) {
   const directory = await mkdtemp(join(tmpdir(), 'bpmn-rules-oracle-'));
   try {
     const result = await build({
@@ -15,8 +15,12 @@ export async function loadUpstreamRules(entry = 'node_modules/bpmn-js/lib/featur
     const chunk = result.output.find(item => item.type === 'chunk' && item.isEntry);
     const path = join(directory, 'rules.mjs');
     await writeFile(path, chunk.code);
-    return (await import(pathToFileURL(path).href)).default.prototype;
+    return await import(pathToFileURL(path).href);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+}
+
+export async function loadUpstreamRules(entry = 'node_modules/bpmn-js/lib/features/rules/BpmnRules.js') {
+  return (await loadRuleModule(entry)).default.prototype;
 }

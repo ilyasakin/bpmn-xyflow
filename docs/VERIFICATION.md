@@ -4,7 +4,7 @@ This checkpoint is ready for independent hosted browser testing. It is **not a
 full parity completion claim**. [PARITY.md](PARITY.md) remains the acceptance
 ledger; [SCENARIOS.md](SCENARIOS.md) describes business workflows and sources.
 
-## Passed locally on the checkpoint source
+## Historical first checkpoint: passed locally
 
 - Frozen dependency install
 - `python3 test/xml-schema.py`: upstream semantic-oracle corpus, rich metadata
@@ -24,7 +24,7 @@ ledger; [SCENARIOS.md](SCENARIOS.md) describes business workflows and sources.
   imported-edge label delete/rename/reconnect, React lifecycle and subprocess
   navigation; reviewed subset has no outstanding checkpoint blocker
 
-## Not yet run
+## Historical first checkpoint: then pending
 
 - Real Chromium suites, including pointer/keyboard/cancellation interaction,
   pixel geometry and rendering, independent upstream browser open/save, and
@@ -38,8 +38,9 @@ prepared suites in a normal browser environment and saves screenshot evidence.
 ## Reproduce
 
 Use Node 24 and the pinned pnpm version. Run `pnpm install --frozen-lockfile
---ignore-scripts`; install Python `lxml==6.1.1`; install the test browser with
-`pnpm exec puppeteer browsers install chrome-headless-shell --install-deps`.
+--ignore-scripts`; install Python `lxml==6.1.1`; use a supported sandbox-capable Chrome installation and set
+`PUPPETEER_EXECUTABLE_PATH` to its executable. GitHub CI selects its preinstalled
+official Google Chrome, prints its version/path, and preserves its sandbox.
 Then run `pnpm check`. The source XML oracle alone is `pnpm test:xml`, actual
 Modeler metadata interoperability is `pnpm test:xml-modeler`, and full XSD
 validation is `pnpm test:schema`.
@@ -61,3 +62,36 @@ Chrome without disabling its sandbox. Existing smoke/framework/viewer checks and
 order/booking scenarios pass. That earlier head still exposed approval lane paint
 order and HR undo precision failures; local fixes above require fresh hosted
 verification. Remaining contextual menu/rule and UI gates stay open in PARITY.md.
+
+## Green hosted checkpoint (2026-09-30)
+
+Library commit `37e9ec053190516c4c9fb52abe01c58650baac7a` passed the full
+configured GitHub CI run [36773803293](https://github.com/ilyasakin/bpmn-xyflow/actions/runs/36773803293).
+This includes native smoke gestures, React/multi-instance/wrapper lifecycle,
+viewer/theme/security tests, all three business workflows, exact HR DI undo,
+independent upstream browser open/save, source/XSD/unit/build and packed consumers.
+CodeQL reported no new alerts. Earlier approval-lane and HR precision failures
+are fixed and pass in real Chrome on this revision.
+
+Site commit `0c86270e3d70ea0f6d6a0b55fe975202efa855b3` pins that library revision
+and passed its CI and normal Vercel preview build. Both PRs remain draft.
+
+The next contextual menu/create/drop/attachment work and its dedicated native
+UI suite remain in progress. The green checkpoint proves the configured gates,
+not completion of every open row in PARITY.md.
+
+The subsequent site-only test checkpoint `98be8faacf872554d458cc8ac14f0045cb795e55`
+passed [run 36775989922](https://github.com/ilyasakin/ilyasakin.github.io/actions/runs/36775989922),
+including native browser assertions against a served production Next build.
+It uses pinned puppeteer-core and the supported runner Chrome without disabling
+its sandbox; passing screenshot evidence is uploaded by the site workflow.
+
+## Contextual source checkpoint
+
+Independent review reran 177 unit tests, XML/security probes, and packed consumers.
+The modeling and schema gates validate 87 generated exports. The new native action
+suite covers nine independently aggregated groups, including boundary creation and
+drag attachment, host history, edge cleanup through event replacement, flow types,
+headers, populated replacement confirmation and geometry controls. Its source is
+checked locally; actual execution awaits the next hosted revision. Touch gestures
+remain an explicit additional core gate, not established by phone layout checks.

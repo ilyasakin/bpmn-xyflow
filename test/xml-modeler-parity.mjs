@@ -78,7 +78,12 @@ try {
   assert.deepEqual(metadata((await reopen(m)).elementsById.Script_1), expected);
   console.log('OK Modeler replacement and undo/redo retain compatible metadata, DI color, lane and boundary references');
 
-  const edge = m.getElement('Flow_1');
+  // A condition is only valid on an Activity/Exclusive/Inclusive source.
+  // Flow_1 starts at a StartEvent and Flow_2 has no DI in this lossless fixture.
+  // Create a rendered Activity-source flow for the reconnect-retention probe.
+  const reconnectionTarget = m.addShape('bpmn:Task', { x: 750, y: 260 });
+  const edge = m.connect(task, copied);
+  assert.ok(edge);
   const moddle = m.getModdle();
   edge.businessObject.conditionExpression = moddle.create('bpmn:FormalExpression', { body: '${verified}', language: 'javascript' });
   edge.businessObject.conditionExpression.$parent = edge.businessObject;
@@ -86,16 +91,16 @@ try {
   edge.businessObject.extensionElements.$parent = edge.businessObject;
   edge.businessObject.extensionElements.values[0].$parent = edge.businessObject.extensionElements;
   edge.businessObject.set('vendor:flag', 'flow-metadata');
-  m.reconnect(edge, 'target', copied);
+  m.reconnect(edge, 'target', reconnectionTarget);
   result = await reopen(m);
-  assert.equal(result.elementsById.Flow_1.targetRef.id, copied.id);
-  assert.equal(result.elementsById.Flow_1.conditionExpression.body, '${verified}');
-  assert.equal(result.elementsById.Flow_1.extensionElements.values[0].class, 'example.FlowListener');
-  assert.equal(result.elementsById.Flow_1.$attrs['vendor:flag'], 'flow-metadata');
+  assert.equal(result.elementsById[edge.id].targetRef.id, reconnectionTarget.id);
+  assert.equal(result.elementsById[edge.id].conditionExpression.body, '${verified}');
+  assert.equal(result.elementsById[edge.id].extensionElements.values[0].class, 'example.FlowListener');
+  assert.equal(result.elementsById[edge.id].$attrs['vendor:flag'], 'flow-metadata');
   m.undo();
-  assert.equal((await reopen(m)).elementsById.Flow_1.targetRef.id, 'Script_1');
+  assert.equal((await reopen(m)).elementsById[edge.id].targetRef.id, copied.id);
   m.redo();
-  assert.equal((await reopen(m)).elementsById.Flow_1.extensionElements.values[0].class, 'example.FlowListener');
+  assert.equal((await reopen(m)).elementsById[edge.id].extensionElements.values[0].class, 'example.FlowListener');
   console.log('OK Modeler reconnect retains conditional expressions, extension metadata and undo/redo reference identity');
 
   const booking = await model('test/fixtures/scenarios/booking-timeout-compensation.bpmn');
