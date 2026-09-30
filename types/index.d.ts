@@ -259,6 +259,9 @@ export interface ConnectionOptions {
   businessObject?: ModdleElement;
   di?: ModdleElement;
   waypoints?: Point[];
+  /** Diagram-coordinate docking hints, projected onto each shape's outline. */
+  connectionStart?: Point;
+  connectionEnd?: Point;
 }
 export type Alignment = 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom';
 export type Axis = 'horizontal' | 'vertical';

@@ -63,3 +63,23 @@ subprocess until a valid typed start configuration exists; the editor does not
 guess a trigger. Reconnection and type replacement normalize condition/default
 properties when the resulting source type cannot own them. Unedited import/export
 still preserves the original XML payload.
+
+## Connection anchor intent
+
+A drag from the visible shape-edge port or an explicit Shift-drag from a shape
+perimeter supplies a chosen source anchor. The drop position supplies the target
+anchor, projected onto the actual outline. Preview and committed routing use the
+same anchors; a target on the other side of the diagram must not silently reverse
+the chosen source side. A context-pad Connect action and an API call without
+anchor hints may instead use automatic source docking.
+
+The direct `connect` options accept `connectionStart` and `connectionEnd` points
+in diagram coordinates when the caller has explicit docking intent. Screen
+coordinates must be converted using the current viewport and canvas bounds.
+Invalid or inaccessible explicit docking is rejected without a half-created
+semantic connection. Manually edited interior bends are retained where possible
+when repairing routes after shape movement or resizing.
+
+Native pointer tests verify these behaviors separately from connection-rule
+inference. See the current acceptance state in PARITY.md before interpreting
+these commands as fully verified.

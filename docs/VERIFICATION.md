@@ -95,3 +95,22 @@ drag attachment, host history, edge cleanup through event replacement, flow type
 headers, populated replacement confirmation and geometry controls. Its source is
 checked locally; actual execution awaits the next hosted revision. Touch gestures
 remain an explicit additional core gate, not established by phone layout checks.
+
+## Pointer-accurate connection checkpoint (awaiting hosted native execution)
+
+User testing exposed basic source-port/drop-anchor and route-edit behavior that
+prior connection-existence tests did not cover. The focused correction preserves
+explicit pointer intent through preview/create/reconnect, repairs end legs while
+retaining manual interior bends, supports two-point segment manipulation, and
+adds screen-sized hit regions. Variable-length and same-count DI edits preserve
+surviving waypoint metadata and exact history restoration.
+
+Independent local verification: **216 unit tests**, **88 XSD-valid exports**,
+**1,008 additional anchor/shape/placement cases**, exact pointer-state and metadata
+probes, packed consumers, build and lint pass. The dedicated native Chromium
+connection suite additionally checks chosen on-screen ports, preview and final
+DI at several zoom levels, the reported Conditional-sample reconnect, source and
+target reconnection, opposite-anchor stability, repeated route edits, cancellation
+and movement/resize. Its hosted result is still required before claiming the
+reported interaction defects are resolved. Touch work remains paused and outside
+this checkpoint.

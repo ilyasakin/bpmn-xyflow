@@ -27,12 +27,12 @@ round-trip through this project's own parser is insufficient evidence of validit
 | Renderer BPMN types | Events/tasks/gateways/data/artifacts/subprocess/pool/lane fixture coverage | Retained renderer/helpers byte-match upstream 18.30.1; structural type corpus passes; Chrome gate passes at published checkpoint |
 | Fit/pan/zoom/resize | Pixel padding, default options, repeated resize and diagrams with zero/large bounds | Usable-area fit avoids palette/toolbar/minimap; large-diagram/mobile tests pass; Chrome gate passes at published checkpoint |
 | Creation/append/replacement | Parent ownership, references, markers, event definitions, cancellation | Explicit remove-contents replacement, metadata/IO ownership and exact recovery pass; contextual catalog/API and resulting-edge cleanup independently reviewed; native action suite pending |
-| Move/resize/containment | Descendants, attached boundaries, external labels, edges follow; undo restores | Exact fractional HR DI restoration and native/API cancellation tests pass; Chrome HR gate passes with exact fractional DI undo |
-| Connection/reconnection | Same-flow-scope sequence flow, message participants, event semantics, invalid drop rollback | 110,500 upstream differential inference comparisons pass with both custom/upstream semantic models; mutation and browser gates pass at published checkpoint |
+| Move/resize/containment | Descendants, attached boundaries, external labels, edges follow; undo restores | Exact HR DI undo passes; native QA exposed adjacent-bend repair missing when connected shapes move/resize; active correction |
+| Connection/reconnection | Same-flow-scope sequence flow, message participants, event semantics, invalid drop rollback | 110,500 upstream differential inference comparisons pass with both custom/upstream semantic models; semantic inference passes, but native user QA exposed discarded source/drop anchors; routing/preview/gesture corrections are active |
 | Delete | Semantic/DI/reference cleanup including descendants/lanes/pools, undo | Cross-plane/subtree/lane/pool/label/reference cleanup and exact recovery pass |
 | Undo/redo/transactions | Atomic rollback, branching history, selected deleted element cleanup, navigation | Atomic rollback, history branching, multi-view histories and interrupted gestures tested |
 | Copy/paste | Deep semantics, hierarchy, namespace extensions, ID/reference remap, DI bounds/waypoints | Hierarchy, metadata, declared-ID remap, opaque data preservation and collaboration copy rules tested |
-| Labels/bendpoints | Edit/move labels, endpoint docking, bend editing/cancellation, no duplicate labels | Imported labels, exact movement, rename/delete/reconnect and undo duplication regressions pass; browser smoke passed prior head |
+| Labels/bendpoints | Edit/move labels, endpoint docking, bend editing/cancellation, no duplicate labels | Label lifecycle passes; native QA exposed two-point segment dragging no-op and undersized hit targets; expanded pointer gates pending |
 | Pools/lanes/subprocesses | Creation, move, resize, containment, collaboration ownership, expand/drill/back | Nested/vertical lane split/add/rebalance, active planes, child-view mirroring/hydration and exact history tested |
 | Selection/keyboard/lasso | Single/multi/select-all, focus restrictions, delete, escape and repeated flows | Existing browser smoke and structural repeat/cancel tests pass; published interaction gate passes; new contextual controls remain pending |
 | Touch and pinch gestures | Native touch selection/pan/pinch/modeling and cancellation | Phone layout and attribution pass only; touch modeling/pinch parity is not verified; Modeler gesture handlers currently use mouse events |
@@ -43,7 +43,7 @@ round-trip through this project's own parser is insufficient evidence of validit
 | Lifecycle/frameworks | Latest import wins, destroy during import, failed import recovery, React/Vue/Svelte | Node lifecycle/StrictMode, full wrapper bundle/type consumers and prior hosted framework tests pass |
 | Attribution | Original upstream license/source retained, visible unobscured bpmn.io link | Original LICENSE and unchanged attribution source retained; prior Chrome visibility gate passes |
 | Site integration | Matching tested library revision, contrast and all core user flows | Site PR15 pins tested library 37e9ec0; production-site native Chrome CI and refreshed preview QA pass; next contextual revision pending |
-| Packaging/CI | Frozen pnpm install, lint, semantic/unit/browser gates, library build | 177 Node tests, 87 XSD exports, strict packed root/framework consumers, build and actionlint pass locally; all configured hosted suites pass at 37e9ec0; new contextual suite pending |
+| Packaging/CI | Frozen pnpm install, lint, semantic/unit/browser gates, library build | 216 Node tests, 88 XSD exports, strict packed root/framework consumers, build and actionlint pass locally; all configured hosted suites pass at 37e9ec0; new contextual suite pending |
 
 ## Execution environment limits
 
@@ -62,9 +62,10 @@ required before describing end-to-end parity as verified. Upstream's 18.30 theme
 token changes are distinct from the older retained renderer implementation and
 must not be implied merely by passing semantic tests.
 
-## Open core gates after the green hosted checkpoint
+## Open core gates after the published checkpoint
 
-- Execute the newly reviewed contextual catalog/create/drop/attachment integration in real Chrome; 348 menu-descriptor comparisons and independent mutation probes pass locally
+- **Priority: basic arrow interaction fidelity.** Preserve chosen source port and target drop point through preview/create/reconnect, including backwards right-to-right routes; repair orthogonal routes after shape move/resize; support two-point segment editing and usable hit areas. Earlier tests checked refs/existence too narrowly; native user QA disproved complete interaction parity.
+- Finish the contextual browser rerun: new boundary selection overlay fixed; empty-plane assertion helper corrected; existing assertions remain enabled
 - Native touch/pinch and touch modeling remain unverified; desktop mouse/keyboard gates do not establish them
 - Real-browser verification of new lane/space/flow-insertion/replacement-confirmation controls and current theme overrides
 - Repeat the production-site browser gate on the next contextual library revision
@@ -112,3 +113,11 @@ ownership, invalid target no-ops and exact XML/history undo. Local gates pass:
 177 unit tests, 87 XSD-valid generated exports, packed consumers, lint and build.
 The new native Chrome suite aggregates nine action groups independently. Touch
 modeling/pan/pinch is active remaining work and is not covered by desktop tests.
+
+### Shared reference limitation: atypical event dimensions
+
+For a non-square imported event (for example, 80×40), the retained upstream
+renderer paints a circle using `round((width + height) / 4)` while its docking
+path uses `width / 2`. This is a visible-outline mismatch in the pinned upstream
+reference too. Standard square BPMN event dimensions are covered by the routing
+gates. A separate renderer/path consistency change is not implied by those tests.

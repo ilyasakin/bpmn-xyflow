@@ -143,6 +143,15 @@ try {
           modeler.setSequenceFlowType(flow, 'default');
           assert.equal(nodes[0].businessObject.default, flow.businessObject);
           assert.equal(flow.businessObject.conditionExpression, undefined);
+          const beforePinned = await modeler.getXML();
+          const connectionStart = { x: nodes[2].x + nodes[2].width, y: nodes[2].y + nodes[2].height / 4 };
+          const connectionEnd = { x: nodes[0].x + nodes[0].width, y: nodes[0].y + nodes[0].height * 3 / 4 };
+          const pinned = modeler.connect(nodes[2], nodes[0], { connectionStart, connectionEnd });
+          assert.ok(pinned);
+          assert.deepEqual(pinned.waypoints[0], connectionStart);
+          assert.deepEqual(pinned.waypoints.at(-1), connectionEnd);
+          modeler.undo();
+          assert.equal(await modeler.getXML(), beforePinned);
           const boundary = modeler.addShape('bpmn:BoundaryEvent', {
             x: nodes[1].x + nodes[1].width, y: nodes[1].y + nodes[1].height
           }, { host: nodes[1], eventDefinitionType: 'bpmn:TimerEventDefinition' });

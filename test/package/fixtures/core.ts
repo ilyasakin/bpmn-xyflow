@@ -39,6 +39,11 @@ if (node) {
   modeler.updateLabel(node, 'Review');
   modeler.updateProperties(node, { name: 'Review', isForCompensation: false });
   const edge = modeler.connect(node, node);
+  modeler.connect(node, node, { connectionStart: { x: 110, y: 50 }, connectionEnd: { x: 90, y: 30 } });
+  // @ts-expect-error docking coordinates must be finite numbers at runtime
+  modeler.connect(node, node, { connectionStart: { x: '110', y: 50 } });
+  // @ts-expect-error both coordinates are required for an explicit docking
+  modeler.connect(node, node, { connectionEnd: { x: 90 } });
   if (edge) {
     modeler.updateWaypoints(edge, [{ x: 0, y: 0 }, { x: 10, y: 10 }]);
     modeler.reconnect(edge, 'target', node);
