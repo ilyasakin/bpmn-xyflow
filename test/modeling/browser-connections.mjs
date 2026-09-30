@@ -47,6 +47,60 @@ function near(actual,expected,tolerance,label) {assert.ok(actual&&Math.hypot(act
 async function preview(page) {
   return page.evaluate(()=>{const path=document.querySelector('.bpmn-xyflow-connect-preview')?.querySelector('path,line,polyline');if(!path)return null;const start=path.getPointAtLength(0),end=path.getPointAtLength(path.getTotalLength());return{start:{x:start.x,y:start.y},end:{x:end.x,y:end.y}};});
 }
+async function renderedEndpoints(page,id) {
+  return page.evaluate(id=>{
+    const path=window.modeler.getContainer().querySelector(`[data-element-id="${CSS.escape(id)}"] .bpmn-xyflow-connection-visual`);
+    if(!path)throw new Error(`Missing rendered connection ${id}`);
+    const matrix=path.getScreenCTM();
+    if(!matrix)throw new Error(`Missing screen transform for ${id}`);
+    const start=path.getPointAtLength(0).matrixTransform(matrix),end=path.getPointAtLength(path.getTotalLength()).matrixTransform(matrix);
+    return{start:{x:start.x,y:start.y},end:{x:end.x,y:end.y}};
+  },id);
+}
+async function reopenCreatedConnection(page,name,expected,id) {
+  const viewport=await page.evaluate(()=>window.modeler.getViewport()),renderedBefore=await renderedEndpoints(page,id);
+  const warnings=await page.evaluate(async({xml,viewport})=>{
+    const modeler=window.modeler,result=await modeler.importXML(xml);
+    await modeler.setViewport(viewport,{duration:0});
+    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+    return result.warnings.map(warning=>warning.message);
+  },{xml:expected.xml,viewport});
+  assert.deepEqual(warnings,[],'actual viewer reimport adds no warnings');
+  const reopened=await state(page),renderedAfter=await renderedEndpoints(page,id);
+  assert.deepEqual(reopened.flows,expected.flows,'actual viewer reimport preserves semantic references and exact DI waypoints');
+  assert.deepEqual(reopened.shapes,expected.shapes,'actual viewer reimport preserves shape DI bounds');
+  assert.deepEqual(reopened.viewport,viewport,'reimport restores the edited view transform');
+  near(renderedAfter.start,renderedBefore.start,0.01,'reimport leaves rendered source endpoint unchanged on screen');
+  near(renderedAfter.end,renderedBefore.end,0.01,'reimport leaves rendered target endpoint unchanged on screen');
+  await writeFile(`test-artifacts/browser-connections-${name}-reopen.json`,JSON.stringify({id,viewport,renderedBefore,renderedAfter,flows:reopened.flows,warnings},null,2));
+  await page.screenshot({path:`test-artifacts/browser-connections-${name}-reopen.png`,fullPage:true});
+}
+async function fractionalSegmentDrag(page,name,id,delta) {
+  const before=await state(page),original=before.flows.find(flow=>flow.id===id);
+  assert.equal(original.points.length,2,'fractional regression starts with the imported two-point route');
+  assert.notEqual(original.points[0].x,original.points[1].x);
+  assert.notEqual(original.points[0].y,original.points[1].y);
+  await selectEdge(page,id);
+  const start=await point(page,{x:(original.points[0].x+original.points[1].x)/2,y:(original.points[0].y+original.points[1].y)/2}),end={x:start.x+delta.x,y:start.y+delta.y};
+  await hit(page,start,id);await markPoints(page,[{...start,label:'Imported fractional segment midpoint'},{...end,label:'Chosen segment position'}]);
+  await drag(page,start,end,{cancel:true});
+  const cancelled=await state(page);assert.equal(cancelled.xml,before.xml,'Escape restores exact imported fractional route');assert.deepEqual(cancelled.history,before.history);
+  await selectEdge(page,id);await page.mouse.move(start.x,start.y);await page.mouse.down();await page.mouse.move(start.x+1,start.y+1);await page.mouse.move(start.x,start.y);await page.mouse.up();
+  const jitter=await state(page);assert.equal(jitter.xml,before.xml,'out-and-back near-axis drag preserves exact imported fractional route');assert.deepEqual(jitter.history,before.history);
+  await selectEdge(page,id);
+  await drag(page,start,end);
+  const after=await state(page),edited=after.flows.find(flow=>flow.id===id);
+  assert.ok(edited.points.length>=4,'near-axis plain drag creates an orthogonal dogleg');
+  orthogonal(edited.points);
+  const axis=delta.x?'x':'y',chosen=(original.points[0][axis]+original.points[1][axis])/2+delta[axis]/before.viewport.zoom;
+  assert.ok(edited.points.slice(1,-1).some((point,index,inner)=>index&&Math.abs(point[axis]-chosen)<=1.5/before.viewport.zoom&&Math.abs(inner[index-1][axis]-chosen)<=1.5/before.viewport.zoom),'new parallel segment follows the native chosen position');
+  // Whole-segment movement may redock on different source/target sides, as in
+  // upstream. Only cancellation and undo must recover the original anchors.
+  assert.equal(edited.source,original.source);assert.equal(edited.target,original.target);
+  await page.screenshot({path:`test-artifacts/browser-connections-${name}-edited.png`,fullPage:true});
+  await undo(page,before.xml);await redo(page,after.xml);
+  await reopenCreatedConnection(page,name,after,id);
+}
 async function run(name,xml,zoom,fn) {
   const page=await browser.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));await page.setViewport({width:1800,height:1250});
   try {
@@ -102,6 +156,7 @@ async function createByGesture(page,name,source,target,sourcePort,targetPort,mod
   near(live.end,targetPort,tolerance,'live preview endpoint follows pointer');
   near(edge.points.at(-1),targetPort,tolerance,'final DI preserves chosen target side/port');
   await undo(page,before.xml);await redo(page,after.xml);
+  await reopenCreatedConnection(page,name,after,edge.id);
   } finally {
     if(shiftHeld)await page.keyboard.up('Shift').catch(()=>{});
     await page.mouse.up().catch(()=>{});
@@ -209,6 +264,9 @@ try {
   });
   // Keep the actual reported Conditional workflow in the regression corpus too.
   const conditional=await readFile('test/fixtures/bpmn/draw/conditional-flow.bpmn','utf8');
+  await run('conditional-fractional-horizontal-segment',conditional,0.899250875,page=>fractionalSegmentDrag(page,'conditional-fractional-horizontal-segment','sid-262FECFE-432B-42B6-AAF7-040A6B6D1880',{x:0,y:55}));
+  const fractionalVertical=[{x:260.199203187251,y:280},{x:260.4183266932271,y:400}];
+  await run('fractional-vertical-segment',fixture([a,{...b,x:180,y:400}],fractionalVertical),1.3,page=>fractionalSegmentDrag(page,'fractional-vertical-segment','Flow',{x:55,y:0}));
   await run('conditional-fixture-reconnect',conditional,0.899250875,async page=>{
     const id='sid-82C30D2C-10BC-4035-8A14-B50298F120E9';
     const found=await page.evaluate(id=>{const m=window.modeler,e=m.getElement(id),target=m.getGraph().nodes.find(n=>n.businessObject?.name==='T2.0');return e&&target?{targetId:target.id,x:target.x,y:target.y,height:target.height,index:e.waypoints.length-1}:null;},id);

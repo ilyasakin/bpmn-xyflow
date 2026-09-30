@@ -505,3 +505,173 @@ test("overlapping inaccessible ports reject deterministically without changing i
   close(safe.at(-1), { x: 250.125, y: 140.625 });
   assert.ok(orthogonal(safe));
 });
+
+test("near-axis segment classification exactly matches pinned upstream graph-unit tolerance", async () => {
+  const { pointsAligned } = await loadRuleModule("node_modules/diagram-js/lib/util/Geometry.js");
+  for (const offset of [-2.001, -2, -0.219123505976, 0, 0.219123505976, 2, 2.001]) {
+    for (const [a, b] of [
+      [
+        { x: 10.125, y: 20.625 },
+        { x: 90.125, y: 20.625 + offset },
+      ],
+      [
+        { x: 10.125, y: 20.625 },
+        { x: 10.125 + offset, y: 100.625 },
+      ],
+    ]) {
+      const expected = pointsAligned(a, b);
+      assert.equal(
+        routing.segmentMoveAxis(a, b),
+        expected === "v" ? "x" : expected === "h" ? "y" : null,
+      );
+    }
+  }
+  assert.equal(routing.segmentMoveAxis({ x: 10, y: 10 }, { x: 11, y: 11 }), "x"); // upstream x-axis tie precedence
+  assert.equal(routing.segmentMoveAxis({ x: 10, y: 10 }, { x: 10, y: 10 }), null);
+});
+
+test("actual Conditional T1 to Gateway fractional segment becomes an orthogonal dogleg", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const { rootElement: defs } = await model.fromXML(
+    await readFile("test/fixtures/bpmn/draw/conditional-flow.bpmn", "utf8"),
+  );
+  const di = defs.diagrams[0].plane.planeElement;
+  const flow = di.find(
+    (item) => item.bpmnElement?.id === "sid-262FECFE-432B-42B6-AAF7-040A6B6D1880",
+  );
+  const graphShape = (bo) => {
+    const visual = di.find((item) => item.bpmnElement === bo);
+    return { ...visual.bounds, type: bo.$type, businessObject: bo, di: visual };
+  };
+  const connection = {
+    source: graphShape(flow.bpmnElement.sourceRef),
+    target: graphShape(flow.bpmnElement.targetRef),
+    waypoints: xy(flow.waypoint),
+  };
+  const before = structuredClone(connection.waypoints);
+  assert.deepEqual(before, [
+    { x: 370, y: 265.199203187251 },
+    { x: 425, y: 265.4183266932271 },
+  ]);
+  assert.equal(routing.segmentMoveAxis(...before), "y");
+  for (const zoom of [0.55, 1, 1.8]) {
+    const result = planSegmentMove(connection, 0, { x: 0, y: 55 / zoom }, renderer);
+    assert.ok(orthogonal(result), JSON.stringify(result));
+    assert.ok(result.length >= 3);
+    const row = before[0].y + 55 / zoom;
+    assert.ok(result.some((p, i) => i && p.y === row && result[i - 1].y === row));
+    assert.deepEqual(connection.waypoints, before);
+    assert.deepEqual(planSegmentMove(connection, 0, { x: 0, y: 0 }, renderer), before);
+  }
+});
+
+test("near-vertical segments normalize only the moved column without rounding originals", () => {
+  const source = shape("Task", 100, 100),
+    target = shape("Task", 100, 400);
+  const connection = edge(source, target, [
+    { x: 150.125, y: 180 },
+    { x: 151.375, y: 400 },
+  ]);
+  const before = structuredClone(connection.waypoints);
+  assert.equal(routing.segmentMoveAxis(...before), "x");
+  for (const offset of [12.25, 95.75]) {
+    const actual = planSegmentMove(connection, 0, { x: offset, y: 111 }, renderer);
+    assert.ok(orthogonal(actual), JSON.stringify(actual));
+    assert.ok(actual.some((p, i) => i && p.x === before[0].x + offset && actual[i - 1].x === p.x));
+  }
+  assert.deepEqual(connection.waypoints, before);
+});
+
+test("real pinned ConnectionSegmentMove and CroppingConnectionDocking redock the fractional Conditional route", async () => {
+  const { setupDOM } = await import("../helpers/dom.mjs");
+  const dom = await setupDOM();
+  try {
+    const { default: SegmentMove } = await loadRuleModule(
+      "node_modules/diagram-js/lib/features/bendpoints/ConnectionSegmentMove.js",
+    );
+    const { default: Docking } = await loadRuleModule(
+      "node_modules/diagram-js/lib/layout/CroppingConnectionDocking.js",
+    );
+    const handlers = new Map(),
+      eventBus = {
+        on(names, fn) {
+          for (const name of Array.isArray(names) ? names : [names])
+            handlers.set(name, [...(handlers.get(name) || []), fn]);
+        },
+      };
+    const source = shape("Task", 270, 225),
+      target = shape("ExclusiveGateway", 425, 245, 40, 40);
+    const original = [
+      { x: 370, y: 265.199203187251 },
+      { x: 425, y: 265.4183266932271 },
+    ];
+    const connection = edge(source, target, structuredClone(original));
+    const gfx = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    const graphics = {
+      getShapePath: renderer.getShapePath,
+      getConnectionPath: (c) => c.waypoints.map((p, i) => `${i ? "L" : "M"}${p.x},${p.y}`).join(""),
+      update() {},
+    };
+    const docking = new Docking({}, graphics);
+    let context, committed;
+    const canvas = {
+      getGraphics: () => gfx,
+      getLayer: () => gfx,
+      addMarker() {},
+      removeMarker() {},
+      viewbox: () => ({ x: 0, y: 0, scale: 1 }),
+      _container: { getBoundingClientRect: () => ({ left: 0, top: 0 }) },
+    };
+    const moving = new SegmentMove(
+      { get: () => docking },
+      eventBus,
+      canvas,
+      {
+        init(_event, _position, _type, data) {
+          context = data.data.context;
+        },
+      },
+      graphics,
+      {
+        updateWaypoints(_edge, points) {
+          committed = points;
+        },
+      },
+    );
+    moving.start({ clientX: 397.5, clientY: 265.3087649402391 }, connection, 1);
+    assert.equal(context.axis, "y");
+    const event = {
+      context,
+      connection,
+      dx: 0,
+      dy: 55 / 0.899250875,
+      x: 397.5,
+      y: 326.4707849382735,
+    };
+    for (const fn of handlers.get("connectionSegment.move.start")) fn(event);
+    for (const fn of handlers.get("connectionSegment.move.move")) fn(event);
+    for (const fn of handlers.get("connectionSegment.move.end")) fn(event);
+    assert.deepEqual(xy(committed), [
+      { x: 320, y: 305 },
+      { x: 320, y: 326 },
+      { x: 445, y: 327 },
+      { x: 445, y: 285 },
+    ]);
+    // Upstream rounds each differing imported ordinate separately (326/327).
+    // We retain fractional precision but deliberately normalize only the moved
+    // leg to one axis, producing a genuinely orthogonal counterpart.
+    const actual = planSegmentMove(
+      { ...connection, waypoints: original },
+      0,
+      { x: 0, y: event.dy },
+      renderer,
+    );
+    assert.ok(orthogonal(actual));
+    close(actual[0], committed[0]);
+    close(actual.at(-1), committed.at(-1));
+    assert.ok(actual[1].y >= 326 && actual[1].y <= 327);
+    assert.equal(actual[1].y, actual[2].y);
+  } finally {
+    await dom.cleanup();
+  }
+});

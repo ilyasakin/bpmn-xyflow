@@ -225,3 +225,38 @@ test('fractional imported DI and offset handle grabs survive out-and-back jitter
     await valid(m);
   }finally{h.close();}
 });
+
+test('reported Conditional near-horizontal segment uses ordinary segment drag without a V bend', async () => {
+  const h=await fixture(),{m}=h;
+  try {
+    await m.importXML(await readFile('test/fixtures/bpmn/draw/conditional-flow.bpmn','utf8'));
+    // Upstream source fixture omits the XSD-required targetNamespace. Normalize
+    // only this derived mutation case before its baseline; retain the fixture.
+    m.getDefinitions().targetNamespace = 'urn:bpmn-xyflow:test:conditional-routing';
+    m.setViewport({x:90,y:40,zoom:0.8});
+    const edge=m.getGraph().edges.find(edge=>edge.waypoints.length===2&&edge.waypoints[0].x===370&&edge.waypoints[1].x===425);
+    assert.ok(edge);assert.equal(edge.waypoints[0].y,265.199203187251);assert.equal(edge.waypoints[1].y,265.4183266932271);
+    const original=xy(edge.waypoints),di=edge.di.waypoint.slice(),before=await m.getXML(),size=m.commandStack.size();
+    m.select(edge.id);assert.ok(m.getContainer().querySelector('[data-segment-index="0"]'));
+    const start={x:(original[0].x+original[1].x)/2,y:(original[0].y+original[1].y)/2},end={x:start.x,y:start.y+55/0.8};
+    h.down(h.gfx(edge),start);h.move(end);h.move(start);h.up(start);
+    assert.equal(await m.getXML(),before);assert.equal(m.commandStack.size(),size);assert.deepEqual(edge.di.waypoint,di);
+    h.down(h.gfx(edge),start);h.move(end);m.cancel();h.up(end);assert.equal(await m.getXML(),before);assert.equal(m.commandStack.size(),size);
+    h.down(h.gfx(edge),start);h.move(end);h.up(end);assert.ok(orthogonal(edge.waypoints));assert.ok(edge.waypoints.length>=4,'near-axis plain drag creates an orthogonal dogleg');
+    assert.equal(m.commandStack.size(),size+1);const final=await m.getXML();
+    for(let repeat=0;repeat<3;repeat++){m.undo();assert.equal(await m.getXML(),before);assert.deepEqual(edge.di.waypoint,di);m.redo();assert.equal(await m.getXML(),final);}
+    await valid(m);
+  }finally{h.close();}
+});
+
+test('near-vertical fractional segment shares the same drag classification and exact undo', async () => {
+  const h=await fixture(),{m}=h;
+  try {
+    const a=m.addShape('bpmn:Task',{x:350,y:300}),b=m.addShape('bpmn:Task',{x:350,y:800}),edge=m.connect(a,b,{waypoints:[{x:350.25,y:340},{x:350.5,y:760}]});
+    const before=await m.getXML(),size=m.commandStack.size();m.select(edge.id);
+    assert.ok(m.getContainer().querySelector('[data-segment-index="0"]'));
+    h.down(h.gfx(edge),{x:350.375,y:550});h.move({x:430.375,y:550});h.up({x:430.375,y:550});
+    assert.ok(orthogonal(edge.waypoints));assert.ok(edge.waypoints.length>=4);assert.equal(m.commandStack.size(),size+1);
+    m.undo();assert.equal(await m.getXML(),before);await valid(m);
+  }finally{h.close();}
+});

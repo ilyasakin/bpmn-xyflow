@@ -114,3 +114,16 @@ target reconnection, opposite-anchor stability, repeated route edits, cancellati
 and movement/resize. Its hosted result is still required before claiming the
 reported interaction defects are resolved. Touch work remains paused and outside
 this checkpoint.
+
+### Native follow-up: fractional near-axis segments
+
+All 25 first connection groups passed in hosted Chrome, and production-site native
+port/preview/export checks passed. Manual replay then exposed a real imported
+Conditional-flow segment with ordinates 265.199203187251 and 265.4183266932271:
+exact-axis classification incorrectly treated its ordinary drag as a free bend.
+The focused correction shares the pinned upstream inclusive 2-diagram-unit
+classification across handles, gesture selection and segment planning. Only the
+edited segment is normalized; original fractional DI remains exact on cancellation
+and undo. Local follow-up passes 222 unit tests. The native suite now has 27 groups,
+including the exact horizontal case, a vertical counterpart and actual viewer
+reimport of all 12 creation variants. These new assertions await hosted execution.
