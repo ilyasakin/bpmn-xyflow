@@ -15,3 +15,12 @@ test('generic metadata names remain own enumerable data when cloned',async()=>{
   assert.equal(again.rootElements[0].flowElements[0].extensionElements.values[0].__proto__,'retained');
   assert.equal(Object.getPrototypeOf(payload),Object.prototype);
 });
+
+test('opaque vendor id values are data, while schema ID properties are regenerated',async()=>{
+  const m=new BpmnModdle();
+  const root=m.create('bpmn:Task',{id:'Task_Original'});
+  root.extensionElements=m.create('bpmn:ExtensionElements');root.extensionElements.$parent=root;
+  const payload=m.createAny('v:record','urn:vendor',{id:'business-key-123'});payload.$parent=root.extensionElements;root.extensionElements.values=[payload];
+  const clone=cloneSemanticGraph(m,[root],{newId:()=> 'Task_Copy'}).get(root);
+  assert.equal(clone.id,'Task_Copy');assert.equal(clone.extensionElements.values[0].id,'business-key-123');
+});

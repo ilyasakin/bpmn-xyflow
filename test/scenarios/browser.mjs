@@ -28,6 +28,21 @@ try {
     const xml=await readFile(`test/fixtures/scenarios/${name}.bpmn`,'utf8');
     const imported=await page.evaluate(async xml=>{const result=await window.modeler.importXML(xml);window.modeler.fitView();return result.warnings.map(w=>w.message);},xml);
     assert.deepEqual(imported,[],`${name} local import warnings`);
+    if (name === 'approval-rejection-rework') {
+      const laneHeader=await page.evaluate(()=>{
+        const shapes=[...window.modeler.getSvg().querySelector('.bpmn-xyflow-shapes').children].map(g=>g.dataset.elementId);
+        const lane=document.querySelector('[data-element-id="RequesterLane"]');
+        const box=lane.getBoundingClientRect(),x=box.left+10,y=box.top+30;
+        return {x,y,order:shapes.indexOf('RequesterLane')<shapes.indexOf('ReworkRequest'),
+          hit:document.elementFromPoint(x,y)?.closest('[data-element-id]')?.getAttribute('data-element-id')};
+      });
+      assert.ok(laneHeader.order,'approval lane must paint below its ReworkRequest task');
+      assert.equal(laneHeader.hit,'RequesterLane','lane header remains hit-testable');
+      await page.mouse.click(laneHeader.x,laneHeader.y);
+      assert.deepEqual(await page.evaluate(()=>window.modeler.getSelection()),['RequesterLane'],'lane remains selectable with pointer input');
+      await page.evaluate(()=>window.modeler.clearSelection());
+    }
+
     // Exercise an actual browser pointer gesture on the business task before
     // the deterministic API mutation/interoperability checks below.
     const pointerBefore=await page.evaluate(id=>{const n=window.modeler.getElement(id);return {x:n.x,y:n.y};},taskId);

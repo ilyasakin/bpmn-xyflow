@@ -23,9 +23,17 @@ try {
   await page.waitForSelector('.bpmn-xyflow-palette');
   await page.select('select[aria-label="Sample diagram"]','1');
   await page.waitForSelector('[data-element-id="Task_1"]');
+  const unobstructed = await page.evaluate(() => {
+    const obstacles = [...document.querySelectorAll('.bpmn-xyflow-palette, .bpmn-xyflow-editor-actions, .bpmn-xyflow-minimap, .bjs-powered-by')].map(element => element.getBoundingClientRect());
+    return [...document.querySelectorAll('.bpmn-xyflow-shape')].every(element => {
+      const rect = element.getBoundingClientRect();
+      return obstacles.every(other => rect.right <= other.left || rect.left >= other.right || rect.bottom <= other.top || rect.top >= other.bottom);
+    });
+  });
+  assert.ok(unobstructed, 'automatic fit keeps the Basic diagram clear of all editor chrome');
   await page.click('[data-element-id="Task_1"]');
   const textColor = await page.$eval('.bpmn-xyflow-context-pad button', el => getComputedStyle(el).color);
-  assert.equal(textColor,'rgb(34, 34, 34)');
+  assert.equal(textColor,'rgb(34, 36, 42)');
   assert.equal((await page.$$('.bjs-powered-by')).length,1);
 
   // Export remains dismissible across repeated use, without duplicate UI.
@@ -40,6 +48,18 @@ try {
   }
   await page.click('.bpmn-xyflow-palette button:nth-child(2)');
   assert.ok((await page.$$('.bpmn-xyflow-shape')).length >= 3);
+  for (const index of ['3','4','5','6']) {
+    await page.select('select[aria-label="Sample diagram"]', index);
+    await page.waitForFunction(index => {
+      const select = document.querySelector('select[aria-label="Sample diagram"]');
+      const label = select.options[Number(index)].text;
+      return [...document.querySelectorAll('span')].some(element => element.textContent.startsWith(`Loaded ${label}`));
+    }, {}, index);
+    assert.ok((await page.$$('.bpmn-xyflow-shape')).length > 5);
+    assert.equal(await page.evaluate(() => [...document.querySelectorAll('button')].find(button => button.textContent === 'Undo').disabled), true);
+    await page.click('.bpmn-xyflow-palette button:nth-child(2)');
+    assert.equal(await page.evaluate(() => [...document.querySelectorAll('button')].find(button => button.textContent === 'Undo').disabled), false);
+  }
   await page.click('a[href="/demo/bpmn"]');
   await page.waitForSelector('[data-element-id="Task_1"]');
   assert.equal((await page.$$('.bjs-powered-by')).length,1);

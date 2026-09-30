@@ -10,6 +10,7 @@
     minZoom = undefined,
     maxZoom = undefined,
     fitPadding = undefined,
+    fitInsets = undefined,
     fitViewOnInit = true,
     selectOnClick = true,
     minimap = false,
@@ -48,7 +49,7 @@
   onMount(() => {
     viewer = new BpmnXyflowViewer({
       container,
-      config, moddleExtensions, minZoom, maxZoom, fitPadding,
+      config, moddleExtensions, minZoom, maxZoom, fitPadding, fitInsets,
       fitViewOnInit, selectOnClick, minimap,
       keyboard, refitOnResize
     });

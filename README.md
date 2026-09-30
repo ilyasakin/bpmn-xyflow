@@ -50,7 +50,7 @@ and exposes the imperative API (`fitView`, `select`, `setViewport`,
 …) via the framework's standard ref / `bind:this` mechanism.
 
 `xml` and `bpmnDiagramId` are reactive inputs. Constructor options such as
-`config`, `moddleExtensions`, `minZoom`, `maxZoom`, `fitPadding`, keyboard,
+`config`, `moddleExtensions`, `minZoom`, `maxZoom`, `fitPadding`, `fitInsets`, keyboard,
 selection, minimap, and resize behavior are read only when the wrapper mounts.
 Changing those props does not reconfigure an existing viewer: remount it (for
 example with a new framework `key`), or use a supported imperative method such
@@ -62,6 +62,14 @@ updates after mounting, so effects depending on `[viewer]` can import a diagram.
 The hook's constructor options are also mount-only, and unmounting destroys the
 instance.
 
+
+### Fitting around editor controls
+
+`fitView()` leaves room for the palette, editor-actions toolbar, minimap and
+visible bpmn.io attribution. `fitPadding` is additional padding in pixels.
+For app-owned controls, pass `fitInsets: { top, right, bottom, left }` in pixels.
+The default minimum zoom is `0.01` so large process models can fit small screens;
+an explicitly configured `minZoom` remains a lower limit.
 
 ## Modeler features
 
@@ -90,6 +98,12 @@ instance.
 pnpm install
 pnpm start
 ```
+
+The modeler sample menu includes three authored synthetic business scenarios
+(order/payment/delivery, approval/rejection/rework, and booking/timeout/
+compensation), plus the retained upstream HR recruitment example. Source XML
+lives in `test/fixtures/scenarios/` and `test/fixtures/bpmn/complex.bpmn`.
+The retained fixtures remain subject to the repository's original notices.
 
 Then open the routes the dev server prints:
 
@@ -141,3 +155,32 @@ See [LICENSE](./LICENSE). Retained source from [bpmn-js](https://github.com/bpmn
 ## Parity status
 
 The [verification ledger](./docs/PARITY.md) distinguishes implemented and tested core behavior from pending gates and optional extensions. This package does not claim drop-in upstream API/plugin compatibility.
+
+### Control themes
+
+Editor controls use the semantic `--bio-*` tokens from bpmn-js 18.30.1
+(`dist/assets/diagram-js.css` and `bpmn-js.css`, sourced from `@bpmn-io/theme`).
+The exact upstream default values are retained in `lib/util/Theme.js`; the full
+upstream CSS is not injected because the XYFlow DOM has different selectors.
+Without a theme, surfaces stay light and control text stays readable on dark host
+pages. Override tokens on the viewer container or any ancestor, for example:
+
+```css
+.my-diagram {
+  --bio-primary: #006daa;
+  --bio-canvas-accent: #006daa;
+  --bio-focus: #006daa;
+  --bio-surface: #fff;
+  --bio-surface-subtle: #f5f6f8;
+  --bio-text: #23252a;
+  --bio-border: #bbc0cc;
+  --bio-radius-md: 3px;
+}
+```
+
+Overrides inherit and update mounted controls without remounting. Body-mounted
+text-editing and drag overlays copy the scoped tokens when opened. For a dark
+control theme, also set `--bpmn-xyflow-color-scheme: dark` so native controls match.
+These tokens style editing UI, minimap, focus and selection; they do not rewrite
+BPMN document colors or the retained renderer. The required bpmn.io logo remains
+visible and its original attribution dialog is preserved.

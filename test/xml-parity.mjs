@@ -306,6 +306,88 @@ try {
   assert.ok(malformedTypeOutput.includes('xsi:type="b:tFormalExpression:Other"'), 'malformed xsi:type remains opaque instead of coercing to a known subtype');
   console.log('OK malformed xsi:type QName is preserved opaquely without subtype reinterpretation');
 
+  const insertionXML = `<b:definitions xmlns:b="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="urn:test"><b:process id="P"><b:startEvent id="Start"><b:outgoing>FlowA</b:outgoing></b:startEvent><b:subProcess id="Sub"><b:incoming>FlowA</b:incoming><b:outgoing>FlowB</b:outgoing><!--retained before nested task--><b:scriptTask id="Inner"><b:script>before<!--script-comment-->after<?script instruction?></b:script></b:scriptTask></b:subProcess><b:endEvent id="End"><b:incoming>FlowB</b:incoming></b:endEvent><b:sequenceFlow id="FlowA" sourceRef="Start" targetRef="Sub"/><b:sequenceFlow id="FlowB" sourceRef="Sub" targetRef="End"/></b:process></b:definitions>`;
+  const insertion = await window.moddle.fromXML(insertionXML);
+  for (const id of [ 'Sub', 'Inner' ]) {
+    const owner = insertion.elementsById.get(id);
+    owner.extensionElements = window.moddle.create('bpmn:ExtensionElements', { values: [ window.moddle.createAny('v:payload', 'urn:added', { ref: 'metadata' }) ] });
+    owner.extensionElements.$parent = owner;
+    owner.extensionElements.values[0].$parent = owner.extensionElements;
+  }
+  insertion.elementsById.get('Sub').documentation = [ window.moddle.create('bpmn:Documentation', { text: 'new documentation' }) ];
+  insertion.elementsById.get('Sub').documentation[0].$parent = insertion.elementsById.get('Sub');
+  insertion.elementsById.get('Inner').loopCharacteristics = window.moddle.create('bpmn:StandardLoopCharacteristics');
+  insertion.elementsById.get('Inner').loopCharacteristics.$parent = insertion.elementsById.get('Inner');
+  const insertionOutput = (await window.moddle.toXML(insertion.rootElement)).xml;
+  await saveArtifact('new-child-properties.bpmn', insertionOutput);
+  const insertionDOM = new DOMParser().parseFromString(insertionOutput, 'application/xml');
+  const elementChildren = name => Array.from(insertionDOM.getElementsByTagNameNS('http://www.omg.org/spec/BPMN/20100524/MODEL', name)[0].childNodes).filter(node => node.nodeType === 1).map(node => node.localName);
+  assert.deepEqual(elementChildren('subProcess'), [ 'documentation', 'extensionElements', 'incoming', 'outgoing', 'scriptTask' ]);
+  assert.deepEqual(elementChildren('scriptTask'), [ 'extensionElements', 'standardLoopCharacteristics', 'script' ]);
+  assert.ok(insertionOutput.includes('<!--retained before nested task-->'));
+  assert.ok(insertionOutput.includes('before<!--script-comment-->after<?script instruction?>'));
+  assert.equal((await oracle.fromXML(insertionOutput)).warnings.length, 0);
+  console.log('OK newly added documentation/extensions/loop properties use canonical insertion without losing retained XML content');
+
+  const interleavedXML = `<b:definitions xmlns:b="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:v="urn:vendor" targetNamespace="urn:test"><b:process id="P"><b:extensionElements><v:a/><!--extension-between--><?extension keep?><v:b/></b:extensionElements><b:task id="A"/><!--task-between--><?process keep?><b:task id="B"/></b:process></b:definitions>`;
+  const interleaved = await window.moddle.fromXML(interleavedXML);
+  const structuralSequence = node => Array.from(node.childNodes).filter(child => child.nodeType !== 3 || child.nodeValue.trim()).map(child => child.nodeType === 1 ? [ 1, child.namespaceURI, child.localName, child.getAttribute('id') ] : [ child.nodeType, child.nodeValue ]);
+  const sourceInterleaved = new DOMParser().parseFromString(interleavedXML, 'application/xml');
+  const firstInterleavedOutput = (await window.moddle.toXML(interleaved.rootElement)).xml;
+  const firstInterleavedDOM = new DOMParser().parseFromString(firstInterleavedOutput, 'application/xml');
+  for (const name of [ 'process', 'extensionElements' ]) {
+    const node = document => document.getElementsByTagNameNS('http://www.omg.org/spec/BPMN/20100524/MODEL', name)[0];
+    assert.deepEqual(structuralSequence(node(firstInterleavedDOM)), structuralSequence(node(sourceInterleaved)), name + ' repeated children retain interleaved comments/PI');
+  }
+  const interleavedProcess = interleaved.elementsById.get('P');
+  interleavedProcess.flowElements.splice(0, 1);
+  interleavedProcess.extensionElements.values.splice(0, 1);
+  const removedInterleavedOutput = (await window.moddle.toXML(interleaved.rootElement)).xml;
+  assert.ok(removedInterleavedOutput.includes('<!--task-between--><?process keep?><bpmn:task id="B"'));
+  assert.ok(removedInterleavedOutput.includes('<!--extension-between--><?extension keep?><v:b'));
+  assert.ok(!removedInterleavedOutput.includes('id="A"') && !removedInterleavedOutput.includes('<v:a'));
+  const newTask = window.moddle.create('bpmn:Task', { id: 'C' });
+  newTask.$parent = interleavedProcess;
+  interleavedProcess.flowElements.unshift(newTask);
+  const insertedInterleavedOutput = (await window.moddle.toXML(interleaved.rootElement)).xml;
+  assert.equal((await oracle.fromXML(insertedInterleavedOutput)).warnings.length, 0);
+  await saveArtifact('interleaved-child-edits.bpmn', insertedInterleavedOutput);
+  console.log('OK repeated semantic/extension children retain interleaved comments/PI across removal and insertion');
+
+  const genericIdsXML = `<b:definitions xmlns:b="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:v="urn:vendor" targetNamespace="urn:test"><b:process id="P"><b:extensionElements><v:record id="same"/><v:record id="same"/></b:extensionElements></b:process></b:definitions>`;
+  const genericIds = await window.moddle.fromXML(genericIdsXML);
+  assert.equal(genericIds.elementsById.has('same'), false, 'opaque vendor id is not registered as a BPMN ID');
+  assert.equal(genericIds.elementsById.get('P').extensionElements.values.length, 2);
+  const genericIdsOutput = (await window.moddle.toXML(genericIds.rootElement)).xml;
+  const genericIdsOracle = await oracle.fromXML(genericIdsOutput);
+  assert.equal(genericIdsOracle.warnings.length, 0);
+  assert.deepEqual(genericIdsOracle.elementsById.P.extensionElements.values.map(record => record.id), [ 'same', 'same' ]);
+  const recordPackage = { name: 'Typed records', prefix: 'records', uri: 'urn:records', xml: { tagAlias: 'lowerCase' }, types: [
+    { name: 'Record', superClass: [ 'Element' ], properties: [ { name: 'key', type: 'String', isAttr: true, isId: true } ] },
+    { name: 'RecordTask', extends: [ 'bpmn:Task' ], properties: [ { name: 'recordRef', type: 'Record', isAttr: true, isReference: true } ] }
+  ] };
+  const typedRecordModel = BpmnModdle({ records: recordPackage });
+  const duplicateRecords = genericIdsXML.replace('xmlns:v="urn:vendor"', 'xmlns:v="urn:records"').replaceAll('id="same"', 'key="same"');
+  await assert.rejects(typedRecordModel.fromXML(duplicateRecords), /duplicate ID/);
+  const referencedRecordXML = `<b:definitions xmlns:b="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:records="urn:records" targetNamespace="urn:test"><b:process id="P"><b:extensionElements><records:record key="K1"/></b:extensionElements><b:task id="T" records:recordRef="K1"/></b:process></b:definitions>`;
+  const typedRecords = await typedRecordModel.fromXML(referencedRecordXML);
+  assert.equal(typedRecords.elementsById.get('T').recordRef, typedRecords.elementsById.get('K1'));
+  const typedRecordOutput = (await typedRecordModel.toXML(typedRecords.rootElement)).xml;
+  const typedRecordOracle = await new UpstreamModdle({ records: recordPackage }).fromXML(typedRecordOutput);
+  assert.equal(typedRecordOracle.warnings.length, 0);
+  assert.equal(typedRecordOracle.elementsById.T.recordRef.key, 'K1');
+  console.log('OK generic vendor id attributes remain ordinary data; declared custom IDs enforce uniqueness and resolve/serialize references');
+
+  const referenceTokensXML = `<b:definitions xmlns:b="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="urn:test"><b:process id="P"><b:task id="A"><b:outgoing>F1<!--FIRST--></b:outgoing><b:outgoing>F2<!--SECOND--></b:outgoing></b:task><b:task id="B"><b:incoming>F1</b:incoming><b:incoming>F2</b:incoming></b:task><b:sequenceFlow id="F1" sourceRef="A" targetRef="B"/><b:sequenceFlow id="F2" sourceRef="A" targetRef="B"/></b:process></b:definitions>`;
+  const referenceTokens = await window.moddle.fromXML(referenceTokensXML);
+  for (const [ id, property ] of [ [ 'A', 'outgoing' ], [ 'B', 'incoming' ], [ 'P', 'flowElements' ] ]) referenceTokens.elementsById.get(id)[property] = referenceTokens.elementsById.get(id)[property].filter(element => element.id !== 'F1');
+  const referenceTokensOutput = (await window.moddle.toXML(referenceTokens.rootElement)).xml;
+  assert.ok(referenceTokensOutput.includes('>F2<!--SECOND--></bpmn:outgoing>'));
+  assert.ok(!referenceTokensOutput.includes('FIRST'), 'deleted reference body comments must not migrate to remaining reference');
+  assert.equal((await oracle.fromXML(referenceTokensOutput)).warnings.length, 0);
+  await saveArtifact('repeated-reference-removal.bpmn', referenceTokensOutput);
+  console.log('OK repeated reference body metadata follows reference identity after array removal');
+
   const created = BpmnModdle(extensions);
   const defs = created.create('bpmn:Definitions', { id: 'NewDefinitions', targetNamespace: 'urn:new' });
   const process = created.create('bpmn:Process', { id: 'NewProcess' });

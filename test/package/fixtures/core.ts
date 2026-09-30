@@ -1,0 +1,110 @@
+import DefaultViewer, {
+  Viewer, Modeler, Renderer, CommandStack, buildGraph, parseBpmnXML,
+  type Alignment, type Axis, type Graph, type GraphNode, type ImportResult,
+  type ModdleExtensions, type ViewerEvents, type Viewport
+} from 'bpmn-xyflow';
+
+const extensions: ModdleExtensions = {
+  audit: { name: 'Audit', prefix: 'audit', uri: 'urn:example:audit', types: [
+    { name: 'Tagged', extends: ['bpmn:BaseElement'], properties: [{ name: 'tag', type: 'String', isAttr: true }] }
+  ] }
+};
+const container = document.createElement('div');
+const viewer: Viewer = new DefaultViewer({ container, moddleExtensions: extensions, minimap: { position: 'top-right' }, fitInsets: { bottom: 20 }, ariaLabel: 'Process diagram' });
+const modeler = new Modeler({ container, palette: false, snap: true });
+const stop = viewer.on('element.click', ({ id, element, event }) => {
+  const maybeId: string | null = id;
+  if (element) viewer.select(element.id);
+  if (event.shiftKey && maybeId) viewer.deselect(maybeId);
+});
+stop();
+const viewportListener = ({ viewport }: ViewerEvents['viewport.change']) => { const v: Viewport = viewport; viewer.setViewport(v, { duration: 20, interpolate: 'smooth' }); };
+viewer.on('viewport.change', viewportListener);
+viewer.off('viewport.change', viewportListener);
+viewer.on('import.done', result => { if (result.error) console.log(result.error.message); else console.log(result.graph.nodes); });
+viewer.findElements('invoice').map(element => element.businessObject.name);
+viewer.focusElement('Task_1');
+viewer.focusElement({ id: 'Task_1' });
+viewer.clear();
+void viewer.switchDiagram('Diagram_2', { reuseGraph: buildGraph((await parseBpmnXML('<xml/>')).rootElement) });
+const imported: ImportResult = await modeler.importXML('<xml/>');
+const graph: Graph = imported.graph;
+console.log(graph.diagram.plane?.bpmnElement?.id);
+const node: GraphNode | null = modeler.addShape('bpmn:Task', { x: 80, y: 120 });
+if (node) {
+  modeler.moveShape(node, { x: 10, y: 5 });
+  modeler.moveShapes([node], { x: 10, y: 5 }, graph.roots[0]);
+  modeler.resizeShape(node, { x: 10, y: 10, width: 100, height: 80 });
+  modeler.updateLabel(node, 'Review');
+  modeler.updateProperties(node, { name: 'Review', isForCompensation: false });
+  const edge = modeler.connect(node, node);
+  if (edge) {
+    modeler.updateWaypoints(edge, [{ x: 0, y: 0 }, { x: 10, y: 10 }]);
+    modeler.reconnect(edge, 'target', node);
+    modeler.insertShape('bpmn:Task', edge, { x: 100, y: 100 });
+  }
+  modeler.copy([node]);
+  modeler.paste({ x: 200, y: 200 });
+  modeler.replace(node, 'bpmn:ServiceTask');
+  modeler.replace(node, 'bpmn:Task', {}, { removeContents: true });
+  // @ts-expect-error destructive replacement requires an explicit boolean
+  modeler.replace(node, 'bpmn:Task', {}, { removeContents: 'yes' });
+  modeler.toggleMarker(node, 'loop');
+  modeler.toggleExpanded(node);
+  const entered: boolean = await modeler.drillInto(node);
+  console.log(entered);
+  modeler.addLane(node, 'after');
+  const lanes = modeler.splitLane(node, 2);
+  if (lanes?.[0]) modeler.deleteLane(lanes[0]);
+}
+const alignment: Alignment = 'center';
+const axis: Axis = 'horizontal';
+modeler.align(graph.nodes, alignment);
+modeler.distribute(graph.nodes, axis);
+const plan = modeler.createSpace(graph.nodes, 'vertical', 100, 50, { direction: 's' });
+if (plan) {
+  const moved: GraphNode[] = plan.movingShapes;
+  console.log(plan.axis, plan.delta.y, moved);
+}
+modeler.createSpace(undefined, 'horizontal', 100, -50, { direction: 'w', padding: 20 });
+modeler.findElements('Review').forEach(element => modeler.focusElement(element));
+await modeler.saveSVG({ padding: 15 });
+await modeler.exportSVG();
+await modeler.getXML({ format: true });
+modeler.cancel();
+modeler.undo();
+modeler.redo();
+await modeler.navigateBack();
+const stack = CommandStack({ limit: 50 });
+const alternate = new CommandStack();
+stack.execute({ name: 'test', do() {}, undo() {}, payload: { value: 1 } });
+const value: number = stack.compound('group', () => 42);
+alternate.restore(stack.snapshot());
+stack.onChange(state => console.log(state.canUndo, value));
+const renderer = new Renderer({ rootSvg: viewer.getSvg(), config: { bpmnRenderer: { defaultFillColor: '#fff' } } });
+if (node) renderer.drawShape(viewer.getSvg(), node);
+modeler.viewer.clear();
+
+// Rejected inputs protect the actual API, not an overly permissive declaration.
+// @ts-expect-error a DOM element is required, not a selector
+new Viewer({ container: '#canvas' });
+// @ts-expect-error align directions are a fixed vocabulary
+modeler.align(graph.nodes, 'horizontal');
+// @ts-expect-error distribution axes are not point-coordinate keys
+modeler.distribute(graph.nodes, 'x');
+// @ts-expect-error the delta is numeric
+modeler.createSpace(graph.nodes, 'horizontal', 10, '20');
+// @ts-expect-error lane location is a fixed vocabulary
+modeler.addLane(graph.nodes[0], 'above');
+// @ts-expect-error space direction is a cardinal abbreviation
+modeler.createSpace(graph.nodes, 'horizontal', 100, 50, { direction: 'east' });
+// @ts-expect-error query text must be a string
+viewer.findElements(123);
+// @ts-expect-error modeler composes viewer; it does not inherit clear
+modeler.clear();
+// @ts-expect-error diagram switching belongs to the contained viewer
+modeler.switchDiagram('Diagram_2');
+// @ts-expect-error viewport zoom is required
+viewer.setViewport({ x: 1, y: 2 });
+viewer.destroy();
+modeler.destroy();

@@ -177,3 +177,24 @@ test('resize refits until the user sets a viewport, then preserves their view', 
     assert.equal(viewer.getViewport().zoom, 1);
   } finally { globalThis.ResizeObserver = original; }
 });
+
+test('fit reads palette and minimap geometry and keeps shapes in the usable canvas', async () => {
+  const viewer = create({ minimap: true });
+  const palette = document.createElement('div');
+  palette.className = 'bpmn-xyflow-palette';
+  palette.getBoundingClientRect = () => ({ left: 10, right: 128, top: 10, bottom: 240, width: 118, height: 230 });
+  viewer.getContainer().appendChild(palette);
+  const actions = document.createElement('div');
+  actions.className = 'bpmn-xyflow-editor-actions';
+  actions.getBoundingClientRect = () => ({ left: 150, right: 600, top: 10, bottom: 44, width: 450, height: 34 });
+  viewer.getContainer().appendChild(actions);
+  await viewer.importXML(basic);
+  viewer.fitView();
+  const viewport = viewer.getViewport();
+  for (const node of viewer.getGraph().nodes.filter(node => !node.hidden)) {
+    assert.ok(node.x * viewport.zoom + viewport.x >= 148 - 0.01, `${node.id} clears palette`);
+    assert.ok((node.x + node.width) * viewport.zoom + viewport.x <= 1168 + 0.01, `${node.id} clears right edge`);
+    assert.ok(node.y * viewport.zoom + viewport.y >= 64 - 0.01, `${node.id} clears editor toolbar`);
+    assert.ok((node.y + node.height) * viewport.zoom + viewport.y <= 762 - 196 - 20 + 0.01, `${node.id} clears minimap and logo`);
+  }
+});

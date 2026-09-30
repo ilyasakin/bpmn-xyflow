@@ -8,7 +8,8 @@
     "lib",
     "!lib/**/*.spec.ts",
     "!lib/demo",
-    "dist"
+    "dist",
+    "types"
   ],
   "scripts": {
     "lint": "oxlint",
@@ -22,12 +23,13 @@
     "test:multi": "node lib/demo/multi-framework-smoke-test.mjs",
     "test:xml": "node test/xml-parity.mjs",
     "test:unit": "node --test test/modeling/*.test.mjs test/geometry/*.test.mjs test/rules/*.test.mjs test/viewer/*.test.mjs",
-    "check": "pnpm run lint && pnpm run test:schema && pnpm run test:unit && pnpm test && pnpm run build",
+    "check": "pnpm run lint && pnpm run test:schema && pnpm run test:unit && pnpm test && pnpm run build && pnpm run test:package",
     "prepack": "pnpm run build",
     "test:browser:viewer": "node test/viewer/browser-parity.mjs",
     "test:browser:scenarios": "node test/scenarios/browser.mjs",
     "test:schema": "python3 test/xml-schema.py",
     "test:xml-modeler": "node test/xml-modeler-parity.mjs",
+    "test:package": "node test/package/consumer-smoke.mjs",
     "test:xml-security": "node test/xml-security.mjs"
   },
   "engines": {
@@ -78,11 +80,13 @@
     "inherits-browser": "^0.1.0",
     "min-dash": "^5.0.0",
     "min-dom": "^5.3.0",
-    "tiny-svg": "^4.1.4",
-    "saxen": "11.2.0"
+    "saxen": "11.2.0",
+    "tiny-svg": "^4.1.4"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.1.1",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^5.0.0",
     "@vitejs/plugin-vue": "^6.0.0",
     "@xmldom/xmldom": "0.9.12",
@@ -98,5 +102,36 @@
     "typescript": "^5.9.3",
     "vite": "^8.0.0",
     "vue": "^3.5.34"
+  },
+  "types": "./types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "import": "./lib/index.js",
+      "default": "./lib/index.js"
+    },
+    "./lib/react": {
+      "types": "./types/react.d.ts",
+      "import": "./lib/react/index.js",
+      "default": "./lib/react/index.js"
+    },
+    "./lib/vue": {
+      "types": "./types/vue.d.ts",
+      "import": "./lib/vue/index.js",
+      "default": "./lib/vue/index.js"
+    },
+    "./lib/svelte": {
+      "types": "./types/svelte.d.ts",
+      "import": "./lib/svelte/index.js",
+      "default": "./lib/svelte/index.js"
+    },
+    "./lib/svelte/BpmnViewer.svelte": {
+      "types": "./types/svelte-component.d.ts",
+      "import": "./lib/svelte/BpmnViewer.svelte",
+      "default": "./lib/svelte/BpmnViewer.svelte"
+    },
+    "./lib/*": "./lib/*",
+    "./dist/*": "./dist/*",
+    "./package.json": "./package.json"
   }
 }

@@ -4,7 +4,9 @@ import { reconcileGraph } from '../../lib/util/GraphUtil.js';
 
 test('diagram reconciliation preserves command graph identities and refreshes relationships', () => {
   const root = { id: 'P', isRoot: true };
-  const task = { id: 'T', parent: root, stale: true };
+  const task = { id: 'T', parent: root, stale: true, attachers: [] };
+  root.children = [task];
+  const rootChildren = root.children, taskAttachers = task.attachers;
   const old = { nodes: [ task ], edges: [], roots: [ root ], elementsById: new Map([ ['P', root], ['T', task] ]), warnings: [] };
   const freshRoot = { id: 'P', isRoot: true };
   const freshTask = { id: 'T', x: 123, parent: freshRoot };
@@ -22,5 +24,8 @@ test('diagram reconciliation preserves command graph identities and refreshes re
   assert.equal(task.stale, undefined);
   assert.equal(task.parent, root);
   assert.equal(root.children[0], task);
+  assert.equal(root.children, rootChildren);
+  assert.equal(task.attachers, taskAttachers);
+  assert.deepEqual(taskAttachers, []);
   assert.equal(edge.source, task);
 });

@@ -69,6 +69,25 @@ try {
   assert.equal(exported.duplicateLabel, false);
   assert.equal(exported.exportedUi, false);
 
+  // Switching subprocess planes must not render outer/sibling diagrams.
+  const activeViews = await page.evaluate(async () => {
+    await window.viewer.importXML(await fetch('/test/fixtures/bpmn/collapsed-sub-process.bpmn').then(r => r.text()));
+    const definitions = window.viewer.getDefinitions();
+    const parent = definitions.diagrams[0];
+    const child = definitions.diagrams.find(diagram => diagram.plane.bpmnElement.id === 'collapsedProcess');
+    const results = [];
+    for (const diagram of [child, parent, child, parent]) {
+      await window.viewer.switchDiagram(diagram.id);
+      const graph = window.viewer.getGraph();
+      const active = new Set(diagram.plane.planeElement);
+      results.push(graph.roots.length === 1 && graph.diagram === diagram &&
+        graph.nodes.every(node => active.has(node.di)) && graph.edges.every(edge => active.has(edge.di)) &&
+        document.querySelectorAll('.bpmn-xyflow-shape').length === graph.nodes.filter(node => !node.hidden && node.type !== 'label').length);
+    }
+    return results;
+  });
+  assert.deepEqual(activeViews, [true, true, true, true]);
+
   // Original project logo opens/closes the notice; repeating never duplicates it.
   await page.click('.bjs-powered-by');
   await page.waitForSelector('.bjs-powered-by-lightbox');
@@ -92,6 +111,18 @@ try {
   await page.waitForFunction(() => !!window.modeler?.getGraph());
   await page.select('#sample-select', '1');
   await page.waitForFunction(() => document.querySelector('#status')?.textContent.startsWith('Loaded Basic'));
+  const safeFit = await page.evaluate(() => {
+    const obstacles = [...document.querySelectorAll('.bpmn-xyflow-palette, .bpmn-xyflow-minimap, .bpmn-xyflow-editor-actions, .bjs-powered-by')]
+      .map(element => element.getBoundingClientRect()).filter(rect => rect.width && rect.height);
+    const canvas = document.querySelector('#viewer').getBoundingClientRect();
+    return [...document.querySelectorAll('.bpmn-xyflow-shape')].map(element => {
+      const rect = element.getBoundingClientRect();
+      return { id: element.dataset.elementId,
+        inside: rect.left >= canvas.left && rect.right <= canvas.right && rect.top >= canvas.top && rect.bottom <= canvas.bottom,
+        blocked: obstacles.some(obstacle => rect.left < obstacle.right && rect.right > obstacle.left && rect.top < obstacle.bottom && rect.bottom > obstacle.top) };
+    });
+  });
+  assert.ok(safeFit.every(shape => shape.inside && !shape.blocked), JSON.stringify(safeFit));
   await page.addStyleTag({content:'html {color-scheme:dark} body {color:white} button {color:inherit}'});
   await page.evaluate(() => {
     const task = window.modeler.getGraph().nodes.find(node => node.type === 'bpmn:Task');
@@ -99,8 +130,36 @@ try {
   });
   for (const selector of ['.bpmn-xyflow-palette button','.bpmn-xyflow-context-pad button']) {
     const colors = await page.$eval(selector, el => ({color:getComputedStyle(el).color, background:getComputedStyle(el).backgroundColor}));
-    assert.equal(colors.color, 'rgb(34, 34, 34)', JSON.stringify(colors));
+    assert.equal(colors.color, 'rgb(34, 36, 42)', JSON.stringify(colors));
   }
+  // Upstream semantic defaults and consumer theme overrides share one contract.
+  // Ancestor changes must work without reconstructing the viewer or modeler.
+  await page.keyboard.press('Tab');
+  const themed = await page.evaluate(() => {
+    const container = window.modeler.getContainer();
+    const parent = container.parentElement;
+    const overrides = {
+      '--bio-text':'rgb(250, 240, 230)', '--bio-surface':'rgb(25, 30, 35)',
+      '--bio-surface-overlay':'rgb(30, 35, 40)', '--bio-surface-subtle':'rgb(35, 40, 45)',
+      '--bio-border':'rgb(110, 120, 130)', '--bio-radius-md':'7px',
+      '--bio-canvas-accent':'rgb(230, 140, 30)', '--bio-focus':'rgb(200, 100, 30)'
+    };
+    for (const [key,value] of Object.entries(overrides)) parent.style.setProperty(key,value);
+    const palette = container.querySelector('.bpmn-xyflow-palette');
+    const button = palette.querySelector('button');button.focus();
+    const css = getComputedStyle(button), paletteCss=getComputedStyle(palette);
+    const selected = container.querySelector('.bpmn-xyflow-shape.is-selected rect');
+    const result = {color:css.color, background:paletteCss.backgroundColor, border:css.borderTopColor,
+      radius:css.borderTopLeftRadius, focus:css.outlineColor, stroke:getComputedStyle(selected).stroke,
+      logo:getComputedStyle(container.querySelector('.bjs-powered-by')).color};
+    container.style.setProperty('--bio-text','rgb(1, 2, 3)');
+    result.localColor=getComputedStyle(button).color;
+    container.style.removeProperty('--bio-text');
+    for (const key of Object.keys(overrides)) parent.style.removeProperty(key);
+    return result;
+  });
+  assert.deepEqual(themed,{color:'rgb(250, 240, 230)',background:'rgb(35, 40, 45)',border:'rgb(110, 120, 130)',
+    radius:'7px',focus:'rgb(200, 100, 30)',stroke:'rgb(230, 140, 30)',logo:'rgb(250, 240, 230)',localColor:'rgb(1, 2, 3)'});
   const before = await page.evaluate(() => {
     const task = window.modeler.getGraph().nodes.find(node => node.type === 'bpmn:Task');
     return {id:task.id,name:task.businessObject.name || '',zoom:window.modeler.getViewport().zoom};
@@ -112,8 +171,43 @@ try {
   await page.waitForSelector('[contenteditable]', {hidden:true});
   const after = await page.evaluate(id => ({name:window.modeler.getElement(id).businessObject.name || '',zoom:window.modeler.getViewport().zoom}), before.id);
   assert.deepEqual(after,{name:before.name,zoom:before.zoom});
+  // Every business example is reachable through the actual sample menu;
+  // switching after edits resets history, selection and pending overlays.
+  for (const index of ['3', '4', '5', '6']) {
+    await page.evaluate(() => {
+      const task = window.modeler.getGraph().nodes.find(node => node.type === 'bpmn:Task');
+      if (task) window.modeler.moveShape(task, {x:10,y:0});
+    });
+    await page.select('#sample-select', index);
+    await page.waitForFunction(index => {
+      const label = document.querySelector('#sample-select').options[Number(index)].text;
+      return document.querySelector('#status').textContent.startsWith(`Loaded ${label}`);
+    }, {}, index);
+    const state = await page.evaluate(() => ({undo: window.modeler.canUndo(), selection: window.modeler.getSelection(), nodes: window.modeler.getGraph().nodes.length}));
+    assert.equal(state.undo, false);
+    assert.deepEqual(state.selection, []);
+    assert.ok(state.nodes > 5);
+    assert.equal((await page.$$('[contenteditable]')).length, 0);
+  }
+  const externalRequests=[];
+  page.on('request', request => { if(request.url().includes('bpmn-security.invalid')) externalRequests.push(request.url()); });
+  const inert=await page.evaluate(async()=>{
+    window.__bpmnSecurityExecution=0;
+    const xml='<b:definitions xmlns:b="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:d="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:h="http://www.w3.org/1999/xhtml" targetNamespace="urn:security"><b:process id="SecurityProcess"><b:task id="SecurityTask" name="&lt;img src=x onerror=alert(1)&gt;"><b:extensionElements><h:script>window.__bpmnSecurityExecution=1</h:script><h:img src="https://bpmn-security.invalid/pixel"/><h:iframe src="https://bpmn-security.invalid/frame"/></b:extensionElements></b:task></b:process><d:BPMNDiagram id="SecurityDiagram"><d:BPMNPlane id="SecurityPlane" bpmnElement="SecurityProcess"><d:BPMNShape id="SecurityTask_di" bpmnElement="SecurityTask"><dc:Bounds x="100" y="100" width="100" height="80"/></d:BPMNShape></d:BPMNPlane></d:BPMNDiagram></b:definitions>';
+    await window.modeler.importXML(xml);
+    const before=window.modeler.getGraph();
+    let rejected=false;
+    try {await window.modeler.importXML('<!DOCTYPE b:definitions SYSTEM "https://bpmn-security.invalid/external.dtd">'+xml);}catch{rejected=true;}
+    const exported=await window.modeler.getXML();
+    return {rejected,keptGraph:window.modeler.getGraph()===before,live:window.modeler.getContainer().querySelectorAll('script,img,iframe,foreignObject').length,exported};
+  });
+  await new Promise(resolve=>setTimeout(resolve,100));
+  assert.equal(inert.rejected,true);assert.equal(inert.keptGraph,true);assert.equal(inert.live,0);
+  assert.ok(inert.exported.includes('window.__bpmnSecurityExecution=1'));
+  assert.equal(await page.evaluate(()=>window.__bpmnSecurityExecution),0);
+  assert.deepEqual(externalRequests,[]);
   assert.deepEqual(errors, []);
-  console.log('PASS browser parity: fit, labels/markers/export, logo/minimap, repeated imports, wrappers, dark host controls, rename cancellation');
+  console.log('PASS browser parity: fit, labels/markers/export, logo/minimap, repeated imports, wrappers, dark host controls, rename cancellation, inert hostile XML');
 } finally {
   await browser?.close();
   child.kill('SIGTERM');

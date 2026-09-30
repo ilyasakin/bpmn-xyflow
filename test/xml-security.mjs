@@ -82,16 +82,16 @@ try {
   assert.equal(unicode.getAttributeNS(null, 'значение'), null);
   const namespace = await moddle.fromXML(wrap('<b:extensionElements><__proto__:payload xmlns:__proto__="urn:safe">retained</__proto__:payload></b:extensionElements>'));
   assert.ok((await moddle.toXML(namespace.rootElement)).xml.includes('xmlns:__proto__="urn:safe"'));
-  const specialProperties = JSON.parse('{"__proto__":"kept-prototype-name","constructor":"kept-constructor","get":"kept-get","set":"kept-set","$body":"body"}');
+  const specialProperties = JSON.parse('{"__proto__":"kept-prototype-name","constructor":"kept-constructor","__extras":"kept-extra-name","get":"kept-get","set":"kept-set","$body":"body"}');
   const special = moddle.createAny('v:special', 'urn:vendor', specialProperties);
-  for (const key of [ '__proto__', 'constructor', 'get', 'set' ]) {
+  for (const key of [ '__proto__', 'constructor', '__extras', 'get', 'set' ]) {
     assert.equal(Object.getOwnPropertyDescriptor(special, key).enumerable, true);
     assert.equal(special[key], specialProperties[key]);
   }
   const created = moddle.create('bpmn:Definitions', { targetNamespace: 'urn:new', rootElements: [ moddle.create('bpmn:Process', { id: 'Created', extensionElements: moddle.create('bpmn:ExtensionElements', { values: [ special ] }) }) ] });
   const createdAgain = await moddle.fromXML((await moddle.toXML(created)).xml);
   const specialAgain = createdAgain.elementsById.get('Created').extensionElements.values[0];
-  for (const key of [ '__proto__', 'constructor', 'get', 'set' ]) assert.equal(specialAgain[key], specialProperties[key]);
+  for (const key of [ '__proto__', 'constructor', '__extras', 'get', 'set' ]) assert.equal(specialAgain[key], specialProperties[key]);
   assert.equal(externalCalls, 0, 'SAX import/export must never touch DOM/HTML/network APIs');
   console.log(`OK inert XML security: ${ rejects.length } rejected attacks/malformed documents, no DOM/HTML/network API access, strict Unicode/entities/namespaces, opaque comments/PI/CDATA preserved`);
 } finally {

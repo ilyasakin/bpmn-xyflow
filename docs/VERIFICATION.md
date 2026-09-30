@@ -46,3 +46,18 @@ validation is `pnpm test:schema`.
 
 For the deployed site, run `SITE_BASE_URL=<verified-preview-url> node
 test/viewer/site-browser-parity.mjs` in an authorized browser environment.
+
+## Second local checkpoint
+
+The next source checkpoint adds independently reviewed SAX/XML fidelity fixes,
+exact fractional DI restoration, initial paint ordering, lane/space/insertion
+operations, explicit subtree replacement, typed public package exports, theme
+tokens and real-scenario menus. Local aggregate: **139 Node tests**, **66 generated
+XSD-valid exports**, packed root/framework TypeScript and bundle/runtime checks,
+lint with **0 errors / 30 warnings**, build and workflow actionlint pass.
+
+The hosted security-only checkpoint passed CodeQL with no new alerts and executed
+Chrome without disabling its sandbox. Existing smoke/framework/viewer checks and
+order/booking scenarios pass. That earlier head still exposed approval lane paint
+order and HR undo precision failures; local fixes above require fresh hosted
+verification. Remaining contextual menu/rule and UI gates stay open in PARITY.md.
