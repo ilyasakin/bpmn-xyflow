@@ -17,7 +17,7 @@
     "start": "node lib/demo/serve.mjs",
     "dev": "vite",
     "build": "vite build",
-    "test": "pnpm run test:smoke && pnpm run test:react && pnpm run test:multi && pnpm run test:browser:viewer && pnpm run test:browser:scenarios && pnpm run test:browser:actions && pnpm run test:browser:connections",
+    "test": "pnpm run test:smoke && pnpm run test:react && pnpm run test:multi && pnpm run test:browser:viewer && pnpm run test:browser:scenarios && pnpm run test:browser:actions && pnpm run test:browser:connections && pnpm run test:browser:touch",
     "test:smoke": "node lib/demo/modeler/smoke-test.mjs",
     "test:react": "node lib/demo/react/smoke-test.mjs",
     "test:multi": "node lib/demo/multi-framework-smoke-test.mjs",
@@ -32,7 +32,8 @@
     "test:package": "node test/package/consumer-smoke.mjs",
     "test:xml-security": "node test/xml-security.mjs",
     "test:browser:actions": "node test/modeling/browser-actions.mjs",
-    "test:browser:connections": "node test/modeling/browser-connections.mjs"
+    "test:browser:connections": "node test/modeling/browser-connections.mjs",
+    "test:browser:touch": "node test/modeling/browser-touch.mjs"
   },
   "engines": {
     "node": ">=20"
