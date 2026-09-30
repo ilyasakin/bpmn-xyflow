@@ -5,8 +5,6 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    env:
-      PUPPETEER_CACHE_DIR: ${{ runner.temp }}/puppeteer
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v4
@@ -16,8 +14,10 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Configure browser cache
+        run: echo "PUPPETEER_CACHE_DIR=$RUNNER_TEMP/puppeteer" >> "$GITHUB_ENV"
       - name: Install browser
-        run: sudo --preserve-env=PATH,PUPPETEER_CACHE_DIR pnpm exec puppeteer browsers install chrome-headless-shell --install-deps
+        run: sudo env "PATH=$PATH" "PUPPETEER_CACHE_DIR=$PUPPETEER_CACHE_DIR" "$(command -v pnpm)" exec puppeteer browsers install chrome-headless-shell --install-deps
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
