@@ -269,7 +269,8 @@ try {
     assert.ok(converted.byId.BuyerProcess.flowElements.includes(flow));assert.ok(!converted.byId.OrderCollaboration.messageFlows.includes(flow));
     assert.ok(converted.byId.SubmitOrder.outgoing.includes(flow));assert.ok(converted.byId.ReceiveDelivery.incoming.includes(flow));
     assert.equal(converted.di('OrderMessage').id,after.di('OrderMessage').id);near(converted.di('OrderMessage').waypoint[0],after.di('OrderMessage').waypoint[0],1e-8);
-    near(converted.di('OrderMessage').waypoint.at(-1),{x:1160,y:95},1.5);
+    const targetBounds=after.di('ReceiveDelivery').bounds;
+    near(converted.di('OrderMessage').waypoint.at(-1),{x:targetBounds.x,y:targetBounds.y+20},1.5);
     assert.equal(converted.history.size,after.history.size+1,'message-to-sequence conversion is one undoable command');
     await historyCycle(page,after,converted);await reopen(page,converted);
   });

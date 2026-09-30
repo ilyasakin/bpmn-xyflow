@@ -181,7 +181,7 @@ try {
   await run('low-zoom-hit-corridor',fixture([a,{...b,y:200}],straight),0.5,async page=>{
     for(const zoom of [0.5,1,1.6]) {
       await page.evaluate(zoom=>window.modeler.setViewport({x:140,y:100,zoom}),zoom);
-      const p=await point(page,{x:470,y:240});p.y+=4;await hit(page,p,'Flow');await page.mouse.click(p.x,p.y);
+      const p=await point(page,{x:470,y:246});await hit(page,p,'Flow');await page.mouse.click(p.x,p.y);
       assert.deepEqual(await page.evaluate(()=>window.modeler.getSelection()),['Flow']);
       const blank=await point(page,{x:900,y:600});await page.mouse.click(blank.x,blank.y);
       const inside=await point(page,{x:a.x+a.width-4/zoom,y:240});await hit(page,inside,'Source');

@@ -5,6 +5,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v4
@@ -35,10 +36,7 @@ jobs:
           status=0
           for suite in test:smoke test:react test:multi test:browser:viewer test:browser:scenarios test:browser:actions test:browser:connections test:browser:touch test:browser:core test:browser:advanced test:browser:hits; do
             echo "::group::$suite"
-            if pnpm run "$suite"; then
-              echo "PASS $suite"
-            else
-              echo "FAIL $suite"
+            if ! node test/run-browser-suite.mjs "$suite"; then
               status=1
             fi
             echo "::endgroup::"

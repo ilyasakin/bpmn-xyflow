@@ -14,8 +14,8 @@ test('connection hit regions track exact visual paths without widening markers o
       const hit=graphic.querySelector('.bpmn-xyflow-connection-hit');
       assert.ok(visual);assert.ok(hit);
       assert.equal(hit.getAttribute('d'),visual.getAttribute('d'));
-      assert.equal(hit.getAttribute('stroke-width'),'12');
-      assert.equal(hit.getAttribute('vector-effect'),'non-scaling-stroke');
+      assert.equal(hit.getAttribute('stroke-width'),'15','pinned diagram-js graph-space interaction width');
+      assert.equal(hit.getAttribute('vector-effect'),null,'hit corridor scales with the same diagram as upstream');
       assert.equal(hit.getAttribute('pointer-events'),'stroke');
       assert.equal(hit.getAttribute('stroke'),'transparent');
       assert.equal(hit.getAttribute('marker-start'),null);assert.equal(hit.getAttribute('marker-end'),null);

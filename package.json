@@ -22,7 +22,7 @@
     "test:react": "node lib/demo/react/smoke-test.mjs",
     "test:multi": "node lib/demo/multi-framework-smoke-test.mjs",
     "test:xml": "node test/xml-parity.mjs",
-    "test:unit": "node --test --test-concurrency=1 test/modeling/*.test.mjs test/geometry/*.test.mjs test/rules/*.test.mjs test/viewer/*.test.mjs",
+    "test:unit": "node --test --test-concurrency=1 test/modeling/*.test.mjs test/geometry/*.test.mjs test/rules/*.test.mjs test/viewer/*.test.mjs test/runner/*.test.mjs",
     "check": "pnpm run lint && pnpm run test:schema && pnpm run test:unit && pnpm test && pnpm run build && pnpm run test:package",
     "prepack": "pnpm run build",
     "test:browser:viewer": "node test/viewer/browser-parity.mjs",
