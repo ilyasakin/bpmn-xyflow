@@ -84,6 +84,42 @@ Native pointer tests verify these behaviors separately from connection-rule
 inference. See the current acceptance state in PARITY.md before interpreting
 these commands as fully verified.
 
+## External-label width resize
+
+Select the external label text itself, rather than its owning event, gateway or
+connection. Drag the east/west (right/left) handle to change its width. The other
+horizontal edge stays fixed, width is clamped to 10 diagram units, and text height
+is fitted automatically. This does not resize the owner or reroute its connections.
+
+The existing `resizeShape` API also accepts a live external-label `GraphNode`:
+
+```js
+const label = modeler.getElement('ApproveFlow')?.label;
+if (label) {
+  modeler.resizeShape(label, {
+    x: label.x,
+    y: label.y,
+    width: 160,
+    height: label.height // text layout computes the committed height
+  });
+}
+```
+
+API requests with nonfinite bounds, width below 10 or a stale label return false
+without a command. Each completed resize is one undo step. Undo/redo restores the
+label's DI metadata and bounds; Escape, window blur and public `cancel()` discard
+an active preview. Zero movement and dragging out and back add no history. Undo
+during a drag first cancels that preview, then undoes the previous command.
+
+The chosen width is saved in `owner.di.label.bounds`. On import/reopen, the viewer
+uses the pinned upstream label measurement and positioning policy for display;
+rendered graph bounds may therefore differ from saved DI. This normalization does
+not rewrite the saved label DI. Read the current label node for displayed bounds.
+
+Structural, independent-oracle and XML-schema checks cover this implementation.
+The paired 19-group native-browser acceptance suite is still pending; this is not
+a full-core parity completion claim.
+
 ## Rule-aligned controls and explicit differences
 
 The context pad, menus and command preflight share executable action policy.
@@ -95,8 +131,8 @@ for hosts. Failed imports preserve the previous navigation/history state.
 Ordinary Task resizing is an intentional fork extension, enabled by default for
 compatibility. `taskResize: false` uses upstream resize eligibility. Event/gateway,
 collapsed-subprocess and data-reference resize is not advertised accidentally;
-annotation resizing is horizontal. External-label width resize is still an open
-core capability, separate from annotation resize.
+annotation resizing is horizontal. External-label width resize is implemented
+with its native acceptance gate still pending, as described above.
 
 Two replacement/append capabilities remain explicitly open in this checkpoint:
 IO-bearing catch/throw conversions safely refuse incompatible data migration,

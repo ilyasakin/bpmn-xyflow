@@ -189,6 +189,38 @@ try {
   assert.ok(genericResult.warnings.some(warning => warning.includes('unresolved reference')));
   console.log('OK unknown namespaces, mixed XML content, comments, escaping and unresolved references survive');
 
+  const formattingPackage = {
+    name: 'Formatting', uri: 'urn:test:formatting', prefix: 'f', xml: { tagAlias: 'lowerCase' }, types: [
+      { name: 'Empty', superClass: [ 'Element' ], properties: [ { name: 'flag', type: 'String', isAttr: true, default: 'default' } ] },
+      { name: 'Text', superClass: [ 'Element' ], properties: [ { name: 'body', type: 'String', isBody: true } ] },
+      { name: 'Container', superClass: [ 'Element' ], properties: [ { name: 'children', type: 'Empty', isMany: true } ] }
+    ]
+  };
+  const emptyContentSource = `<b:definitions xmlns:b="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:f="urn:test:formatting" xmlns:v="urn:unknown:formatting" targetNamespace="urn:test:empty-content"><b:process id="EmptyP"><b:extensionElements><f:empty><!--typed-empty--><?vendor empty?></f:empty><f:text>before<!--typed-text--><?vendor text?>after</f:text><f:container><!--container--><f:empty flag="child"/><?vendor container?></f:container><v:empty><!--generic-empty--><?vendor generic?></v:empty></b:extensionElements><b:task id="EmptyA"/><b:task id="EmptyB"/><b:sequenceFlow id="EmptyFlow" sourceRef="EmptyA" targetRef="EmptyB"/></b:process><bpmndi:BPMNDiagram id="EmptyD"><bpmndi:BPMNPlane id="EmptyPlane" bpmnElement="EmptyP"><bpmndi:BPMNShape id="EmptyA_di" bpmnElement="EmptyA"><dc:Bounds x="0.25" y="1.5" width="100" height="80"><!--bounds-comment--><?vendor bounds?></dc:Bounds></bpmndi:BPMNShape><bpmndi:BPMNShape id="EmptyB_di" bpmnElement="EmptyB"><dc:Bounds x="200" y="1.5" width="100" height="80"/></bpmndi:BPMNShape><bpmndi:BPMNEdge id="EmptyFlow_di" bpmnElement="EmptyFlow"><di:waypoint x="100.25" y="41.5"><!--point-comment--><?vendor point?></di:waypoint><di:waypoint x="200" y="41.5"/></bpmndi:BPMNEdge></bpmndi:BPMNPlane></bpmndi:BPMNDiagram></b:definitions>`;
+  const formattingModel = BpmnModdle({ formatting: formattingPackage });
+  const formattingOracle = new UpstreamModdle({ formatting: formattingPackage });
+  const emptyParsed = await formattingModel.fromXML(emptyContentSource);
+  const emptyExpected = await formattingOracle.fromXML(emptyContentSource);
+  assert.deepEqual(emptyParsed.warnings, []);assert.deepEqual(emptyExpected.warnings, []);
+  for (const format of [ false, true ]) {
+    const output = (await formattingModel.toXML(emptyParsed.rootElement, { format })).xml;
+    const document = new DOMParser().parseFromString(output, 'application/xml');
+    const named = (uri, localName) => document.getElementsByTagNameNS(uri, localName)[0];
+    for (const element of [ named('http://www.omg.org/spec/DD/20100524/DC', 'Bounds'), named('http://www.omg.org/spec/DD/20100524/DI', 'waypoint'), named('urn:test:formatting', 'empty'), named('urn:unknown:formatting', 'empty') ]) {
+      assert.equal(element.textContent, '', `${element.tagName} gains no character content from formatting`);
+      assert.deepEqual(Array.from(element.childNodes).map(node => node.nodeType), [8, 7], `${element.tagName} retains comment and PI nodes`);
+    }
+    const text = named('urn:test:formatting', 'text');
+    assert.equal(text.textContent, 'beforeafter');assert.deepEqual(Array.from(text.childNodes).map(node => node.nodeType), [3, 8, 7, 3]);
+    const container = named('urn:test:formatting', 'container');
+    assert.equal(container.getElementsByTagNameNS('urn:test:formatting', 'empty')[0].getAttribute('flag'), 'child');
+    if (format) assert.ok(Array.from(container.childNodes).some(node => node.nodeType === 3 && node.nodeValue.includes('\n')), 'element-content descriptors still pretty-print');
+    const actual = await formattingOracle.fromXML(output);assert.deepEqual(actual.warnings, []);
+    assert.deepEqual(snapshot(actual.rootElement), snapshot(emptyExpected.rootElement), 'empty/body/element/opaque content descriptors retain independent semantics');
+    await saveArtifact(`empty-content-${format ? 'formatted' : 'compact'}.bpmn`, output);
+  }
+  console.log('OK formatted empty-content Bounds/Point/custom types preserve inline comments/PI without schema-invalid text');
+
   const namespaceResult = await runInDom(async () => {
     const xml = `<m:definitions xmlns:m="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmn="urn:root-vendor" xmlns:xtype="http://www.w3.org/2001/XMLSchema-instance" xmlns:v="urn:vendor" targetNamespace="urn:test"><m:process id="P"><m:task id="A"/><m:task id="B"/><m:sequenceFlow id="F" sourceRef="A" targetRef="B"><m:conditionExpression xmlns:bpmn1="urn:local-vendor" xtype:type="v:Expression" v:hint="bpmn1:symbol">a &lt; 3</m:conditionExpression></m:sequenceFlow><m:extensionElements><v:payload xmlns:v="urn:nested-vendor" v:value="bpmn:symbol"/></m:extensionElements></m:process></m:definitions>`;
     const { rootElement } = await window.BpmnModdle().fromXML(xml);

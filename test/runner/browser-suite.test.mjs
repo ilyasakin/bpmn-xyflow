@@ -122,6 +122,7 @@ test('stat parser handles spaces and parentheses in process names', () => {
 
 test('CLI accepts only the reviewed browser script allowlist', async () => {
   assert.ok(Object.hasOwn(BROWSER_SUITES, 'test:browser:hits'));
+  assert.equal(BROWSER_SUITES['test:browser:labels'], 'test/modeling/browser-label-resize.mjs');
   for (const name of ['test:unit', '../anything', 'test:smoke; echo injected', '__proto__']) await assert.rejects(runBrowserSuite(name), /Unknown browser suite/);
 });
 
