@@ -570,7 +570,14 @@ test('native DOM boundary palette, intermediate-on-host, menu variants and Escap
  const host=m.addShape('bpmn:Task',{x:500,y:300});m.select(host.id);const before=await m.getXML(),count=m.commandStack.size();
  const mouse=(type,x,y)=>new dom.window.MouseEvent(type,{bubbles:true,cancelable:true,button:0,clientX:x,clientY:y});
  const boundaryButton=[...m.getContainer().querySelectorAll('.bpmn-xyflow-palette button')].find(button=>button.textContent==='+ Boundary');assert.ok(boundaryButton);boundaryButton.click();assert.ok(m.getContainer().querySelector('[data-action="replace-with-timer-boundary"]'));window.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));assert.equal(await m.getXML(),before);assert.equal(m.commandStack.size(),count);
- boundaryButton.click();m.getContainer().querySelector('[data-action="replace-with-non-interrupting-timer-boundary"]').click();const boundary=host.attachers.at(-1);assert.equal(boundary.type,'bpmn:BoundaryEvent');assert.equal(boundary.businessObject.cancelActivity,false);m.undo();assert.equal(await m.getXML(),before);
+ boundaryButton.click();m.getContainer().querySelector('[data-action="replace-with-non-interrupting-timer-boundary"]').click();const boundary=host.attachers.at(-1);assert.equal(boundary.type,'bpmn:BoundaryEvent');assert.equal(boundary.businessObject.cancelActivity,false);
+ assert.deepEqual(m.getSelection(),[boundary.id]);
+ const center={x:boundary.x+boundary.width/2,y:boundary.y+boundary.height/2};
+ for(const handle of m.getContainer().querySelectorAll('.bpmn-xyflow-resize-handle')){
+  const x=Number(handle.getAttribute('x')),y=Number(handle.getAttribute('y')),w=Number(handle.getAttribute('width')),h=Number(handle.getAttribute('height'));
+  assert.ok(center.x<x||center.x>x+w||center.y<y||center.y>y+h,'boundary center is not covered by a stale host resize handle');
+ }
+ m.undo();assert.equal(await m.getXML(),before);assert.deepEqual(m.getSelection(),[]);assert.equal(m.getContainer().querySelector('.bpmn-xyflow-resize-handles'),null);
  const loose=m.addShape('bpmn:IntermediateThrowEvent',{x:800,y:300}),looseBefore=await m.getXML(),oldHit=document.elementsFromPoint;document.elementsFromPoint=()=>[m.getContainer().querySelector(`[data-element-id="${host.id}"]`)];
  try{m.getContainer().querySelector(`[data-element-id="${loose.id}"]`).dispatchEvent(mouse('mousedown',loose.x+18,loose.y+18));window.dispatchEvent(mouse('mousemove',host.x+host.width,host.y+host.height));window.dispatchEvent(mouse('mouseup',host.x+host.width,host.y+host.height));assert.equal(loose.type,'bpmn:BoundaryEvent');assert.equal(loose.host,host);assert.equal(loose.businessObject.eventDefinitions.length,0);m.undo();assert.equal(await m.getXML(),looseBefore);m.redo();m.select(loose.id);m.getContainer().querySelector('button[title^="Change type"]').click();m.getContainer().querySelector('[data-action="replace-with-timer-boundary"]').click();assert.equal(loose.businessObject.eventDefinitions[0].$type,'bpmn:TimerEventDefinition');}
  finally{document.elementsFromPoint=oldHit;}await oracle(m);m.destroy();
@@ -657,4 +664,57 @@ test('empty participant creation honors explicit state without hiding a lone pro
 test('IO-bearing throw-event attachment is a pre-mutation no-op without an uncaught transaction error',async()=>{
  const m=await model(),host=m.addShape('bpmn:Task',{x:500,y:300}),event=m.addShape('bpmn:IntermediateThrowEvent',{x:800,y:300}),data=m.addShape('bpmn:DataObjectReference',{x:1000,y:300});assert.ok(m.connect(data,event));const before=await m.getXML(),size=m.commandStack.size();assert.equal(m.attachBoundary(event,host),null);assert.equal(await m.getXML(),before);assert.equal(m.commandStack.size(),size);
  const mouse=(type,x,y)=>new dom.window.MouseEvent(type,{bubbles:true,cancelable:true,button:0,clientX:x,clientY:y});m.getContainer().querySelector(`[data-element-id="${event.id}"]`).dispatchEvent(mouse('mousedown',event.x+18,event.y+18));window.dispatchEvent(mouse('mousemove',host.x+host.width,host.y+host.height));window.dispatchEvent(mouse('mouseup',host.x+host.width,host.y+host.height));assert.equal(await m.getXML(),before);assert.equal(m.commandStack.size(),size);m.destroy();
+});
+
+test('label editor direct cancellation preserves repeated commit, Escape, import and undo behavior', async () => {
+  // Call registered transitions directly: this is a structural state-machine
+  // test, not synthetic DOM input or a claim about native browser gestures.
+  const handlers = new WeakMap();
+  const prototype = dom.window.HTMLElement.prototype;
+  const register = prototype.addEventListener;
+  prototype.addEventListener = function(type, callback, options) {
+    if (this.contentEditable === 'plaintext-only' && ['blur', 'keydown'].includes(type)) {
+      if (!handlers.has(this)) handlers.set(this, {});
+      handlers.get(this)[type] = callback;
+    }
+    return register.call(this, type, callback, options);
+  };
+  let m;
+  try {
+    m = new Modeler({ container: dom.createContainer(), fitViewOnInit: false, palette: false });
+    const svg = m.getSvg(), add = svg.addEventListener;
+    let doubleClick;
+    svg.addEventListener = function(type, callback, options) {
+      if (type === 'dblclick' && options === true) doubleClick = callback;
+      return add.call(this, type, callback, options);
+    };
+    const xml = await readFile('test/fixtures/bpmn/basic.bpmn', 'utf8');
+    await m.importXML(xml);
+    const task = m.getGraph().nodes.find(node => node.type === 'bpmn:Task');
+    m.updateLabel(task, 'Saved name');
+    const saved = await m.getXML(), size = m.commandStack.size();
+    const open = () => {
+      doubleClick({ target: m.getContainer().querySelector(`[data-element-id="${task.id}"]`), preventDefault() {}, stopPropagation() {} });
+      return [...handlersForEditors()].at(-1);
+    };
+    function* handlersForEditors() {
+      for (const node of document.body.querySelectorAll('div')) if (handlers.has(node)) yield node;
+    }
+    let editor = open(); editor.textContent = 'Cancelled';
+    handlers.get(editor).keydown({ key: 'Escape', preventDefault() {} });
+    assert.equal(editor.isConnected, false); assert.equal(await m.getXML(), saved); assert.equal(m.commandStack.size(), size);
+    editor = open(); editor.textContent = 'Committed'; handlers.get(editor).blur();
+    assert.equal(task.businessObject.name, 'Committed'); assert.equal(editor.isConnected, false);
+    m.undo(); assert.equal(await m.getXML(), saved);
+    editor = open(); editor.textContent = 'First';
+    const next = open(); assert.equal(editor.isConnected, false); assert.equal(task.businessObject.name, 'First');
+    next.textContent = 'Uncommitted'; m.undo();
+    assert.equal(next.isConnected, false); assert.equal(await m.getXML(), saved);
+    m.redo(); assert.equal(task.businessObject.name, 'First'); await oracle(m);
+    editor = open(); editor.textContent = 'Never imported'; await m.importXML(xml);
+    assert.equal(editor.isConnected, false); assert.equal(m.canUndo(), false);
+    assert.equal([...handlersForEditors()].length, 0);
+  } finally {
+    m?.destroy(); prototype.addEventListener = register;
+  }
 });
