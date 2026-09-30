@@ -3,7 +3,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { DOMParser } from '@xmldom/xmldom';
 import { BpmnModdle as Oracle } from 'bpmn-moddle';
 import { setupDOM } from './helpers/dom.mjs';
 import { assertScenario } from './helpers/assert-scenarios.mjs';
@@ -11,8 +10,6 @@ import { assertScenario } from './helpers/assert-scenarios.mjs';
 const camunda = JSON.parse(await fs.readFile('test/fixtures/json/model/camunda.json', 'utf8'));
 const oracle = new Oracle({ camunda });
 const dom = await setupDOM();
-// happy-dom supplies rendering APIs; its XML parser does not support CDATA.
-Object.defineProperty(globalThis, 'DOMParser', { configurable: true, value: DOMParser });
 const models = [];
 try {
   const { default: Modeler } = await dom.loadModule('/lib/Modeler.js');

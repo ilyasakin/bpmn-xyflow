@@ -5,7 +5,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BpmnModdle as UpstreamModdle } from 'bpmn-moddle';
-import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
+import { DOMParser as XMLDOMParser } from '@xmldom/xmldom';
 import { BpmnModdle } from '../lib/bpmn/moddle.js';
 import { assertScenario } from './helpers/assert-scenarios.mjs';
 import { cloneSemanticGraph } from '../lib/modeling/Clipboard.js';
@@ -13,10 +13,9 @@ import { cloneSemanticGraph } from '../lib/modeling/Clipboard.js';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const extensions = Object.fromEntries(await Promise.all([ 'camunda', 'custom' ].map(async name => [ name, JSON.parse(await fs.readFile(path.join(root, 'test/fixtures/json/model', name + '.json'), 'utf8')) ])));
 const oracle = new UpstreamModdle(extensions);
-globalThis.DOMParser = class extends DOMParser {
+class DOMParser extends XMLDOMParser {
   constructor() { super({ onError: (level, message) => { if (level !== 'warning') throw new Error(message); } }); }
-};
-globalThis.XMLSerializer = XMLSerializer;
+}
 globalThis.window = {};
 const runInDom = (callback, value) => callback(value);
 const artifactDirectory = process.env.BPMN_XML_ARTIFACT_DIR;
@@ -230,6 +229,83 @@ try {
   assert.equal(adversarialDOM.getElementsByTagNameNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'formalExpression').length, 0);
   console.log('OK adversarial QName references, generic xsi:type and opaque mixed-content wrapper regressions');
 
+  const rawContentXML = `<b:definitions xmlns:b="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:v="urn:vendor" targetNamespace="urn:test"><b:process id="P"><b:extensionElements><v:payload>before<!--middle-->after<?vendor pi?>last</v:payload></b:extensionElements></b:process></b:definitions>`;
+  const rawContent = await window.moddle.fromXML(rawContentXML);
+  const originalRawNodes = new DOMParser().parseFromString(rawContentXML, 'application/xml').getElementsByTagNameNS('urn:vendor', 'payload')[0];
+  const rawSequence = node => Array.from(node.childNodes).map(child => [ child.nodeType, child.nodeValue ]);
+  const rawOutput = (await window.moddle.toXML(rawContent.rootElement)).xml;
+  const rawNodes = new DOMParser().parseFromString(rawOutput, 'application/xml').getElementsByTagNameNS('urn:vendor', 'payload')[0];
+  assert.deepEqual(rawSequence(rawNodes), rawSequence(originalRawNodes), 'generic text/comment/PI sequence is preserved without child elements');
+  const rawPayload = rawContent.elementsById.get('P').extensionElements.values[0];
+  rawPayload.$body = 'edited body';
+  const editedRaw = (await window.moddle.toXML(rawContent.rootElement)).xml;
+  assert.ok(editedRaw.includes('edited body<!--middle--><?vendor pi?>'));
+  delete rawPayload.$body;
+  const removedRaw = (await window.moddle.toXML(rawContent.rootElement)).xml;
+  assert.ok(removedRaw.includes('<!--middle--><?vendor pi?>'));
+  assert.ok(!removedRaw.includes('before') && !removedRaw.includes('edited body'));
+  console.log('OK text/comment/processing-instruction order survives generic leaf roundtrip and body edits');
+
+  const movedNamespaceXML = `<b:definitions xmlns:b="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" targetNamespace="urn:test"><b:process id="P1" xmlns:v="urn:old"><b:task id="A"><b:extensionElements><x:payload xmlns:x="urn:extension" ref="v:Thing" xsi:type="v:Custom">v:Text</x:payload></b:extensionElements></b:task></b:process><b:process id="P2" xmlns:v="urn:new"/></b:definitions>`;
+  const movedNamespace = await window.moddle.fromXML(movedNamespaceXML);
+  const movedTask = movedNamespace.elementsById.get('A');
+  movedNamespace.elementsById.get('P1').flowElements = [];
+  movedNamespace.elementsById.get('P2').flowElements = [ movedTask ];
+  movedTask.$parent = movedNamespace.elementsById.get('P2');
+  const movedOutput = (await window.moddle.toXML(movedNamespace.rootElement)).xml;
+  const movedPayload = new DOMParser().parseFromString(movedOutput, 'application/xml').getElementsByTagNameNS('urn:extension', 'payload')[0];
+  assert.equal(movedPayload.lookupNamespaceURI('v'), 'urn:old');
+  assert.equal(movedPayload.getAttribute('ref'), 'v:Thing');
+  assert.equal(movedPayload.textContent, 'v:Text');
+  assert.equal(movedPayload.getAttributeNS('http://www.w3.org/2001/XMLSchema-instance', 'type'), 'v:Custom');
+  const copiedNamespace = cloneSemanticGraph(window.moddle, [ movedTask ]).get(movedTask);
+  const anotherDefinitions = window.moddle.create('bpmn:Definitions', { targetNamespace: 'urn:new-document', rootElements: [ window.moddle.create('bpmn:Process', { id: 'Target', flowElements: [ copiedNamespace ] }) ] });
+  const copiedNamespaceOutput = (await window.moddle.toXML(anotherDefinitions)).xml;
+  const copiedNamespacePayload = new DOMParser().parseFromString(copiedNamespaceOutput, 'application/xml').getElementsByTagNameNS('urn:extension', 'payload')[0];
+  assert.equal(copiedNamespacePayload.lookupNamespaceURI('v'), 'urn:old');
+  const noDefaultSource = `<b:definitions xmlns:b="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="urn:test"><b:process id="P1"><b:task id="A"><b:extensionElements><payload code="1"/></b:extensionElements></b:task></b:process><b:process id="P2" xmlns="urn:new"/></b:definitions>`;
+  const noDefault = await window.moddle.fromXML(noDefaultSource);
+  const noNamespaceTask = noDefault.elementsById.get('A');
+  noDefault.elementsById.get('P1').flowElements = [];
+  noDefault.elementsById.get('P2').flowElements = [ noNamespaceTask ];
+  noNamespaceTask.$parent = noDefault.elementsById.get('P2');
+  const noDefaultOutput = (await window.moddle.toXML(noDefault.rootElement)).xml;
+  const noNamespacePayload = new DOMParser().parseFromString(noDefaultOutput, 'application/xml').getElementsByTagName('payload')[0];
+  assert.equal(noNamespacePayload.namespaceURI || null, null, 'absent source default namespace remains absent after reparenting');
+  console.log('OK reparented/copied opaque QName values retain inherited namespace meaning');
+
+  const typedContentXML = `<b:definitions xmlns:b="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" targetNamespace="urn:test"><b:process id="P"><b:documentation>before<!--mid-->after<?p x?>last</b:documentation><b:scriptTask id="S"><b:script>before<!--mid-->after<?p x?>last</b:script></b:scriptTask><b:task id="T"/><b:sequenceFlow id="F" sourceRef="S" targetRef="T"><b:conditionExpression xsi:type="b:tFormalExpression">before<!--mid-->after<?p x?>last</b:conditionExpression></b:sequenceFlow></b:process></b:definitions>`;
+  const typedContent = await window.moddle.fromXML(typedContentXML);
+  const typedOriginalDOM = new DOMParser().parseFromString(typedContentXML, 'application/xml');
+  const typedOutput = (await window.moddle.toXML(typedContent.rootElement)).xml;
+  const typedOutputDOM = new DOMParser().parseFromString(typedOutput, 'application/xml');
+  for (const name of [ 'documentation', 'script', 'conditionExpression' ]) {
+    const node = document => document.getElementsByTagNameNS('http://www.omg.org/spec/BPMN/20100524/MODEL', name)[0];
+    assert.deepEqual(rawSequence(node(typedOutputDOM)), rawSequence(node(typedOriginalDOM)), name + ' mixed text/PI/comment order');
+  }
+  typedContent.elementsById.get('P').documentation[0].text = 'edited documentation';
+  typedContent.elementsById.get('S').script = 'edited script';
+  typedContent.elementsById.get('F').conditionExpression.body = 'edited expression';
+  const typedEdited = (await window.moddle.toXML(typedContent.rootElement)).xml;
+  for (const value of [ 'edited documentation', 'edited script', 'edited expression' ]) assert.ok(typedEdited.includes(value + '<!--mid--><?p x?>'));
+  delete typedContent.elementsById.get('P').documentation[0].text;
+  typedContent.elementsById.get('S').script = '';
+  delete typedContent.elementsById.get('F').conditionExpression.body;
+  const typedDeleted = (await window.moddle.toXML(typedContent.rootElement)).xml;
+  assert.ok(!typedDeleted.includes('edited') && !typedDeleted.includes('before') && !typedDeleted.includes('after') && !typedDeleted.includes('last'));
+  assert.equal(typedDeleted.split('<!--mid--><?p x?>').length - 1, 3);
+  delete typedContent.elementsById.get('S').script;
+  const deletedProperty = (await window.moddle.toXML(typedContent.rootElement)).xml;
+  assert.equal(new DOMParser().parseFromString(deletedProperty, 'application/xml').getElementsByTagNameNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'script').length, 0, 'deleted scalar property does not resurrect XML wrapper');
+  console.log('OK typed documentation/expression/script comment+PI order survives roundtrip, edits and deletion');
+
+  const malformedTypeXML = `<b:definitions xmlns:b="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" targetNamespace="urn:test"><b:process id="P"><b:sequenceFlow id="F"><b:conditionExpression xsi:type="b:tFormalExpression:Other">opaque</b:conditionExpression></b:sequenceFlow></b:process></b:definitions>`;
+  const malformedType = await window.moddle.fromXML(malformedTypeXML);
+  assert.equal(malformedType.elementsById.get('F').conditionExpression.$descriptor.isGeneric, true);
+  const malformedTypeOutput = (await window.moddle.toXML(malformedType.rootElement)).xml;
+  assert.ok(malformedTypeOutput.includes('xsi:type="b:tFormalExpression:Other"'), 'malformed xsi:type remains opaque instead of coercing to a known subtype');
+  console.log('OK malformed xsi:type QName is preserved opaquely without subtype reinterpretation');
+
   const created = BpmnModdle(extensions);
   const defs = created.create('bpmn:Definitions', { id: 'NewDefinitions', targetNamespace: 'urn:new' });
   const process = created.create('bpmn:Process', { id: 'NewProcess' });
@@ -261,7 +337,5 @@ try {
   assert.ok(invalid.every(Boolean), 'malformed XML, wrong roots, external entities and duplicate IDs reject');
   console.log('OK malformed XML, invalid roots, external entities and duplicate IDs rejected');
 } finally {
-  delete globalThis.DOMParser;
-  delete globalThis.XMLSerializer;
   delete globalThis.window;
 }

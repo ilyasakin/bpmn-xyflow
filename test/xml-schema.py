@@ -23,6 +23,7 @@ schema = etree.XMLSchema(etree.parse(str(SCHEMA), parser))
 
 with tempfile.TemporaryDirectory(prefix="bpmn-xml-schema-") as directory:
     env = {**os.environ, "BPMN_XML_ARTIFACT_DIR": directory}
+    subprocess.run(["node", "test/xml-security.mjs"], cwd=ROOT, env=env, check=True)
     subprocess.run(["node", "test/xml-parity.mjs"], cwd=ROOT, env=env, check=True)
     subprocess.run(["node", "--test", "test/modeling/modeler.test.mjs"], cwd=ROOT, env=env, check=True)
     subprocess.run(["node", "test/xml-modeler-parity.mjs"], cwd=ROOT, env=env, check=True)
