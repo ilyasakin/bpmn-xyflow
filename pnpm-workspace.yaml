@@ -1,3 +1,6 @@
+packages:
+  - "."
+
 # Chromium is installed explicitly in browser CI; dependency hooks are unnecessary.
 ignoredBuiltDependencies:
   - puppeteer
