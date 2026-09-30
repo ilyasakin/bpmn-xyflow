@@ -5,6 +5,8 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    env:
+      PUPPETEER_CACHE_DIR: ${{ runner.temp }}/puppeteer
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v4
@@ -15,7 +17,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Install browser
-        run: pnpm exec puppeteer browsers install chrome-headless-shell --install-deps
+        run: sudo --preserve-env=PATH,PUPPETEER_CACHE_DIR pnpm exec puppeteer browsers install chrome-headless-shell --install-deps
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
