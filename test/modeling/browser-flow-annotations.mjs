@@ -10,6 +10,7 @@ import {createRequire} from 'node:module';
 import puppeteer from 'puppeteer';
 import {BpmnModdle} from 'bpmn-moddle';
 import {assertUpstreamFlowAppendReopen} from '../helpers/flow-append-reopen-oracle.mjs';
+import {assertFlowAppendGeometry} from '../helpers/flow-append-geometry-oracle.mjs';
 const require=createRequire(import.meta.url),up=createRequire(require.resolve('bpmn-js/package.json'));
 const oracle=new BpmnModdle();assert.equal(require('bpmn-js/package.json').version,'18.30.1');
 const fixtureRoot='test/fixtures/flow-native';
@@ -43,17 +44,18 @@ async function setup(xml,engine='local',{viewport={x:160,y:120,zoom:.9}}={}){
    }
    Object.assign(window.flowTest,{getConnectionAdjustment,Canvas,getConnectionMid,getClosestPointOnConnection,mouseDropCount:0,referenceBendMoves:[]});
    if(engine==='upstream'){
-    m.get('eventBus').on('bendpoint.move.move',20000,event=>{window.flowTest.referenceBendRawMove={id:event.context.connection.id,x:event.x,y:event.y,client:{x:event.originalEvent.clientX,y:event.originalEvent.clientY}};});
+    m.get('eventBus').on('bendpoint.move.move',20000,event=>{window.flowTest.referenceBendRawMove={id:event.context.connection.id,x:event.x,y:event.y,ctrlKey:event.originalEvent.ctrlKey,client:{x:event.originalEvent.clientX,y:event.originalEvent.clientY}};});
     m.get('eventBus').on('commandStack.connection.reconnect.preExecute',20000,event=>{window.flowTest.referenceReconnect={id:event.context.connection.id,docking:{...event.context.dockingOrPoints},side:event.context.hints?.docking};});
     m.get('eventBus').on('bendpoint.move.move',500,event=>window.flowTest.referenceBendMoves.push({id:event.context.connection.id,x:event.x,y:event.y,allowed:event.context.allowed,hover:event.context.hover?.id}));
-    m.get('eventBus').on('bendpoint.move.end',1200,event=>{window.flowTest.referenceBendEnd={id:event.context.connection.id,x:event.x,y:event.y,allowed:event.context.allowed,hover:event.context.hover?.id};});
+    m.get('eventBus').on('bendpoint.move.end',1400,event=>{window.flowTest.referenceBeforeGrid={id:event.context.connection.id,x:event.x,y:event.y,snapped:{x:!!event.snapped?.x,y:!!event.snapped?.y},gridActive:m.get('gridSnapping').isActive(),gridSpacing:m.get('gridSnapping').getGridSpacing()};});
+    m.get('eventBus').on('bendpoint.move.end',1150,event=>{window.flowTest.referenceBendEnd={id:event.context.connection.id,x:event.x,y:event.y,allowed:event.context.allowed,hover:event.context.hover?.id};});
    }
    // Observe the exact native MouseEvent used by both engines. Chromium may
    // quantize requested fractional CDP coordinates before dispatching it.
    window.addEventListener('mouseup',event=>{
     const t=window.flowTest,viewportNode=t.engine==='local'?t.m.viewer._internals.viewport:t.m.get('canvas')._viewport;
     const matrix=viewportNode.getScreenCTM(),p=new DOMPoint(event.clientX,event.clientY).matrixTransform(matrix.inverse());
-    t.lastMouseDrop={count:++t.mouseDropCount,trusted:event.isTrusted,button:event.button,client:{x:event.clientX,y:event.clientY},graph:{x:p.x,y:p.y},matrix:{a:matrix.a,b:matrix.b,c:matrix.c,d:matrix.d,e:matrix.e,f:matrix.f}};
+    t.lastMouseDrop={count:++t.mouseDropCount,trusted:event.isTrusted,button:event.button,ctrlKey:event.ctrlKey,altKey:event.altKey,metaKey:event.metaKey,client:{x:event.clientX,y:event.clientY},graph:{x:p.x,y:p.y},matrix:{a:matrix.a,b:matrix.b,c:matrix.c,d:matrix.d,e:matrix.e,f:matrix.f}};
    },true);
    return result.warnings.map(w=>w.message);
   },{engine,xml,viewport,adjustUrl:'/@fs/'+require.resolve('bpmn-js/lib/features/modeling/behavior/util/ConnectionLayoutUtil.js'),canvasUrl:'/@fs/'+up.resolve('diagram-js/lib/core/Canvas.js'),layoutUrl:'/@fs/'+up.resolve('diagram-js/lib/layout/LayoutUtil.js'),bendpointUrl:'/@fs/'+up.resolve('diagram-js/lib/features/bendpoints/BendpointUtil.js')});
@@ -61,7 +63,7 @@ async function setup(xml,engine='local',{viewport={x:160,y:120,zoom:.9}}={}){
  }catch(e){await page.close().catch(()=>{});throw e;}
 }
 async function state(page){
- const raw=await page.evaluate(async()=>{const t=window.flowTest;return{xml:await t.xml(),history:t.history(),viewport:t.viewport(),selection:t.selection(),nativeInput:{drop:t.lastMouseDrop||null,projection:t.lastProjection||null,referenceBendEnd:t.referenceBendEnd||null,referenceBendRawMove:t.referenceBendRawMove||null,referenceReconnect:t.referenceReconnect||null}};});
+ const raw=await page.evaluate(async()=>{const t=window.flowTest;return{xml:await t.xml(),history:t.history(),viewport:t.viewport(),selection:t.selection(),nativeInput:{drop:t.lastMouseDrop||null,projection:t.lastProjection||null,referenceBeforeGrid:t.referenceBeforeGrid||null,referenceBendEnd:t.referenceBendEnd||null,referenceBendRawMove:t.referenceBendRawMove||null,referenceReconnect:t.referenceReconnect||null}};});
  const parsed=await oracle.fromXML(raw.xml);assert.deepEqual(parsed.warnings,[],'independent exported XML parse');
  const di=parsed.rootElement.diagrams.flatMap(d=>d.plane.planeElement||[]);
  return{...raw,parsed,canonical:(await oracle.toXML(parsed.rootElement,{format:true})).xml,
@@ -82,7 +84,7 @@ async function selectEdge(page,id,position){
 async function selectShape(page,id){const b=(await state(page)).shapes[id],p=await screen(page,{x:b.x+b.width/2,y:b.y+b.height/2});await hit(page,p,id);await page.mouse.click(p.x,p.y);await settle(page);assert.deepEqual(await page.evaluate(()=>window.flowTest.selection()),[id]);}
 async function control(page,selector){const h=await page.waitForSelector(selector),b=await h.boundingBox();assert.ok(b);const p={x:b.x+b.width/2,y:b.y+b.height/2};await hit(page,p,null,selector);return p;}
 async function gesture(page,from,to,{cancel=false,preview,modifier}={}){
- await page.evaluate(()=>{window.flowTest.lastMouseDrop=null;window.flowTest.lastProjection=null;window.flowTest.referenceBendMoves=[];window.flowTest.referenceBendEnd=null;window.flowTest.referenceBendRawMove=null;window.flowTest.referenceReconnect=null;});
+ await page.evaluate(()=>{window.flowTest.lastMouseDrop=null;window.flowTest.lastProjection=null;window.flowTest.referenceBendMoves=[];window.flowTest.referenceBeforeGrid=null;window.flowTest.referenceBendEnd=null;window.flowTest.referenceBendRawMove=null;window.flowTest.referenceReconnect=null;});
  if(modifier)await page.keyboard.down(modifier);
  try{await page.mouse.move(from.x,from.y);await page.mouse.down();await page.mouse.move(to.x,to.y,{steps:12});await settle(page);if(preview)await preview();if(cancel)await page.keyboard.press('Escape');await page.mouse.up();await settle(page);}
  finally{await page.mouse.up().catch(()=>{});if(modifier)await page.keyboard.up(modifier).catch(()=>{});}
@@ -276,7 +278,8 @@ try{
  browser=await puppeteer.launch({headless:'shell',protocolTimeout:30000});await mkdir('test-artifacts',{recursive:true});
  for(const [owner,name]of [['ApproveFlow','approval-source'],['OrderMessage','message-source']])for(const mode of ['click','drag'])await run(`${owner}-native-${mode}-append`,async create=>{
   const outputs={};for(const engine of ['upstream','local']){const page=await create(await fixture(name,{straight:owner==='ApproveFlow',withoutDependent:true}),engine);const result=await append(page,owner,mode);outputs[engine]={bounds:result.after.shapes[result.note.id],points:result.edge.points,owner:result.edge.owner};await evidence(page,`${owner}-${mode}-${engine}`,outputs[engine]);}
-  assert.deepEqual(outputs.local,outputs.upstream,'same native append mode matches independent upstream placement, anchor and ownership');return outputs;
+  const cropping=assertFlowAppendGeometry(outputs,{ownerId:owner,mode});
+  return{status:'intentional-difference',...outputs,cropping,reason:'Placement, ownership and source anchor agree exactly; local annotation cropping retains the analytical fraction that pinned upstream rounds'};
  });
  for(const mode of ['click','drag'])await run(`asymmetric-half-length-${mode}-append`,async create=>{
   const page=await create(await fixture('approval-source'));const result=await append(page,'ApproveFlow',mode);near(result.edge.points[0],{x:900,y:500},'asymmetric route uses half total length, not longest segment midpoint',.01);
@@ -286,28 +289,36 @@ try{
   const page=await create(await fixture(name));const initial=await state(page);for(let i=0;i<3;i++)await append(page,owner,'drag',{cancel:true});assert.equal((await state(page)).xml,initial.xml);const result=await append(page,owner,'click');return{edge:result.edge};
  });
  await run('repeated-auto-append-minimal-safe-pan',async create=>repeatedVisible(await create(await fixture('approval-source'), 'local',{viewport:{x:500,y:470,zoom:1}})));
- for(const fractional of [false,true])for(const target of [false,true])await run(`native-dependent-${target?'target':'source'}-${fractional?'fractional':'integral'}-projection-reference`,async create=>{
+ for(const mode of ['integral','fractional','integral-control'])for(const target of [false,true])await run(`native-dependent-${target?'target':'source'}-${mode}-projection-reference`,async create=>{
+  const fractional=mode==='fractional',modifier=mode==='integral-control';
   const entries=[];
   for(const engine of ['upstream','local']){
-   // An integral graph input at scale 1 isolates the common native projection
-   // contract. The local scale-.9 cases below separately capture Chromium's
-   // fractional CSS-pixel quantization. Upstream Dragging/BendpointMove round
-   // graph coordinates, so fractional-input equality must not be presumed.
+   // The integral point lies exactly on the owner. Upstream BendpointSnapping
+   // changes neither axis, leaving both eligible for its default 10-unit grid.
+   // Fractional off-line input changes both axes and suppresses that grid.
+   // Local explicit docking keeps the projection of the delivered pointer.
    const page=await create(await fixture(target?'approval-target':'approval-source'),engine,{viewport:{x:160,y:120,zoom:fractional?.9:1}}),before=await selectEdge(page,'PolicyAssociation',{x:850,y:550});
    const index=target?before.edges.PolicyAssociation.points.length-1:0,position=fractional?{x:360,y:175.5}:{x:366,y:187},to=await screen(page,position);await hit(page,to,'ReviewFlow');
-   await gesture(page,await nativeEndpointControl(page,'PolicyAssociation',index),to,{preview:async()=>{
+   await gesture(page,await nativeEndpointControl(page,'PolicyAssociation',index),to,{modifier:modifier?'Control':undefined,preview:async()=>{
     if(engine==='local')await routePreview(page,'PolicyAssociation',before.edges.PolicyAssociation.points);
     else{const active=await page.evaluate(()=>({move:window.flowTest.referenceBendMoves.at(-1),gfx:!!document.querySelector('.djs-bendpoint.djs-dragging')}));assert.ok(active.gfx);assert.equal(active.move?.id,'PolicyAssociation');assert.equal(active.move.hover,'ReviewFlow');assert.notDeepEqual({x:active.move.x,y:active.move.y},before.edges.PolicyAssociation.points[index]);}
    }});
    const observed=await projectedDrop(page,'ReviewFlow',to),after=await state(page),edge=after.edges.PolicyAssociation;
+   assert.equal(observed.ctrlKey,modifier,'real mouseup carries the intended grid-bypass modifier');assert.equal(observed.altKey,false);assert.equal(observed.metaKey,false);
    if(!fractional)near(observed.graph,position,'integral reference input is actually delivered',.0001);
    let expected=observed.projected;
    if(engine==='upstream'){
-    const reference=await page.evaluate(()=>{const t=window.flowTest;return{raw:t.referenceBendRawMove,end:t.referenceBendEnd,command:t.referenceReconnect,projectedRoundedInput:t.getClosestPointOnConnection({x:Math.round(t.lastMouseDrop.graph.x),y:Math.round(t.lastMouseDrop.graph.y)},t.node('ReviewFlow'))};});
+    const reference=await page.evaluate(()=>{const t=window.flowTest;return{raw:t.referenceBendRawMove,beforeGrid:t.referenceBeforeGrid,end:t.referenceBendEnd,command:t.referenceReconnect,projectedRoundedInput:t.getClosestPointOnConnection({x:Math.round(t.lastMouseDrop.graph.x),y:Math.round(t.lastMouseDrop.graph.y)},t.node('ReviewFlow'))};});
     assert.equal(reference.raw?.id,'PolicyAssociation');assert.deepEqual(reference.raw.client,observed.client,'last native move and mouseup reach the same delivered pixel');
+    assert.equal(reference.raw.ctrlKey,modifier,'actual upstream move receives the same modifier as mouseup');
     assert.deepEqual({x:reference.raw.x,y:reference.raw.y},{x:Math.round(observed.graph.x),y:Math.round(observed.graph.y)},'pinned Dragging rounds the delivered graph input');
-    assert.equal(reference.end?.id,'PolicyAssociation');assert.equal(reference.end.hover,'ReviewFlow');near(reference.end,reference.projectedRoundedInput,'pinned BendpointSnapping projects the rounded native input',1e-8);
-    expected={x:Math.round(reference.projectedRoundedInput.x),y:Math.round(reference.projectedRoundedInput.y)};
+    assert.equal(reference.beforeGrid?.id,'PolicyAssociation');near(reference.beforeGrid,reference.projectedRoundedInput,'pinned BendpointSnapping projects the rounded native input before grid',1e-8);
+    assert.equal(reference.beforeGrid.gridActive,true);assert.equal(reference.beforeGrid.gridSpacing,10);
+    assert.deepEqual(reference.beforeGrid.snapped,{x:fractional,y:fractional},'unchanged on-line axes remain eligible for grid; changed fractional axes are already snapped');
+    const processed=fractional||modifier?point(reference.projectedRoundedInput):{x:Math.round(reference.projectedRoundedInput.x/10)*10,y:Math.round(reference.projectedRoundedInput.y/10)*10};
+    assert.equal(reference.end?.id,'PolicyAssociation');assert.equal(reference.end.hover,'ReviewFlow');near(reference.end,processed,'actual post-grid position follows exact pinned axis flags',1e-8);
+    expected={x:Math.round(processed.x),y:Math.round(processed.y)};
+    if(!fractional)assert.deepEqual(expected,modifier?{x:366,y:187}:{x:370,y:190},'only the modifier bypasses default grid on the same integral input');
     assert.equal(reference.command?.id,'PolicyAssociation');assert.equal(reference.command.side,target?'target':'source');assert.deepEqual(reference.command.docking,expected,'pinned BendpointMove rounds the processed point before reconnect');
     observed.reference=reference;assert.deepEqual(edge.points[index],expected,'upstream stores its exactly rounded native docking');
    }else near(edge.points[index],expected,'local endpoint equals pinned projection of its delivered fractional input',.0001);
@@ -316,11 +327,13 @@ try{
    for(const owner of ['ApproveFlow','ReviewFlow'])assert.deepEqual(after.edges[owner],before.edges[owner]);
    await unchangedExceptGeometry(before,after,['PolicyAssociation'],{PolicyAssociation:[target?'targetRef':'sourceRef']});
    await history(page,before,after,2);await reopen(page,after);
-   const entry={engine,requestedGraph:position,requestedClient:to,observed,endpoint:edge.points[index]};entries.push(entry);await evidence(page,`paired-${target?'target':'source'}-${fractional?'fractional':'integral'}-redock-${engine}`,entry);
+   const entry={engine,mode,requestedGraph:position,requestedClient:to,observed,endpoint:edge.points[index]};entries.push(entry);await evidence(page,`paired-${target?'target':'source'}-${mode}-redock-${engine}`,entry);
   }
   near(entries[0].observed.graph,entries[1].observed.graph,'same native input reaches the same graph pointer in both engines',.0001);
-  if(fractional){assert.notDeepEqual(entries[0].endpoint,entries[1].endpoint,'this fixture must expose the approved integer-versus-fractional docking difference');return{status:'intentional-difference',policy:'Upstream rounds native graph input and processed docking; local preserves the projection of delivered fractional input.',entries};}
-  near(entries[0].endpoint,entries[1].endpoint,'paired integral native endpoint projection',.0001);return{entries};
+  if(modifier){assert.deepEqual(entries[0].endpoint,{x:366,y:187});assert.deepEqual(entries[1].endpoint,{x:366,y:187});return{entries};}
+  assert.notDeepEqual(entries[0].endpoint,entries[1].endpoint,'fixture must expose the exact measured reference-grid/rounding versus local-pointer difference');
+  if(!fractional){assert.deepEqual(entries[0].endpoint,{x:370,y:190});assert.deepEqual(entries[1].endpoint,{x:366,y:187});}
+  return{status:'intentional-difference',policy:fractional?'Upstream rounds native graph input and processed docking; local preserves the projection of delivered fractional input.':'Upstream grid-snaps unchanged integral on-line axes; local preserves the exact projected pointer.',entries};
  });
  for(const target of [false,true])await run(`dependent-${target?'target':'source'}-follows-segment`,async create=>ownerEdit(await create(await fixture(target?'approval-target':'approval-source')),'segment',{target}));
  await run('dependent-follows-owner-bendpoint',async create=>ownerEdit(await create(await fixture('approval-source')),'bend'));

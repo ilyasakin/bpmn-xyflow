@@ -15,6 +15,16 @@ longest segment or the context-pad icon's position. The actual upstream
 ContextPad/AutoPlace/Modeling pipeline supplies the reference placement,
 connected-peer spacing and cropped Association endpoint.
 
+For a Collaboration-owned MessageFlow without a Process ancestor, automatic
+annotation placement also retains the pinned registry-direction fallback. That
+fallback selects the vertical placement branch; the fixture's automatic note is
+at `(180, 260)`, not `(180, 150)`. SequenceFlow placement is unchanged. The four
+native append pairs require exact placement, semantic ownership and half-path
+source anchoring. Their annotation endpoint is checked against an independent
+rectangle intersection: local keeps the analytical fraction, while pinned
+`CroppingConnectionDocking` rounds that intersection to integers. These measured
+precision differences are reported separately, never counted as equal geometry.
+
 A dependent Association can attach at either end to a connection. Subsequent
 owner segment/bendpoint edits, reconnects and connected-shape movement/resize
 adjust that endpoint using the pinned
@@ -47,7 +57,7 @@ suite, 11 focused tests passed on the new helper.
 
 ## Prepared native coverage
 
-`test/modeling/browser-flow-annotations.mjs` has 23 independently aggregated groups:
+`test/modeling/browser-flow-annotations.mjs` has 25 independently aggregated groups:
 
 - Four native upstream/local click and press-drag append pairs for sequence and message flows
 - Two asymmetric route midpoint/placement cases
@@ -56,6 +66,7 @@ suite, 11 focused tests passed on the new helper.
 - Source- and target-owned dependency propagation during segment editing
 - Owner bendpoint editing and target reconnect
 - Dependent source and target redocking to the same and another flow, with Escape and invalid-drop rollback
+- Six paired source/target controls for default integral grid, fractional projection and native Ctrl grid bypass
 - Owner deletion, dependent cleanup and exact history
 - Sequence/message source-shape movement and sequence source-shape resize
 
@@ -77,9 +88,17 @@ provenance; they do not import third-party business process content.
 
 Native redocking is checked against the delivered MouseEvent and live viewport
 matrix, not an ideal requested coordinate. Local explicit docking retains the
-fractional projected position. The pinned reference rounds input, projects, then
-rounds its committed waypoint; the fractional paired cases assert that exact
-measured difference separately. Static hit regions are not widened.
+projected position. The pinned reference rounds input and projects it at
+BendpointSnapping priority 1500. An axis whose projection changes is marked
+snapped, suppressing its default 10-unit GridSnapping at priority 1200. An
+unchanged integral on-line projection sets neither flag, so the grid still acts:
+the measured `(366, 187)` pointer becomes `(370, 190)`. Native Ctrl controls in
+both endpoint directions bypass this grid and require `(366, 187)` in both
+engines. The fractional cases separately assert input rounding, changed snap
+flags, grid suppression and final integer rounding in the reference; local
+preserves its delivered-pointer projection. Each measured difference is reported
+separately, with exact command/DI, complete-model, history and reopen assertions.
+Static hit regions are not widened.
 
 Fresh input associations use a reusable Property placeholder; fresh outputs do
 not allocate IO declarations. Reconnecting an external endpoint must not grow
