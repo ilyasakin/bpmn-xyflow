@@ -29,6 +29,7 @@ with tempfile.TemporaryDirectory(prefix="bpmn-xml-schema-") as directory:
     subprocess.run(["node", "--test", "test/modeling/connections.test.mjs"], cwd=ROOT, env=env, check=True)
     subprocess.run(["node", "--test", "test/modeling/ui-policy.test.mjs"], cwd=ROOT, env=env, check=True)
     subprocess.run(["node", "--test", "test/modeling/label-resize.test.mjs"], cwd=ROOT, env=env, check=True)
+    subprocess.run(["node", "--test", "test/modeling/io-conversion.test.mjs"], cwd=ROOT, env=env, check=True)
     subprocess.run(["node", "test/xml-modeler-parity.mjs"], cwd=ROOT, env=env, check=True)
     artifacts = sorted(Path(directory).glob("*.bpmn"))
     if len(artifacts) < 6:

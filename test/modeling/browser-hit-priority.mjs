@@ -13,9 +13,7 @@ import { BpmnModdle } from 'bpmn-moddle';
 const require=createRequire(import.meta.url),oracle=new BpmnModdle();
 assert.equal(require('bpmn-js/package.json').version,'18.30.1','native comparison uses the pinned upstream release');
 const port=Number(process.env.BPMN_HIT_PRIORITY_PORT||5241),base=`http://localhost:${port}`;
-const server=spawn(process.execPath,['lib/demo/serve.mjs'],{env:{...process.env,PORT:String(port)},stdio:['ignore','pipe','inherit']});
-server.stdout.on('data',()=>{});
-const results=[];let browser;
+const results=[];let browser,server,serverOutput='';
 const rect=b=>({x:b.x,y:b.y,width:b.width,height:b.height});
 const xy=p=>({x:p.x,y:p.y});
 const shape=(id,type,x,y,width,height)=>({id,type,x,y,width,height});
@@ -120,9 +118,9 @@ async function paired(name,xml,zoom,center,id,{ring,label=false,connections=['Fl
       assert.equal((await state(page)).xml,before.xml,'native selection probes do not mutate semantic XML or DI');assert.deepEqual(errors,[]);
       pair[engine]=probes;await evidence(page,name,engine,{zoom,center,id,probes});
     }
-    // Strict reference comparison where the request identified an actual hit;
-    // corridor widths may differ, but local must not steal a visible shape
-    // where the same upstream screen offset selected that shape.
+    // All outcomes must match. The sole intentional policy difference is
+    // imported external labels above later-imported routes; pinned upstream
+    // acknowledges this import ordering defect in BpmnOrderingProvider.
     const candidates=[id,id+'_label',...connections];
     for(const engine of ['upstream','local']) {
       const probe=pair[engine][0];
@@ -130,13 +128,22 @@ async function paired(name,xml,zoom,center,id,{ring,label=false,connections=['Fl
       assert.ok(candidates.includes(probe.selection[0]),`${engine} center selected an unrelated element: ${JSON.stringify(probe)}`);
       assert.equal(probe.target.id,probe.selection[0],`${engine} sampled center hit must be the element selected by native input`);
     }
-    assert.deepEqual(pair.local[0].selection,pair.upstream[0].selection,'same native center click matches pinned upstream');
+    let intentionalDifferences=0;
     for(let i=0;i<pair.upstream.length;i++) {
       const u=pair.upstream[i],l=pair.local[i];
       if(u.ring){assert.deepEqual(u.selection,[id],'upstream ring point actually selects boundary');assert.deepEqual(l.selection,[id],'local ring point actually selects boundary');}
-      if(u.selection.includes(id)||u.selection.includes(id+'_label'))assert.deepEqual(l.selection,u.selection,`local hit corridor must not consume upstream-visible shape or label at offset ${u.offset}`);
+      if(name==='external-label-over-route') {
+        // Exact observed baseline at each point, not a blanket allowance for
+        // either selection or any upstream-edge/local-shape mismatch.
+        const onRoute=u.label||Math.abs(u.offset)<=7.5*zoom;
+        assert.deepEqual(u.selection,[onRoute?'Flow':id+'_label'],'pinned imported label/flow order');
+        assert.deepEqual(l.selection,[id+'_label'],'local imported label remains consistently selectable');
+        assert.equal(u.target.id,u.selection[0]);assert.equal(l.target.id,l.selection[0]);
+        if(onRoute)intentionalDifferences++;
+      } else assert.deepEqual(l.selection,u.selection,`same native selection at offset ${u.offset??'glyph'}`);
     }
-    results.push({name,status:'passed',upstream:pair.upstream,local:pair.local});console.log(`PASS native hit priority ${name}`);
+    if(name==='external-label-over-route')assert.ok(intentionalDifferences>0,'intentional difference must be observed, never counted as equality');
+    results.push({name,status:intentionalDifferences?'intentional-difference':'passed',intentionalDifferences,upstream:pair.upstream,local:pair.local});console.log(`PASS native hit priority ${name}`);
   } catch(error) {
     results.push({name,status:'failed',error:error.stack||String(error),...pair});console.error(`FAIL native hit priority ${name}: ${error.stack||error}`);
     // Completed engine captures already contain the exact mismatch. Avoid a
@@ -172,11 +179,22 @@ async function selectedEndpointPriority() {
 }
 
 try {
-  const deadline=Date.now()+60000;while(true){try{if((await fetch(`${base}/modeler/`,{signal:AbortSignal.timeout(5000)})).ok)break;}catch{}if(server.exitCode!==null||Date.now()>deadline)throw Error('Hit-priority demo server startup timeout');await new Promise(resolve=>setTimeout(resolve,150));}
+  server=spawn(process.execPath,['lib/demo/serve.mjs'],{env:{...process.env,PORT:String(port)},stdio:['ignore','pipe','inherit']});
+  server.stdout.on('data',chunk=>{serverOutput+=String(chunk);});
+  const deadline=Date.now()+60000;while(true){
+    const actual=serverOutput.match(/demo listening on http:\/\/localhost:(\d+)/);
+    if(actual&&Number(actual[1])!==port)throw Error(`Hit-priority server bound unexpected port ${actual[1]}`);
+    if(actual)try{if((await fetch(`${base}/modeler/`,{signal:AbortSignal.timeout(5000)})).ok)break;}catch{}
+    if(server.exitCode!==null||Date.now()>deadline)throw Error('Hit-priority demo server startup timeout');
+    await new Promise(resolve=>setTimeout(resolve,150));
+  }
   browser=await puppeteer.launch({headless:'shell',protocolTimeout:30000});await mkdir('test-artifacts',{recursive:true});
   for(const zoom of [.2,.65,1,1.4,3])for(const crossing of [shape('Crossing','task',380,200,100,80),shape('Crossing','intermediateCatchEvent',412,222,36,36),shape('Crossing','exclusiveGateway',405,215,50,50),shape('Crossing','subProcess',370,180,140,120)]) {
     await paired(`${crossing.type}-crossing-${zoom}`,fixture(crossing),zoom,{x:430,y:240},'Crossing');
   }
+  for(const zoom of [.65,1.4])await paired(`target-endpoint-interior-${zoom}`,fixture(shape('Other','task',450,450,100,80)).replace('<di:waypoint x="280" y="240"/>','<di:waypoint x="280" y="200"/>'),zoom,{x:660.25,y:237},'Target');
+  const overlapping=fixture(shape('Other','task',450,450,100,80)).replace('<dc:Bounds x="660"','<dc:Bounds x="230"').replace('<di:waypoint x="660"','<di:waypoint x="230"');
+  await paired('overlapping-endpoint-interiors',overlapping,1,{x:255,y:244},'Target');
   const booking=await bookingOverlap();
   await paired('booking-attached-boundary',booking,.9,{x:480,y:260},'FlightTimeout',{ring:{x:480,y:246},connections:['ReservationFlow2','TimeoutFlow']});
   const labelled={...shape('Crossing','intermediateCatchEvent',412,380,36,36),name:'MMMMMMMM',label:{x:385,y:232,width:90,height:20}};
@@ -184,5 +202,5 @@ try {
   await paired('external-label-unobstructed',fixture({...labelled,label:{...labelled.label,y:200}}),1,{x:430,y:210},'Crossing',{label:'select'});
   await selectedEndpointPriority();
   await writeFile('test-artifacts/browser-hit-priority-results.json',JSON.stringify(results,null,2));
-  const failures=results.filter(r=>r.status==='failed');assert.equal(failures.length,0,failures.map(r=>`${r.name}: ${r.error}`).join('\n'));console.log(`PASS ${results.length} native hit-priority groups`);
-}finally{await browser?.close();server.kill('SIGTERM');}
+  const failures=results.filter(r=>r.status==='failed');assert.equal(failures.length,0,failures.map(r=>`${r.name}: ${r.error}`).join('\n'));console.log(`PASS ${results.length} native hit-priority groups (${results.filter(r=>r.status==='intentional-difference').length} explicit intentional difference)`);
+}finally{await browser?.close();server?.kill('SIGTERM');}

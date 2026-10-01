@@ -2,7 +2,7 @@ import DefaultViewer, {
   Viewer, Modeler, Renderer, CommandStack, buildGraph, parseBpmnXML,
   type Alignment, type Axis, type Graph, type GraphNode, type GraphEdge, type ImportResult,
   type ModdleExtensions, type ViewerEvents, type Viewport,
-  type ReplacementTarget, type SequenceFlowType, type AddShapeOptions,
+  type ReplacementTarget, type ReplaceOptions, type SequenceFlowType, type AddShapeOptions,
   type ModelerOptions, type NavigationEvent
 } from 'bpmn-xyflow';
 
@@ -95,6 +95,15 @@ if (node) {
   // @ts-expect-error attachment requires a host node
   modeler.attachBoundary(node, 'Task_1');
   modeler.replace(node, 'bpmn:Task', {}, { removeContents: true });
+  const cleanupOptions: ReplaceOptions = { removeIncompatibleData: true };
+  const converted: GraphNode | null = modeler.replace(node, 'bpmn:IntermediateCatchEvent', {}, cleanupOptions);
+  modeler.replace(node, { type: 'bpmn:IntermediateThrowEvent' }, {}, { removeContents: true, removeIncompatibleData: true });
+  modeler.replace(node, 'bpmn:Task', {}, { removeIncompatibleData: false });
+  console.log(converted);
+  // @ts-expect-error incompatible IO removal requires an explicit boolean
+  modeler.replace(node, 'bpmn:Task', {}, { removeIncompatibleData: 'yes' });
+  // @ts-expect-error cleanup is the fourth argument; it is not a replacement target flag
+  modeler.replace(node, { type: 'bpmn:Task', removeIncompatibleData: true });
   // @ts-expect-error destructive replacement requires an explicit boolean
   modeler.replace(node, 'bpmn:Task', {}, { removeContents: 'yes' });
   const markerResult: GraphNode | false = modeler.toggleMarker(node, 'loop');

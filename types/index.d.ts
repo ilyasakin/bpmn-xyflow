@@ -242,7 +242,11 @@ export interface Viewer extends DiagramAPI {
 export const Viewer: { new(options: ViewerOptions): Viewer };
 export default Viewer;
 
-export interface ReplaceOptions { removeContents?: boolean }
+export interface ReplaceOptions {
+  removeContents?: boolean;
+  /** Explicitly remove incompatible owned IO and its associations. Defaults to false. */
+  removeIncompatibleData?: boolean;
+}
 export interface ReplacementTarget {
   type: string;
   eventDefinitionType?: string;

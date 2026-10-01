@@ -187,9 +187,10 @@ try {
       const inside=await point(page,{x:a.x+a.width-4/zoom,y:240});await hit(page,inside,'Source');
     }
   });
-  await run('overlapping-endpoint-hit-exclusion',fixture([a,{...b,x:230,y:200}],[{x:280,y:240},{x:230,y:240}]),1,async page=>{
-    const p=await point(page,{x:255,y:244});await hit(page,p,'Target');await page.mouse.click(p.x,p.y);
-    assert.deepEqual(await page.evaluate(()=>window.modeler.getSelection()),['Target'],'overlap of endpoint interiors remains a shape hit, never the wide edge corridor');
+  await run('overlapping-endpoint-reference-hit',fixture([a,{...b,x:230,y:200}],[{x:280,y:240},{x:230,y:240}]),1,async page=>{
+    const before=await state(page),p=await point(page,{x:255,y:244});await hit(page,p,'Flow');await page.mouse.click(p.x,p.y);
+    assert.deepEqual(await page.evaluate(()=>window.modeler.getSelection()),['Flow'],'pinned uncut 15-unit corridor remains selectable within overlapping endpoint interiors');
+    const after=await state(page);assert.equal(after.xml,before.xml,'selection alone cannot mutate endpoint/route DI');assert.deepEqual(after.history,before.history);
   });
   await run('plain-two-point-segment',fixture([a,{...b,y:200}],straight),1,async page=>{
     const before=await state(page);await selectEdge(page);const p=await point(page,{x:470,y:240});await drag(page,p,{x:p.x,y:p.y+70});const after=await state(page),edge=after.flows[0];

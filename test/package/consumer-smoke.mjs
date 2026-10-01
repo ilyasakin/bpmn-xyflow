@@ -9,6 +9,7 @@ import { build } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import ts from 'typescript';
 import { setupDOM } from '../helpers/dom.mjs';
+import { checkIOReplacement } from './io-replacement-runtime.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const temp = await mkdtemp(join(tmpdir(), 'bpmn-xyflow-consumer-'));
@@ -193,6 +194,7 @@ try {
           assert.match((await modeler.saveSVG()).svg, /<svg/);
           await viewer.importXML(await modeler.getXML());
           assert.equal(viewer.findElements('packed consumer').length, 1);
+          await checkIOReplacement(api, dom);
           console.log('PASS packed consumer DOM runtime: import, model, align, distribute, space, search, replacements, attachments, flow/header variants, resize policy, navigation events, SVG/XML, undo/redo');
         } finally {
           viewer.destroy();

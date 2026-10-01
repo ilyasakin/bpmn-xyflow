@@ -10,10 +10,10 @@ after(async()=>dom.cleanup());
 const bounds=node=>({x:node.x,y:node.y,width:node.width,height:node.height});
 let artifact=0;
 async function valid(m){const xml=await m.getXML();if(process.env.BPMN_XML_ARTIFACT_DIR){await mkdir(process.env.BPMN_XML_ARTIFACT_DIR,{recursive:true});await writeFile(path.join(process.env.BPMN_XML_ARTIFACT_DIR,`label-resize-${++artifact}.bpmn`),xml);}const parsed=await new BpmnModdle().fromXML(xml);assert.deepEqual(parsed.warnings,[]);return parsed;}
-async function editor(id='ApproveFlow',{explicit=true,authored=false}={}){
+async function editor(id='ApproveFlow',{explicit=true,authored=false,snap=true}={}){
  const callbacks=new WeakMap(),restore=[];
  for(const target of [dom.window.HTMLElement.prototype,dom.window.SVGElement.prototype,window]){const add=target.addEventListener,remove=target.removeEventListener;target.addEventListener=function(type,callback,options){const all=callbacks.get(this)||[];all.push({type,callback});callbacks.set(this,all);return add.call(this,type,callback,options);};target.removeEventListener=function(type,callback,options){callbacks.set(this,(callbacks.get(this)||[]).filter(entry=>entry.type!==type||entry.callback!==callback));return remove.call(this,type,callback,options);};restore.push(()=>{target.addEventListener=add;target.removeEventListener=remove;});}
- const m=new Modeler({container:dom.createContainer(),fitViewOnInit:false,palette:false});m.getSvg().getBoundingClientRect=m.getContainer().getBoundingClientRect;
+ const m=new Modeler({container:dom.createContainer(),fitViewOnInit:false,palette:false,snap});m.getSvg().getBoundingClientRect=m.getContainer().getBoundingClientRect;
  let xml=await readFile('test/fixtures/scenarios/approval-rejection-rework.bpmn','utf8');
  if(explicit){const re=new RegExp(`(<bpmndi:BPMN(?:Shape|Edge)\\b[^>]*bpmnElement="${id}"[^>]*>)([\\s\\S]*?)(</bpmndi:BPMN(?:Shape|Edge)>)`);assert.ok(re.test(xml));xml=xml.replace(re,(_,open,inside,close)=>`${open}${inside}<bpmndi:BPMNLabel xmlns:v="urn:label-resize-test" id="ResizeLabelDI" v:note="keep"><dc:Bounds x="500.25" y="500.5" width="170.5" height="20.25"><!--precise bounds--></dc:Bounds></bpmndi:BPMNLabel>${close}`);}
  await m.importXML(xml);const owner=m.getElement(id);
@@ -21,7 +21,7 @@ async function editor(id='ApproveFlow',{explicit=true,authored=false}={}){
  const call=(node,type,event={},name)=>{const ev={target:node,button:0,preventDefault(){},stopPropagation(){},stopImmediatePropagation(){},...event};const entries=(callbacks.get(node)||[]).filter(entry=>entry.type===type&&(!name||entry.callback.name===name));assert.ok(entries.length,`${type} ${name||''}`);for(const {callback}of entries)callback.call(node,ev);};
  const screen=point=>{const v=m.getViewport(),r=m.getContainer().getBoundingClientRect();return{clientX:r.left+v.x+point.x*v.zoom,clientY:r.top+v.y+point.y*v.zoom};};
  let start;
- return{m,owner,call,begin(dir){m.select(owner.label.id);const label=owner.label;start={x:label.x+(dir==='e'?label.width:0),y:label.y+label.height/2};const handle=m.getContainer().querySelector(`[data-resize-dir="${dir}"]`);assert.ok(handle);call(m.getSvg(),'mousedown',{target:handle,...screen(start)},'onMouseDown');},move(delta){call(window,'mousemove',screen({x:start.x+delta,y:start.y}),'onMouseMove');},end(){call(window,'mouseup',{},'onMouseUp');},close(){m.destroy();restore.reverse().forEach(fn=>fn());}};
+ return{m,owner,call,begin(dir){m.select(owner.label.id);const label=owner.label;start={x:label.x+(dir==='e'?label.width:0),y:label.y+label.height/2};const handle=m.getContainer().querySelector(`[data-resize-dir="${dir}"]`);assert.ok(handle);call(m.getSvg(),'mousedown',{target:handle,...screen(start)},'onMouseDown');},move(delta,modifiers={}){call(window,'mousemove',{...screen({x:start.x+delta,y:start.y}),...modifiers},'onMouseMove');},end(){call(window,'mouseup',{},'onMouseUp');},close(){m.destroy();restore.reverse().forEach(fn=>fn());}};
 }
 
 for(const id of ['ApprovedEnd','ApprovalDecision','ApproveFlow'])test(`imported ${id} label exposes e/w and resizes only its bounds with exact metadata/undo`,async()=>{
@@ -30,7 +30,7 @@ for(const id of ['ApprovedEnd','ApprovalDecision','ApproveFlow'])test(`imported 
   m.setViewport({x:120,y:75,zoom:.65});m.select(owner.label.id);assert.deepEqual([...m.getContainer().querySelectorAll('[data-resize-dir]')].map(node=>node.dataset.resizeDir),['e','w']);
   const label=owner.label,oldDi=owner.di.label,oldNodeDi=label.di,oldBounds=oldDi.bounds,original=await m.getXML(),count=m.commandStack.size(),originalGraph=bounds(label);
   const ownerBounds=owner.waypoints?owner.waypoints.map(p=>({x:p.x,y:p.y})):bounds(owner);
-  h.begin('e');h.move(-90);h.end();const expected=layoutExternalLabelBounds({...label,...originalGraph},externalLabelResizeBounds(originalGraph,'e',-90),m.viewer._internals.renderer.textRenderer);
+  h.begin('e');h.move(-90);h.end();const expected=layoutExternalLabelBounds({...label,...originalGraph},externalLabelResizeBounds(originalGraph,'e',-90,{snap:true,snapTargets:label.parent?.children||[]}),m.viewer._internals.renderer.textRenderer);
   assert.deepEqual(bounds(label),expected);assert.deepEqual(bounds(owner.di.label.bounds),expected);assert.equal(owner.di.label.$attrs['v:note'],'keep');assert.ok((await m.getXML()).includes('<!--precise bounds-->'));
   assert.deepEqual(owner.waypoints?owner.waypoints.map(p=>({x:p.x,y:p.y})):bounds(owner),ownerBounds);assert.equal(m.commandStack.size(),count+1);
   const edited=await m.getXML(),parsed=await valid(m);assert.ok(parsed.elementsById.ResizeLabelDI);
@@ -46,7 +46,7 @@ test('label resize cancellation, zero movement and out/back preserve absent impo
  try{
   const label=owner.label,oldNodeDi=label.di,original=await m.getXML(),count=m.commandStack.size(),oldBounds=bounds(label);assert.equal(owner.di.label,undefined);
   for(const mode of ['zero','back','cancel','escape','blur']){h.begin('w');if(mode!=='zero')h.move(75.25);if(mode==='back')h.move(0);if(mode==='cancel')m.cancel();if(mode==='escape')h.call(window,'keydown',{key:'Escape'},'onWindowKeyDown');if(mode==='blur')h.call(window,'blur',{},'onWindowBlur');h.end();assert.equal(await m.getXML(),original,mode);assert.equal(m.commandStack.size(),count);assert.deepEqual(bounds(label),oldBounds);assert.equal(label.di,oldNodeDi);}
-  h.begin('w');h.move(1000);h.end();assert.equal(label.width,10);assert.ok(label.height>=0);assert.equal(owner.di.label.bounds.width,10);const edited=await m.getXML();m.undo();assert.equal(await m.getXML(),original);m.redo();assert.equal(await m.getXML(),edited);await valid(m);
+  h.begin('w');h.move(1000,{ctrlKey:true});h.end();assert.equal(label.width,10);assert.ok(label.height>=0);assert.equal(owner.di.label.bounds.width,10);const edited=await m.getXML();m.undo();assert.equal(await m.getXML(),original);m.redo();assert.equal(await m.getXML(),edited);await valid(m);
  }finally{h.close();}
 });
 
@@ -60,4 +60,17 @@ test('authored label DI, API resize, command interruption, invalid bounds and ow
   m.clearSelection();assert.equal(m.getContainer().querySelector('.bpmn-xyflow-resize-handles'),null);m.select(owner.id);assert.equal(m.getContainer().querySelector('.bpmn-xyflow-resize-handles'),null,'event owner remains nonresizable');
   h.begin('w');h.move(45);await m.importXML(original);h.end();assert.equal(m.getContainer().querySelector('.bpmn-xyflow-resize-handles'),null);assert.equal(m.commandStack.size(),0);assert.deepEqual(m.getSelection(),[]);assert.equal(m.resizeShape(label,{...graph,width:110}),false,'old label object is stale after import');
  }finally{h.close();}
+});
+
+
+test('label drag applies default border/grid snapping and explicit modifier/config bypass',async()=>{
+ for(const settings of [{},{ctrlKey:true},{metaKey:true},{ctrlKey:true,altKey:true},{snap:false}]){
+  const h=await editor('ApproveFlow',{snap:settings.snap!==false}),{m,owner}=h;
+  try{const label=owner.label,before=bounds(label),xml=await m.getXML();
+   h.begin('e');h.move(-83.25,settings);h.end();
+   const snap=settings.snap!==false&&!((settings.ctrlKey||settings.metaKey)&&!settings.altKey);
+   const expected=layoutExternalLabelBounds({...label,...before},externalLabelResizeBounds(before,'e',-83.25,{snap,snapTargets:label.parent?.children||[]}),m.viewer._internals.renderer.textRenderer);
+   assert.deepEqual(bounds(label),expected);assert.deepEqual(bounds(owner.di.label.bounds),expected);m.undo();assert.equal(await m.getXML(),xml);
+  }finally{h.close();}
+ }
 });

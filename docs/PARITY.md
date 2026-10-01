@@ -4,41 +4,37 @@ This is an implementation and verification ledger, not a claim of full bpmn-js
 compatibility. The XYFlow engine and direct API remain intentional. Passing a
 round-trip through this project's own parser is insufficient evidence of validity.
 
-## Current checkpoint — 2026-09-30
+## Current reconstruction — 2026-10-01
 
-**Published library `2c9296645f88d039078537612e23d3677089dd8f` corresponds to reviewed
-source checkpoint `6bec456f`. Its hosted rerun is not green.** All 19 core-control,
-27 connection, nine contextual-action and ten touch-differential groups pass.
-Three later assertions still fail: smoke double-click bendpoint deletion (three
-points remain three), an outside-host boundary drop, and a same-pool message
-reconnect in the advanced suite. These are under diagnosis, not three established
-implementation defects: smoke setup had stale graph/DI/render geometry and hit
-the wrong endpoint; the same-pool message operation permits an upstream-valid
-connection-type change; boundary-center overlap awaits native upstream comparison.
+The current branch starts from published library
+`7bc8a3a2610267a11d18556720b8744e93924e3d`. Its hosted native gate remains red:
+four hit comparisons and nine label assertions failed in
+[run 36793352184](https://github.com/ilyasakin/bpmn-xyflow/actions/runs/36793352184).
+The remaining earlier smoke/core/advanced/connection/touch/contextual/framework/
+viewer/business suites passed at that revision.
 
-The preceding published library `59cd24e5feb2d3af9506333db10abdd4bd523b12` passed the 27 connection,
-nine contextual-action and ten touch-differential groups, plus the existing
-smoke/framework/viewer/business-scenario gates. It nevertheless had **six failing
-cases across the 19 core-control and 17 advanced-interaction groups**. Those
-failures prevented treating that checkpoint as fully green. The current run
-progresses beyond those six assertions but exposes the three failures above.
+This is a **new reconstruction** of the bounded IO conversion, label snapping and
+hit-policy correction. The previous unpublished local snapshot is unavailable;
+its commit, test counts and review do not certify these new bytes. Fresh source and semantic review is complete. The reconstructed snapshot passes
+297 unit tests, 135 official XSD exports, XML/security checks, lint, build, workflow
+validation and 73-file packed-consumer checks. Native verification remains
+required before acceptance.
 
-The current correction addresses process-only lane membership, boundary drop
-snapping, absent label-DI restoration on replacement undo, and no-motion diagonal
-connection selection. Reopen assertions now compare independently parsed
-canonical models, exact DI and resolved references rather than redundant waypoint
-`xsi:type` spelling; Undo and cancellation remain byte-exact. Independent focused
-reproductions pass. Current tracked-source gates pass **248 unit tests and 115
-XSD-valid generated exports**, lint and build. Unintegrated helper prototypes are
-excluded from those counts and from the capability claims below.
+The current scope is:
+- Default external-label snapping, modifier bypass and accurate native expectations
+- Generic shape/label hit regions, with the existing explicit imported-label
+  layering difference documented separately from equivalence
+- Explicit undoable cleanup for IO-bearing catch/throw family conversion,
+  preserving compatible properties, references, extensions and exact history
 
-Site `f94828d` pins `59cd24e` and passed its production browser CI. Published site
-`d0b904a488172be26b142e62a28d08e6ce1a5653` pins `2c929664`; its production CI
-(run 36788799750) and Ready preview passed. Manual preview QA already verified the requested source port, target drop Y, orthogonal
-shape movement, fractional near-axis segment editing and exact Undo at library
-`e925a51` / site `79b4643`. That evidence is revision-bound, not a substitute for
-resolution of the current failures. See [VERIFICATION.md](VERIFICATION.md) for
-history and reproduction commands.
+Later flow-owned annotation and Group category/lifecycle work is a separate
+recovery stage. It is not part of this checkpoint and has no current acceptance.
+
+Published site `65bf8846d1e8f32c3ec09e22706ea939bcac870d` pins `7bc8a3a` and passed
+its served-production gate. Manual preview QA previously verified the reported
+source-port, target-drop-Y, orthogonal-move and fractional-segment regressions at
+`e925a51` / `79b4643`. The original 27 native connection groups remain required
+on every new revision. No full-core completion claim follows from those cases.
 
 ## References and scope
 
@@ -55,58 +51,37 @@ history and reproduction commands.
 
 ## Acceptance ledger
 
-“Prior native pass” below means evidence at `59cd24e` unless otherwise stated.
-“Current local pass” means the reviewed `6bec456f` source for published `2c929664`.
-Current native results are identified explicitly. No hosted result silently
-transfers to a later revision.
+Historical hosted evidence is bound to `7bc8a3a`. Every row affected by this
+reconstruction requires fresh local and hosted results. Prepared tests are not
+passed evidence.
 
-| Core area | Evidence and current status |
+| Core area | Current evidence and remaining gate |
 | --- | --- |
-| BPMN/DI parse/write | Independent upstream oracle covers 100 corpus fixtures, an alternate descriptor and three business scenarios. Current XML/security checks and 115 generated-export XSD validations pass |
-| Opaque extensions/namespaces | QName scope, unknown xsi subtypes, mixed content, script whitespace, timer expressions, vendor elements/attributes and ordered property edits have independent regressions; current local pass |
-| Identity/references | Declared IDs versus opaque vendor data, copy/replacement/reconnect ownership and semantic/DI references have oracle/XSD regressions; current local pass |
-| Hostile/malformed input | DTD/entity/network/DOM rejection and prior-diagram recovery have 40 security cases; prior native inert-markup/recovery gate passed |
-| Renderer and viewport | Type corpus, theme overrides, safe-area fit, large diagrams, phone layout, pan/zoom and attribution have prior native passes. No general renderer-equivalence claim follows from semantic tests |
-| Creation/append/replacement | Pinned catalog covers 348 action/target comparisons. Nine contextual native groups passed. Atomic append, disabled unsafe replacement rows and explicit populated-subprocess cleanup have current local coverage; current core 19 pass; advanced has two remaining failures |
-| Move/resize/containment | Prior connection native gate and manual QA verify orthogonal end-leg repair and exact fractional DI history. Current lane-membership/boundary-position corrections pass focused repros; core lane controls now pass; advanced boundary-drop assertion remains under upstream comparison |
-| Connection/reconnection | 110,500 upstream differential inference comparisons plus 27 prior native groups cover preview, explicit ports, reconnects, near-axis segments, route repair, metadata/history and creation reopen. Current connection gate passes; advanced same-pool assertion needs to account for upstream-valid connection morphing |
-| Delete | Cross-plane/subtree/lane/pool/label/reference cleanup has local exact-recovery coverage. Six external-label Delete/Backspace paths are in the advanced native suite; its current full gate still has two failures |
-| Undo/redo/navigation | Atomic rollback, branching history, independent drill/back histories and interrupted gestures have local coverage. Current replacement-label identity/DI undo correction passes independent repros; current core navigation passes; advanced gate still has two failures |
-| Copy/paste | Deep semantics, namespaces, IDs, references, hierarchy and DI have local coverage. Native clipboard/duplicate/group-delete paths are in the core-control suite; current core 19 pass |
-| Labels/bendpoints | Rename/move/delete, endpoint/segment editing and exact cancellation have local and prior connection-native evidence. Current smoke double-click assertion fails with stale fixture geometry/wrong hit; external-label width resize is still a capability gap |
-| Pools/lanes/subprocesses | Nested/vertical lanes, active planes, child-view hydration and exact history have local coverage. Current process-only lane split correction passes; current native core lane/control group passes |
-| Selection/keyboard/lasso | Core suite uses native multi-select, lasso, clipboard, 1px/Shift-10px arrows, Tab traversal and focus guards. Current full 19-group gate passes; no-motion edge selection has a new exact XML/history guard |
-| Touch/pinch | Ten differential groups pass at the current published revision against actual pinned upstream: includes tap, pan, pinch, context-connect, partial release and mouse recovery. Shared non-activation of ordinary touch shape drag/resize is recorded as a limitation, not certified support |
-| Align/distribute/search/space | Geometry, toolbar, focus, space expansion/compression and cancellation have local coverage; prior contextual controls passed. The advanced suite still has two failures on the current revision |
-| Auto-place/snapping/insertion | Atomic append, palette/existing-shape insertion and condition/default preservation have local coverage and native core assertions. Current full core 19-group gate passes |
-| Export SVG/XML | Standalone marker/label export, removal of interaction hit overlays, independent semantic reopen and notices have local/prior native coverage. Reopen canonical equivalence does not replace byte-exact Undo/cancel |
-| Lifecycle/frameworks | Latest-import wins, failed-import recovery, destroy, StrictMode and wrappers have local/prior native passes. Packed root/React/Vue/Svelte Bundler/NodeNext types, Vite bundles and runtime pass in the current hosted package gate |
-| Attribution | Original LICENSE/source retained; prior Chrome tests verify visible, unobscured bpmn.io link including phone layout |
-| Site | Production native CI passed at site `f94828d` / library `59cd24e`; site `d0b904a` pins `2c929664`, with production CI and Ready preview passed |
-| Packaging/CI | Current tracked units 248 and XSD exports 115 pass; hosted source, build and packed consumers also pass. Hosted CI runs each browser suite independently and retains failures/artifacts; `2c929664` has three remaining native failures despite the core/connection/context/touch passes |
+| XML/DI/extensions/security | Independent moddle oracle, corpus/business fixtures, hostile-input tests and official XSD remain mandatory; rerun against reconstructed edits |
+| Renderer/viewport/hit selection | Existing hosted theme/fit/export coverage passes; four native hit differences need corrected reference comparisons and rerun |
+| Creation/replacement | Existing catalog/context/core gates pass; explicit IO cleanup needs fresh API, native and packed-consumer verification |
+| Move/resize/containment | Existing core/advanced and original connection gates pass at baseline; retain them on new source |
+| Connection gestures | Original 27 native groups and manual source/drop/route evidence are regression requirements, not a full interaction guarantee |
+| Undo/redo/delete/copy | Baseline exact-history and subtree/label/reference regressions remain; IO refusal/cleanup/history needs new semantic assertions |
+| External labels | Width resize exists; default grid/modifier behavior and 23-case native expectations require fresh execution |
+| Pools/lanes/subprocesses | Existing core/advanced gates pass at baseline and remain required |
+| Keyboard/search/align/space | Existing native/core gates remain required; no new capability claim |
+| Touch | Ten baseline differential groups pass within measured reference behavior; retain exact streams |
+| Export/frameworks/package | Reopen, SVG, framework lifecycle and packed Bundler/NodeNext/runtime gates remain required on new source |
+| Attribution | Retained upstream license and visible bpmn.io attribution must remain unchanged and tested |
+| Site | Current site pins the older baseline; update only after reviewed library publication and rerun served-production/native preview checks |
+| Flow annotations and Group lifecycle | Separate later recovery stage, outside this checkpoint; overall core parity remains open |
 
-## Remaining capabilities and acceptance gates
+## Remaining acceptance gates
 
-1. **External-label width resize.** Upstream supports east/west label resizing;
-   current label handles/API do not yet provide it. Label rename, movement and
-   deletion do not close this gap.
-2. **IO-bearing cross-family replacement.** Unsupported Activity/Event and
-   catch/throw conversions safely refuse mutation; disabled menu rows explain
-   this. Explicit, undoable IO cleanup/migration remains open. Compatible
-   Activity-to-Activity replacements preserve owned IO/association identities.
-3. **Flow-owned annotation append and dependent routing.** The raw pinned
-   catalogue includes annotation append from SequenceFlow/MessageFlow, but the
-   executable controls/private append preflight defer it. Changing an owner
-   route must propagate docking to its dependent association through
-   move/resize/waypoint/reconnect edits, preserving metadata and exact undo.
-   Node annotation append remains enabled. Imported flow-owned associations do
-   not establish complete editing support.
-4. **Current native acceptance.** Correct the stale smoke fixture and same-pool
-   expectation using the upstream-valid connection behavior; compare the boundary
-   overlap gesture with actual upstream before deciding whether production code
-   needs a change. Retain the 19 core, 27 connection, nine contextual and ten touch
-   passes and rerun the affected exact revision. Site `d0b904a` is green within its
-   own production assertions. Reviewed source/DOM tests are not native passes.
+1. Local implementation, independent review, semantic/XSD tests, build and packed
+   consumers pass for this bounded reconstruction; retain those gates on updates
+2. Publish its exact reviewed tree to the existing draft PR and run every native
+   suite, including corrected hit/label cases and the new IO cases
+3. Diagnose failures without weakening meaningful gesture or semantic assertions;
+   update the paired site only with a verified library revision
+4. Recover and separately review the later flow/Group scope, then complete its
+   native gates before an overall parity statement
 
 Touch shape dragging/resizing did not activate in either pinned engine in the
 recorded baseline. The differential pass establishes the measured behavior only;
@@ -120,6 +95,10 @@ subprocess-to-noncontainer replacement is refused by default. The fourth argumen
 `{ removeContents: true }` or **Replace and remove contents** confirmation enables
 atomic, undoable removal, including disclosed incompatible boundaries/edges.
 Unsafe compensation changes similarly require explicit cleanup confirmation.
+IO-bearing cross-family conversion also refuses implicit cleanup. The fourth
+argument `{ removeIncompatibleData: true }` or the corresponding confirmation
+action enables atomic removal of disclosed incompatible IO. Compatible properties
+and metadata remain; retained references into removed data block the operation.
 Task resizing is an intentional fork extension, enabled by default;
 `taskResize: false` uses the pinned upstream resize policy.
 

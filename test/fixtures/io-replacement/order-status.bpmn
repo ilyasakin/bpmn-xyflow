@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:status="urn:bpmn-xyflow:order-status" id="OrderStatusDefinitions" targetNamespace="urn:bpmn-xyflow:io-replacement">
+  <bpmn:message id="WarehouseStatusMessage" name="Warehouse status" />
+  <bpmn:process id="OrderStatusProcess" isExecutable="false">
+    <bpmn:task id="RequestWarehouseStatus" name="Request warehouse status" />
+    <bpmn:intermediateCatchEvent id="WarehouseStatusReceived" name="Warehouse status received">
+      <bpmn:documentation>Keep order status audit and message identity.</bpmn:documentation>
+      <bpmn:extensionElements><status:record code="event">Preserve <!-- io-owner-marker -->event<?io-owner preserve?></status:record></bpmn:extensionElements>
+      <bpmn:dataOutput id="ReceivedStatus" name="Received status" />
+      <bpmn:dataOutputAssociation id="StatusToPayload"><bpmn:extensionElements><status:record code="association" /></bpmn:extensionElements><bpmn:sourceRef>ReceivedStatus</bpmn:sourceRef><bpmn:targetRef>StatusPayload</bpmn:targetRef></bpmn:dataOutputAssociation>
+      <bpmn:outputSet id="StatusOutputSet"><bpmn:dataOutputRefs>ReceivedStatus</bpmn:dataOutputRefs></bpmn:outputSet>
+      <bpmn:messageEventDefinition id="WarehouseStatusDefinition" messageRef="WarehouseStatusMessage" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:task id="UpdateOrderStatus" name="Update order status" />
+    <bpmn:task id="ArchiveOrderStatus" name="Archive status">
+      <bpmn:ioSpecification id="ArchiveIO"><bpmn:dataInput id="ArchiveStatusInput" /><bpmn:inputSet id="ArchiveInputSet"><bpmn:dataInputRefs>ArchiveStatusInput</bpmn:dataInputRefs></bpmn:inputSet><bpmn:outputSet id="ArchiveOutputSet" /></bpmn:ioSpecification>
+      <bpmn:dataInputAssociation id="StatusToArchive"><bpmn:sourceRef>ReceivedStatus</bpmn:sourceRef><bpmn:targetRef>ArchiveStatusInput</bpmn:targetRef></bpmn:dataInputAssociation>
+    </bpmn:task>
+    <bpmn:dataObject id="StatusPayloadObject" />
+    <bpmn:dataObjectReference id="StatusPayload" name="Status payload" dataObjectRef="StatusPayloadObject" />
+    <bpmn:sequenceFlow id="RequestToStatus" sourceRef="RequestWarehouseStatus" targetRef="WarehouseStatusReceived" />
+    <bpmn:sequenceFlow id="StatusToUpdate" sourceRef="WarehouseStatusReceived" targetRef="UpdateOrderStatus" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="OrderStatusDiagram"><bpmndi:BPMNPlane id="OrderStatusPlane" bpmnElement="OrderStatusProcess">
+    <bpmndi:BPMNShape id="RequestWarehouseStatus_di" bpmnElement="RequestWarehouseStatus"><dc:Bounds x="100" y="100" width="100" height="80" /></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="WarehouseStatusReceived_di" bpmnElement="WarehouseStatusReceived"><dc:Bounds x="300" y="122" width="36" height="36" /><bpmndi:BPMNLabel id="WarehouseStatusLabel" status:note="preserve-label"><dc:Bounds x="261.25" y="170.5" width="115.5" height="28.5" /></bpmndi:BPMNLabel></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="UpdateOrderStatus_di" bpmnElement="UpdateOrderStatus"><dc:Bounds x="440" y="100" width="100" height="80" /></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="StatusPayload_di" bpmnElement="StatusPayload"><dc:Bounds x="300" y="300" width="36" height="50" /></bpmndi:BPMNShape>
+    <bpmndi:BPMNEdge id="RequestToStatus_di" bpmnElement="RequestToStatus"><di:waypoint x="200" y="140" /><di:waypoint x="300" y="140" /></bpmndi:BPMNEdge>
+    <bpmndi:BPMNEdge id="StatusToUpdate_di" bpmnElement="StatusToUpdate"><di:waypoint x="336" y="140" /><di:waypoint x="440" y="140" /></bpmndi:BPMNEdge>
+    <bpmndi:BPMNEdge id="StatusToPayload_di" bpmnElement="StatusToPayload"><di:waypoint x="318" y="158" /><di:waypoint x="318" y="300" /></bpmndi:BPMNEdge>
+  </bpmndi:BPMNPlane></bpmndi:BPMNDiagram>
+  <bpmndi:BPMNDiagram id="OrderStatusLineageDiagram"><bpmndi:BPMNPlane id="OrderStatusLineagePlane" bpmnElement="OrderStatusProcess">
+    <bpmndi:BPMNShape id="WarehouseStatusReceived_lineage_di" bpmnElement="WarehouseStatusReceived"><dc:Bounds x="150.25" y="230.5" width="36" height="36"><!-- io-lineage-marker --><?io-lineage preserve?></dc:Bounds></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="ArchiveOrderStatus_di" bpmnElement="ArchiveOrderStatus"><dc:Bounds x="350" y="220" width="100" height="80" /></bpmndi:BPMNShape>
+    <bpmndi:BPMNEdge id="StatusToArchive_di" bpmnElement="StatusToArchive"><di:waypoint x="186.25" y="248.5" /><di:waypoint x="350" y="260" /></bpmndi:BPMNEdge>
+  </bpmndi:BPMNPlane></bpmndi:BPMNDiagram>
+</bpmn:definitions>

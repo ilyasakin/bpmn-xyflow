@@ -23,6 +23,10 @@ Coverage:
   declared Viewer/Modeler member names against the runtime instances, then checks
   importing, modeling, alignment, distribution, space, search/focus, SVG/XML
   export, and undo/redo.
+- The packed Modeler also checks `replace(..., {}, { removeIncompatibleData: true })`:
+  default and malformed-option refusal, explicit owned-IO cleanup across two
+  diagrams, preserved metadata and Property identity, exact undo/redo, and
+  independent composition with `removeContents`.
 
 The DOM harness does not provide browser geometry or gesture coverage. Those are
 covered by the separate browser suites. `NodeNext` is a **declaration-resolution**

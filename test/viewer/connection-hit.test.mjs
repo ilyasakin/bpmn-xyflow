@@ -19,8 +19,8 @@ test('connection hit regions track exact visual paths without widening markers o
       assert.equal(hit.getAttribute('pointer-events'),'stroke');
       assert.equal(hit.getAttribute('stroke'),'transparent');
       assert.equal(hit.getAttribute('marker-start'),null);assert.equal(hit.getAttribute('marker-end'),null);
-      assert.ok(hit.parentNode.getAttribute('clip-path'));
-      assert.equal(graphic.querySelectorAll('clipPath').length,new Set([edge.source,edge.target]).size,'intersect independent endpoint exclusions');assert.ok(graphic.querySelector('clipPath [clip-rule="evenodd"]'));
+      assert.equal(hit.parentNode,graphic,'the same uncut corridor applies at endpoints as pinned upstream');
+      assert.equal(graphic.querySelectorAll('clipPath').length,0);
       const path=hit.getAttribute('d');viewer.select(edge.id);viewer._internals.redrawConnection(edge);
       assert.equal(viewer._internals.elementGfx(edge.id).querySelector('.bpmn-xyflow-connection-hit').getAttribute('d'),path);
     }

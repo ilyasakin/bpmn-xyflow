@@ -119,7 +119,10 @@ test('replacement entries use the real command preflight instead of silently clo
   const sub=m.addShape('bpmn:SubProcess',{x:650,y:500});m.addShape('bpmn:StartEvent',{x:560,y:500},{parent:sub});
   const event=m.addShape('bpmn:IntermediateCatchEvent',{x:900,y:300},{eventDefinitionType:'bpmn:MessageEventDefinition'}),data=m.addShape('bpmn:DataObjectReference',{x:1000,y:300});m.connect(event,data);
   for(const [node,action]of [[sub,'replace-with-event-subprocess'],[event,'replace-with-message-intermediate-throw']]){
-   m.select(node.id);const before=await m.getXML(),size=m.commandStack.size();await h.call(m.getContainer().querySelector('button[title^="Change type"]'),'click');const row=h.button(action);assert.ok(row);assert.equal(row.getAttribute('aria-disabled'),'true');assert.ok(row.title.includes('cannot be preserved'));await h.call(row,'click');assert.ok(row.isConnected);assert.equal(await m.getXML(),before);assert.equal(m.commandStack.size(),size);
+   m.select(node.id);const before=await m.getXML(),size=m.commandStack.size();await h.call(m.getContainer().querySelector('button[title^="Change type"]'),'click');const row=h.button(action);assert.ok(row);
+   if(node===sub){assert.equal(row.getAttribute('aria-disabled'),'true');assert.ok(row.title.includes('cannot be preserved'));await h.call(row,'click');assert.ok(row.isConnected);}
+   else{assert.notEqual(row.getAttribute('aria-disabled'),'true');await h.call(row,'click');const dialog=m.getContainer().querySelector('[role="dialog"][aria-label="Replace and remove incompatible data"]');assert.ok(dialog);const cancel=[...dialog.querySelectorAll('button')].find(button=>button.textContent==='Cancel');assert.ok(cancel);await h.call(cancel,'click');assert.equal(dialog.isConnected,false);}
+   assert.equal(await m.getXML(),before);assert.equal(m.commandStack.size(),size);
   }
  }finally{h.close();}
 });
