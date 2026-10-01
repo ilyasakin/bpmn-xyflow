@@ -5,9 +5,9 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { BpmnModdle } from 'bpmn-moddle';
 import { setupDOM } from '../helpers/dom.mjs';
-import { assertUpstreamHoverDeleteUndo } from '../helpers/hover-delete-order-oracle.mjs';
+import { assertUpstreamHoverDeleteUndo, assertUpstreamHoverDeleteReopen } from '../helpers/hover-delete-order-oracle.mjs';
 
-let dom, Upstream, Local, fixture, baseline, restored;
+let dom, Upstream, Local, fixture, baseline, restored, reopened;
 let exported = 0;
 const oracle = new BpmnModdle(), save = async m => (await m.saveXML({ format: true })).xml;
 async function artifact(xml) {
@@ -90,4 +90,40 @@ test('local Delete/Undo still preserves original bytes, raw mixed metadata and e
       m.redo(); assert.equal(await m.getXML(), deleted);
     }
   } finally { m.destroy(); }
+});
+
+test('actual pinned reopen after Delete/Undo changes only the two restored flow DI positions', async () => {
+  const m = new Upstream({ container: dom.createContainer() });
+  try {
+    assert.deepEqual((await m.importXML(restored)).warnings, []); reopened = await save(m);
+    await assertUpstreamHoverDeleteReopen(restored, reopened); await artifact(reopened);
+    for (let n = 0; n < 2; n++) {
+      assert.deepEqual((await m.importXML(reopened)).warnings, []);
+      assert.equal(await save(m), reopened, 'the measured reorder stabilizes after the first import');
+    }
+  } finally { m.destroy(); }
+});
+
+test('reference reopen allowance rejects unrelated containment, DI, geometry, ref and metadata changes', async () => {
+  const corruptions = [
+    p => { p.rootElement.id = 'OtherDefinitions'; },
+    p => { p.elementsById.HoverProcess.flowElements.reverse(); },
+    p => { p.elementsById.HoverProcess.flowElements.push(oracle.create('bpmn:Task', { id: 'Unexpected' })); },
+    p => { p.elementsById.FlowA.sourceRef = p.elementsById.SourceB; },
+    p => { p.elementsById.TargetA.incoming = []; },
+    p => { p.elementsById.FlowA.$attrs['v:sentinel'] = 'LOST'; },
+    p => { p.elementsById.FlowA_di.$attrs['v:sentinel'] = 'LOST'; },
+    p => { p.elementsById.HoverProcess.extensionElements.values[0].$body = 'Altered'; },
+    p => { p.elementsById.SourceA_di.bounds.y += .5; },
+    p => { p.elementsById.FlowA_di.waypoint[2].x += .25; },
+    p => { p.elementsById.FlowA_di.waypoint.reverse(); },
+    p => { p.elementsById.HoverPlane.planeElement.reverse(); },
+    p => { p.elementsById.HoverPlane.planeElement.pop(); }
+  ];
+  for (const change of corruptions) {
+    const parsed = await oracle.fromXML(reopened); change(parsed);
+    await assert.rejects(assertUpstreamHoverDeleteReopen(restored, (await oracle.toXML(parsed.rootElement, { format: true })).xml));
+  }
+  await assert.rejects(assertUpstreamHoverDeleteReopen(restored, restored));
+  await assert.rejects(assertUpstreamHoverDeleteReopen(baseline, reopened));
 });

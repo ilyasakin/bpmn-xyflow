@@ -10,7 +10,8 @@ import path from 'node:path';
 import puppeteer from 'puppeteer';
 import { BpmnModdle } from 'bpmn-moddle';
 import { collectHoverBackground } from '../helpers/hover-background.mjs';
-import { assertUpstreamHoverDeleteUndo } from '../helpers/hover-delete-order-oracle.mjs';
+import { assertUpstreamHoverDeleteUndo, assertUpstreamHoverDeleteReopen } from '../helpers/hover-delete-order-oracle.mjs';
+import { assertSelectedZoomGeometry } from '../helpers/selected-zoom-geometry.mjs';
 
 const require = createRequire(import.meta.url), oracle = new BpmnModdle();
 assert.equal(require('bpmn-js/package.json').version, '18.30.1');
@@ -187,11 +188,13 @@ async function history(page, before, after, { upstreamDelete = false } = {}) {
     await settle(page); assert.equal((await state(page)).xml, after.xml, 'native Redo restores complete XML');
   }
 }
-async function reopen(page, expected) {
+async function reopen(page, expected, { upstreamDelete = false } = {}) {
   const warnings = await page.evaluate(async xml => { const t = window.hoverTest, r = await t.m.importXML(xml); return r.warnings.map(w => w.message); }, expected.xml);
   assert.deepEqual(warnings, []); const reopened = await state(page);
   assert.deepEqual(reopened.edges, expected.edges); assert.deepEqual(reopened.shapes, expected.shapes);
-  assert.equal(reopened.canonical, expected.canonical, 'actual reimport preserves complete independently canonical model');
+  if (upstreamDelete && await page.evaluate(() => window.hoverTest.engine) === 'upstream') {
+    await assertUpstreamHoverDeleteReopen(expected.xml, reopened.xml);
+  } else assert.equal(reopened.canonical, expected.canonical, 'actual reimport preserves complete independently canonical model');
 }
 async function previewChanged(page, id, prior, kind) {
   const value = await page.evaluate(id => {
@@ -243,20 +246,23 @@ async function selectedZoomChecks(page) {
     try { await page.mouse.wheel({ deltaY: -90 }); } finally { await page.keyboard.up('Control'); }
     await page.waitForFunction(z => Math.abs(window.hoverTest.matrix().a - z) > 1e-5, {}, beforeZoom); await settle(page);
     const geometry = await page.evaluate(() => {
-      const t = window.hoverTest, hit = t.selectedHitBeforeZoom, box = hit.getBoundingClientRect(), zoom = t.matrix().a;
+      const t = window.hoverTest, hit = t.selectedHitBeforeZoom, box = hit.getBoundingClientRect(), ctm = hit.getScreenCTM(), zoom = ctm.a;
       const current = t.engine === 'local' ? t.container.querySelector('.bpmn-xyflow-bendpoint-hit[data-element-id="FlowA"][data-bend-index="0"]') : t.container.querySelector('.djs-bendpoints[data-element-id="FlowA"] > .djs-bendpoint:not(.floating) circle.djs-hit');
-      return { engine: t.engine, zoom, radius: Number(hit.getAttribute('r')), width: box.width, same: current === hit, connected: hit.isConnected };
+      const modelZoom = t.engine === 'local' ? t.m.getViewport().zoom : null;
+      return { engine: t.engine, zoom, modelZoom,
+        nativeScale: t.engine === 'local' ? t.m.getSvg().createSVGMatrix().scale(modelZoom).a : null,
+        matrix: Object.fromEntries(['a','b','c','d','e','f'].map(key => [key, ctm[key]])),
+        radius: Number(hit.getAttribute('r')), radiusValue: hit.r.baseVal.value, centerX: hit.cx.baseVal.value,
+        width: box.width, same: current === hit, connected: hit.isConnected };
     });
-    assert.equal(geometry.same, true, 'zoom retains the selected endpoint SVG node'); assert.equal(geometry.connected, true);
-    const expectedRadius = geometry.engine === 'local' ? 10 / geometry.zoom : 10;
-    assert.ok(Math.abs(geometry.radius - expectedRadius) < 1e-8); assert.ok(Math.abs(geometry.width - expectedRadius * geometry.zoom * 2) < .01);
+    const numericBounds = assertSelectedZoomGeometry(geometry);
     const endpoint = await pointer(page, { x: 280, y: 240 }, 'FlowA'); assert.ok((await hit(page, endpoint)).control);
     const midpoint = await screen(page, { x: 525, y: 380 }); await page.mouse.move(midpoint.x, midpoint.y); await settle(page);
     const segment = await hit(page, midpoint); assert.ok(segment.inside, 'selected segment remains visible after native zoom'); assert.equal(segment.id, 'FlowA'); assert.ok(segment.control, 'selected segment hit remains reachable after zoom');
     const before = await state(page), destination = await screen(page, { x: 525, y: 450 });
     await drag(page, midpoint, destination, { cancel: true, inspect: () => previewChanged(page, 'FlowA', before.edges.FlowA.points, 'connectionSegment.move') });
     const cancelled = await state(page); assert.equal(cancelled.xml, original.xml); assert.deepEqual(cancelled.history, original.history);
-    checks.push({ mode, ...geometry, segment });
+    checks.push({ mode, ...geometry, numericBounds, segment });
   }
   return checks;
 }
@@ -420,12 +426,12 @@ try {
     await settle(page); const restored = await state(page);
     if (engine === 'upstream') await assertUpstreamHoverDeleteUndo(before.xml, restored.xml); else assert.equal(restored.xml, before.xml);
     await blank(page, true); await hover(page, 'FlowA', { x: 520, y: 380 });
-    await reopen(page, restored); await blank(page); assert.equal((await controls(page, 'FlowA')).visible, false, 'import clears previous hover controls');
+    await reopen(page, restored, { upstreamDelete: true }); await blank(page); assert.equal((await controls(page, 'FlowA')).visible, false, 'import clears previous hover controls');
     // Re-establish the view after import, then prove fresh controls act on the
     // new graph object instead of the removed prior instance.
     await page.evaluate(() => { const t = window.hoverTest; window.hoverTest = window.makeHoverAdapter(t.m, t.container, 1); });
     await hover(page, 'FlowA', { x: 520, y: 380 }); assert.deepEqual((await state(page)).selection, []);
-    return engine === 'upstream' ? { status: 'intentional-difference', policy: 'Pinned Delete Undo reinserts FlowA after FlowB in semantic containment; every other field and DI order remain exact.' } : { exactHistory: true };
+    return engine === 'upstream' ? { status: 'intentional-difference', policy: 'Pinned Delete Undo reinserts FlowA after FlowB in semantic containment; its subsequent reimport orders their two DI entries accordingly. Exact fixture-scoped oracles preserve every other field and geometry.' } : { exactHistory: true };
   });
 
   await paired('pending-and-active-blur', async (page, engine) => {

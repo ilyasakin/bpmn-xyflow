@@ -109,6 +109,20 @@ second cumulative zoom from moving the tested endpoint off canvas.
 One reference-only Delete/Undo difference is measured explicitly: restoring
 FlowA reinserts it after FlowB in `HoverProcess.flowElements`. A fixture-scoped
 oracle permits only that exact sibling-order change; DI order, metadata,
-references, every other field and raw Redo remain checked. Local Undo retains
-its complete raw-XML requirement. All 32 native engine cases remain required;
-verification of these final harness corrections is pending the hosted rerun.
+references, every other field and raw Redo remain checked. A subsequent pinned
+import reconstructs the canvas in that semantic order, so its next export also
+places `FlowB_di` before `FlowA_di`. A separate full-service oracle permits only
+those two DI entries to change order in this exact fixture; geometry, references,
+extension values and all other content remain equal. Local Undo and reopen keep
+their original strict requirements.
+
+Hosted `e3a3f1f` passes 29 of 32 hover engine cases and all retained native suites.
+Its remaining failures are the reference DI reimport order above and two local
+numeric checks that confused the public double-precision zoom with Chromium's
+float32 SVG matrix scale. The corrected check requires the local radius to equal
+`10 / modeler.getViewport().zoom` exactly, checks the actual numeric SVG matrix
+factory against the screen CTM, and bounds their storage difference by half a
+float32 ULP. Rendered width is checked separately using the SVG length value and
+coordinate-derived rounding bounds. Wrong radius, stale target, hidden control,
+unrelated DI/semantic edits and pixel-scale geometry drift still fail. All 32
+cases remain required; this test-only correction awaits hosted execution.
