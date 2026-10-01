@@ -1,5 +1,5 @@
 /** Native hover-control differential against bpmn-js 18.30.1.
- * Fixture imports and lifecycle teardown use APIs. All selection, dragging,
+ * Fixture imports, one ordinary-selection constructor setup and lifecycle teardown use APIs. All tested selection, dragging,
  * cancellation, deletion and history actions use trusted Chromium input.
  */
 import assert from 'node:assert/strict';
@@ -69,7 +69,7 @@ async function screen(page, point) { return page.evaluate(p => { const q = new D
 async function hit(page, point) {
   return page.evaluate(p => {
     const e = document.elementFromPoint(p.x, p.y), r = window.hoverTest.container.getBoundingClientRect();
-    return { id: e?.closest('[data-element-id]')?.getAttribute('data-element-id') || null, class: e?.getAttribute('class'), tag: e?.tagName, control: !!e?.closest('.djs-bendpoint,.djs-segment-dragger,.bpmn-xyflow-hover-bendpoint,.bpmn-xyflow-hover-segment,.bpmn-xyflow-bendpoint-hit'), inside: p.x >= r.left && p.x < Math.min(r.right, innerWidth) && p.y >= r.top && p.y < Math.min(r.bottom, innerHeight) };
+    return { id: e?.closest('[data-element-id]')?.getAttribute('data-element-id') || null, class: e?.getAttribute('class'), tag: e?.tagName, control: !!e?.closest('.djs-bendpoint,.djs-segment-dragger,.bpmn-xyflow-hover-bendpoint,.bpmn-xyflow-hover-segment,.bpmn-xyflow-bendpoint-hit,.bpmn-xyflow-bendpoint,.bpmn-xyflow-segment-handle'), inside: p.x >= r.left && p.x < Math.min(r.right, innerWidth) && p.y >= r.top && p.y < Math.min(r.bottom, innerHeight) };
   }, point);
 }
 async function state(page) {
@@ -92,14 +92,27 @@ async function controls(page, id) {
     const visible = e => !!e && getComputedStyle(e).display !== 'none' && getComputedStyle(e).visibility !== 'hidden' && e.getBoundingClientRect().width > 0;
     const root = t.engine === 'upstream' ? scope.querySelector('.djs-bendpoints[data-element-id="' + id + '"]') : scope.querySelector('.bpmn-xyflow-hover-controls[data-element-id="' + id + '"]');
     const hits = root ? [...root.querySelectorAll(t.engine === 'upstream' ? '.djs-bendpoint:not(.floating) circle.djs-hit' : '.bpmn-xyflow-hover-bendpoint-hit')] : [];
+    const segments = root ? [...root.querySelectorAll(t.engine === 'upstream' ? '.djs-segment-dragger .djs-hit' : '.bpmn-xyflow-hover-segment-hit')] : [];
     const selected = t.engine === 'upstream' ? root?.classList.contains('selected') : !!scope.querySelector('.bpmn-xyflow-bendpoints [data-element-id="' + id + '"]');
-    return { visible: hits.some(visible), selected: !!selected, radii: hits.map(h => Number(h.getAttribute('r'))), count: hits.length };
+    // A hovered reference segment stays interactive via :hover even after its
+    // overlay clears the route marker and hides the other fixed bendpoints.
+    return { visible: hits.some(visible) || segments.some(visible), bendpointsVisible: hits.filter(visible).length, segmentsVisible: segments.filter(visible).length, selected: !!selected, radii: hits.map(h => Number(h.getAttribute('r'))), count: hits.length, rootClass: root?.getAttribute('class') || null };
   }, id);
 }
 async function blank(page, click = false) {
-  const p = await page.evaluate(() => { const r = window.hoverTest.container.getBoundingClientRect(); return { x: r.right - 180, y: r.bottom - 100 }; });
+  const p = await page.evaluate(() => {
+    const t = window.hoverTest, r = t.container.getBoundingClientRect(), rootId = t.engine === 'upstream' ? t.m.get('canvas').getRootElement().id : t.m.getGraph().root.id;
+    for (const [fx, fy] of [[.75,.75],[.6,.8],[.85,.65],[.5,.9],[.3,.85]]) {
+      const p = { x: r.left + r.width * fx, y: r.top + r.height * fy }, hit = document.elementFromPoint(p.x, p.y), owner = hit?.closest('[data-element-id]')?.getAttribute('data-element-id');
+      if (p.x >= innerWidth || p.y >= innerHeight || !hit || !t.container.contains(hit)) continue;
+      if (hit.closest('button,input,select,[contenteditable],.bpmn-xyflow-minimap,.bpmn-xyflow-palette,.bpmn-xyflow-editor-actions,.bpmn-xyflow-context-pad,.djs-palette,.djs-context-pad,.bjs-powered-by')) continue;
+      if ((owner && owner !== rootId) || !hit.closest('svg')) continue;
+      return p;
+    }
+    throw Error('No unobstructed visible canvas background point found');
+  });
   if (click) await page.mouse.click(p.x, p.y); else await page.mouse.move(p.x, p.y);
-  await settle(page); return p;
+  await settle(page); if (click) assert.deepEqual(await page.evaluate(() => window.hoverTest.selection()), [], 'native background click actually deselects'); return p;
 }
 async function hover(page, id, position) {
   const prior = await page.evaluate(() => window.hoverTest.selection());
@@ -110,8 +123,19 @@ async function hover(page, id, position) {
   assert.deepEqual(await page.evaluate(() => window.hoverTest.selection()), prior, 'hover must not select'); return p;
 }
 async function pointer(page, graphPoint, id) {
-  const p = await screen(page, graphPoint); await page.mouse.move(p.x, p.y); await settle(page);
-  const target = await hit(page, p); assert.equal(target.id, id, 'chosen native control owner: ' + JSON.stringify(target)); return p;
+  const approach = await page.evaluate(({ graphPoint, id }) => {
+    const points = window.hoverTest.node(id).waypoints, index = points.findIndex(p => p.x === graphPoint.x && p.y === graphPoint.y);
+    if (index < 0) throw Error('Control approach requires an actual waypoint');
+    const adjacent = points[index > 0 ? index - 1 : 1], dx = adjacent.x - graphPoint.x, dy = adjacent.y - graphPoint.y, length = Math.hypot(dx, dy);
+    if (length <= 30) throw Error('Fixture needs an exposed route span before the control');
+    return { x: graphPoint.x + dx * 15 / length, y: graphPoint.y + dy * 15 / length };
+  }, { graphPoint, id });
+  // Approach on the adjacent outer route span first. Jumping directly from a
+  // hovered segment overlay to a hidden endpoint is a different native path.
+  const lead = await screen(page, approach); await page.mouse.move(lead.x, lead.y); await settle(page);
+  assert.equal((await hit(page, lead)).id, id, 'native control approach stays on its owner route');
+  const p = await screen(page, graphPoint); await page.mouse.move(p.x, p.y, { steps: 4 }); await settle(page);
+  const target = await hit(page, p); assert.equal(target.id, id, 'chosen native control owner: ' + JSON.stringify(target)); assert.ok(target.control, 'native approach reaches an actual endpoint/bendpoint control'); return p;
 }
 async function resetEvents(page) { await page.evaluate(() => { window.hoverTest.starts = []; window.hoverTest.events = []; }); }
 async function drag(page, from, to, { cancel = false, outback = false, inspect } = {}) {
@@ -163,8 +187,8 @@ async function reopen(page, expected) {
 async function previewChanged(page, id, prior, kind) {
   const value = await page.evaluate(id => {
     const t = window.hoverTest, node = t.node(id), context = t.activeContext;
-    const preview = context?.connectionPreviewGfx?.querySelector('path,polyline');
-    const original = t.engine === 'upstream' ? t.m.get('elementRegistry').getGraphics(node).querySelector('.djs-visual path') : null;
+    const preview = context?.connectionPreviewGfx?.querySelector(':scope > path,:scope > polyline');
+    const original = t.engine === 'upstream' ? t.m.get('elementRegistry').getGraphics(node).querySelector('.djs-visual > path,.djs-visual > polyline') : null;
     const dragger = context?.draggerGfx, center = dragger?.isConnected && new DOMPoint(0, 0).matrixTransform(dragger.getScreenCTM()).matrixTransform(t.matrix().inverse());
     return { engine: t.engine, points: node.waypoints.map(p => ({ x: p.x, y: p.y })), start: t.starts.at(-1), moves: t.events.filter(e => e.phase === 'move'),
       preview: preview?.isConnected ? preview.getAttribute('d') || preview.getAttribute('points') : null,
@@ -177,12 +201,53 @@ async function previewChanged(page, id, prior, kind) {
       // Pinned BendpointMovePreview draws a separate path. Its live model
       // route deliberately stays unchanged until the actual command commits.
       assert.ok(value.preview && value.dragger, 'connected native preview and drag handle are visible');
+      assert.ok(value.original, 'original route geometry exists outside marker definitions');
       assert.notEqual(value.preview, value.original, 'rendered preview differs from the original route');
       assert.ok(prior.every(p => Math.hypot(p.x - value.dragger.x, p.y - value.dragger.y) > 1), 'active handle moved away from every original waypoint');
     } else assert.notDeepEqual(value.points, prior, 'reference segment preview updates the live route');
   } else assert.notDeepEqual(value.points, prior, 'local native gesture produces a route preview');
   return value;
 }
+async function selectedZoomChecks(page) {
+  const checks = [], original = await state(page);
+  for (const mode of ['ordinary', 'promoted']) {
+    await blank(page, true);
+    if (mode === 'ordinary') {
+      // Fixture setup isolates the ordinary selected-control constructor from
+      // hover promotion. The zoom and every tested edit remain native input.
+      await page.evaluate(() => { const t = window.hoverTest; if (t.engine === 'local') t.m.select('FlowA'); else t.m.get('selection').select(t.node('FlowA')); });
+    } else {
+      const at = await hover(page, 'FlowA', { x: 445, y: 380 }); await page.mouse.click(at.x, at.y); await settle(page);
+    }
+    assert.deepEqual(await page.evaluate(() => window.hoverTest.selection()), ['FlowA']);
+    const beforeZoom = await page.evaluate(() => {
+      const t = window.hoverTest;
+      t.selectedHitBeforeZoom = t.engine === 'local' ? t.container.querySelector('.bpmn-xyflow-bendpoint-hit[data-element-id="FlowA"][data-bend-index="0"]') : t.container.querySelector('.djs-bendpoints[data-element-id="FlowA"] > .djs-bendpoint:not(.floating) circle.djs-hit');
+      if (!t.selectedHitBeforeZoom) throw Error('Selected endpoint hit is missing before zoom');
+      return t.matrix().a;
+    });
+    await blank(page); await page.keyboard.down('Control');
+    try { await page.mouse.wheel({ deltaY: -90 }); } finally { await page.keyboard.up('Control'); }
+    await page.waitForFunction(z => Math.abs(window.hoverTest.matrix().a - z) > 1e-5, {}, beforeZoom); await settle(page);
+    const geometry = await page.evaluate(() => {
+      const t = window.hoverTest, hit = t.selectedHitBeforeZoom, box = hit.getBoundingClientRect(), zoom = t.matrix().a;
+      const current = t.engine === 'local' ? t.container.querySelector('.bpmn-xyflow-bendpoint-hit[data-element-id="FlowA"][data-bend-index="0"]') : t.container.querySelector('.djs-bendpoints[data-element-id="FlowA"] > .djs-bendpoint:not(.floating) circle.djs-hit');
+      return { engine: t.engine, zoom, radius: Number(hit.getAttribute('r')), width: box.width, same: current === hit, connected: hit.isConnected };
+    });
+    assert.equal(geometry.same, true, 'zoom retains the selected endpoint SVG node'); assert.equal(geometry.connected, true);
+    const expectedRadius = geometry.engine === 'local' ? 10 / geometry.zoom : 10;
+    assert.ok(Math.abs(geometry.radius - expectedRadius) < 1e-8); assert.ok(Math.abs(geometry.width - expectedRadius * geometry.zoom * 2) < .01);
+    const endpoint = await pointer(page, { x: 280, y: 240 }, 'FlowA'); assert.ok((await hit(page, endpoint)).control);
+    const midpoint = await screen(page, { x: 525, y: 380 }); await page.mouse.move(midpoint.x, midpoint.y); await settle(page);
+    const segment = await hit(page, midpoint); assert.equal(segment.id, 'FlowA'); assert.ok(segment.control, 'selected segment hit remains reachable after zoom');
+    const before = await state(page), destination = await screen(page, { x: 525, y: 450 });
+    await drag(page, midpoint, destination, { cancel: true, inspect: () => previewChanged(page, 'FlowA', before.edges.FlowA.points, 'connectionSegment.move') });
+    const cancelled = await state(page); assert.equal(cancelled.xml, original.xml); assert.deepEqual(cancelled.history, original.history);
+    checks.push({ mode, ...geometry, segment });
+  }
+  return checks;
+}
+
 async function onlyFlowDeleted(before, after, id) {
   const expected = await oracle.fromXML(before.xml), flow = expected.elementsById[id]; assert.ok(flow);
   const owner = flow.$parent; assert.ok(owner.flowElements.includes(flow)); owner.flowElements = owner.flowElements.filter(e => e !== flow);
@@ -195,8 +260,10 @@ async function onlyFlowDeleted(before, after, id) {
 }
 
 async function evidence(page, name, detail) {
-  const current = await state(page); await writeFile('test-artifacts/browser-hover-' + name + '.bpmn', current.xml);
-  await writeFile('test-artifacts/browser-hover-' + name + '.json', JSON.stringify({ detail, state: report(current) }, null, 2));
+  const current = await state(page);
+  const controlDOM = await page.evaluate(() => [...window.hoverTest.container.querySelectorAll('.djs-bendpoints,.bpmn-xyflow-hover-controls,.bpmn-xyflow-bendpoints')].map(e => e.outerHTML));
+  await writeFile('test-artifacts/browser-hover-' + name + '.bpmn', current.xml);
+  await writeFile('test-artifacts/browser-hover-' + name + '.json', JSON.stringify({ detail, state: report(current), controlDOM }, null, 2));
   await page.screenshot({ path: 'test-artifacts/browser-hover-' + name + '.png', fullPage: true });
 }
 async function paired(name, action, options = {}) {
@@ -233,13 +300,14 @@ try {
   for (const zoom of [.5, 1.5]) await paired('hover-approach-radius-leave-' + zoom, async page => {
     const before = await state(page); await blank(page); const inside = await screen(page, { x: 274, y: 244 });
     await page.mouse.move(inside.x, inside.y); await settle(page); assert.equal((await hit(page, inside)).id, 'SourceA', 'fresh shape-side approach has no hover endpoint');
-    await hover(page, 'FlowA', { x: 320, y: 240 }); const first = await controls(page, 'FlowA');
-    assert.equal(first.count, before.edges.FlowA.points.length); assert.ok(first.radii.every(r => r === 10), 'hover radius uses graph units');
+    await hover(page, 'FlowA', { x: 295, y: 240 }); const first = await controls(page, 'FlowA');
+    assert.equal(first.count, before.edges.FlowA.points.length); assert.ok(first.bendpointsVisible > 0, 'outer route approach exposes fixed endpoint controls'); assert.ok(first.radii.every(r => r === 10), 'hover radius uses graph units');
     await page.mouse.move(inside.x, inside.y); await settle(page); const inherited = await hit(page, inside);
     assert.equal(inherited.id, 'FlowA'); assert.ok(inherited.control, 'route-to-control approach retains the hover target');
     await blank(page); assert.equal((await controls(page, 'FlowA')).visible, false, 'leaving hides unselected controls');
     const after = await state(page); assert.equal(after.xml, before.xml); assert.deepEqual(after.history, before.history); assert.deepEqual(after.selection, []);
-    return { first, inherited, input: after.input };
+    const selectedZoom = await selectedZoomChecks(page);
+    return { first, inherited, input: after.input, selectedZoom, status: 'intentional-difference', policy: 'Both hover radii use graph units; existing local selected hits retain 10 CSS-pixel radius while pinned selected hits retain 10 graph units.' };
   }, { zoom });
 
   for (const side of ['source','target']) await paired('unselected-' + side + '-reconnect', async page => {

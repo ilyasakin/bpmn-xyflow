@@ -33,6 +33,7 @@ async function harness() {
       target(node) { target = node && gfx(node); },
       hover(node, p) { call(window, 'mousemove', event(gfx(node), p), 'onMouseMove'); },
       move(p, node = target) { call(window, 'mousemove', event(node, p), 'onMouseMove'); },
+      moveEvent(p, overrides) { call(window, 'mousemove', event(target, p, overrides), 'onMouseMove'); },
       down(node, p, extra) { call(m.getSvg(), 'mousedown', event(node, p, extra), 'onMouseDown'); },
       up(p, node = target, extra) { call(window, 'mouseup', event(node, p, extra), 'onMouseUp'); },
       leave() { call(m.getSvg(), 'pointerleave', {}, 'onHoverLeave'); },
@@ -144,8 +145,95 @@ test('hover promotion retains native hit identity and selected sizing at zoom ex
       m.clearSelection();m.setViewport({x:50,y:75,zoom});const start={...edge.waypoints[0]};h.hover(edge,start);
       const hit=h.handle(0);h.down(hit,start);h.up(start,hit);
       assert.equal(hit.isConnected,true);assert.equal(hit.getAttribute('class'),'bpmn-xyflow-bendpoint-hit');assert.equal(Number(hit.getAttribute('r')),10/zoom);
+      assert.equal(hit.getAttribute('data-element-id'),edge.id);assert.equal(hit.getAttribute('data-bend-index'),'0');
+      assert.equal(Number(hit.getAttribute('cx')),start.x);assert.equal(Number(hit.getAttribute('cy')),start.y);
+      assert.equal(hit.style['pointer-events'],'all');assert.equal(hit.parentNode.getAttribute('transform'),null);
+      const visible=hit.parentNode.querySelector('.bpmn-xyflow-bendpoint');
+      assert.equal(Number(visible.getAttribute('r')),4);assert.equal(visible.getAttribute('data-element-id'),edge.id);
+      assert.equal(visible.getAttribute('data-bend-index'),'0');assert.equal(Number(visible.getAttribute('cx')),start.x);assert.equal(Number(visible.getAttribute('cy')),start.y);
       assert.equal(m.getContainer().querySelector('.bpmn-xyflow-bendpoints').getAttribute('pointer-events'),null);
-      assert.equal(m.getContainer().querySelector('.bpmn-xyflow-bendpoint').getAttribute('stroke-width'),'1.5');assert.equal(h.group(),null);assert.equal(await m.getXML(),before);
+      assert.equal(m.getContainer().querySelector('.bpmn-xyflow-bendpoints').style['pointer-events'],'');
+      assert.equal(visible.style['pointer-events'],'');
+      const segmentHit=m.getContainer().querySelector('.bpmn-xyflow-segment-handle rect');
+      assert.ok(segmentHit);assert.equal(segmentHit.closest('[style*="pointer-events: none"]'),null,'selected segment target cannot inherit disabled hover-root pointer events');
+      assert.equal(visible.style['stroke-width'],'1.5px');assert.equal(h.group(),null);assert.equal(await m.getXML(),before);
+    }
+  }finally{root.close();}
+});
+
+test('global non-Node and outside-SVG move targets preserve active shape and selected endpoint gestures', async () => {
+  const root=await harness(),h=await root.create(),{m,a,c,edge}=h;
+  const svg=m.getSvg(),contains=svg.contains;
+  // Happy DOM accepts Window here; native Element.contains rejects it. Make
+  // that native precondition explicit so this regression runs without Chrome.
+  svg.contains=function(node){if(node != null && !node.nodeType)throw new TypeError('parameter 1 is not of type Node');return contains.call(this,node);};
+  try {
+    const detached=document.createElement('div'), outside=document.createElement('div');document.body.appendChild(outside);
+    try {
+      for(const target of [window,null,undefined,detached,outside]){
+        const before=await m.getXML(),size=m.commandStack.size(),start={x:a.x+25,y:a.y+25};
+        m.clearSelection();h.down(h.gfx(a),start);h.moveEvent({x:start.x+45,y:start.y+30},{target});
+        assert.equal(a.x+25,start.x+45,'global event still reaches shape-move handler');assert.notEqual(await m.getXML(),before);
+        h.escape();h.up(start,target);assert.equal(await m.getXML(),before);assert.equal(m.commandStack.size(),size);
+      }
+      const before=await m.getXML(),size=m.commandStack.size(),start={...edge.waypoints.at(-1)};
+      m.select(edge.id);const hit=m.getContainer().querySelector(`.bpmn-xyflow-bendpoint-hit[data-element-id="${edge.id}"][data-bend-index="${edge.waypoints.length-1}"]`);
+      h.down(hit,start);h.target(c);h.move({x:c.x,y:c.y+24.5},window);assert.notEqual(await m.getXML(),before,'global move still reaches endpoint preview');
+      h.up({x:c.x,y:c.y+24.5},window);assert.equal(edge.target,c);assert.equal(m.commandStack.size(),size+1);
+      await exactHistory(m,before,await m.getXML());
+      m.undo();m.clearSelection();h.hover(edge,{x:500,y:300});assert.ok(h.group());h.move({x:-200,y:-100},outside);
+      assert.equal(h.group(),null,'leaving this SVG removes only the hover overlay');assert.equal(await m.getXML(),before);
+    }finally{outside.remove();}
+  }finally{svg.contains=contains;root.close();}
+});
+
+test('ordinary and promoted selected controls retain screen size across later viewport changes', async () => {
+  const root=await harness(),h=await root.create(),{m,edge}=h;
+  try {
+    // D3 reads SVG width/height.baseVal for its extent. Happy DOM cannot
+    // resolve the production 100% lengths, so supply this fixture's pixels.
+    m.getSvg().setAttribute('width','1188');m.getSvg().setAttribute('height','762');
+    const before=await m.getXML(),size=m.commandStack.size();
+    const events=[];m.on('viewport.change',({viewport})=>events.push({...viewport}));
+    for(const promoted of [false,true]){
+      m.clearSelection();m.setViewport({x:50,y:75,zoom:1});
+      if(promoted){const start={...edge.waypoints[0]};h.hover(edge,start);const hit=h.handle(0);h.down(hit,start);h.up(start,hit);}
+      else m.select(edge.id);
+      const hit=m.getContainer().querySelector('.bpmn-xyflow-bendpoint-hit');
+      for(const zoom of [.2,3,.65,1]){
+        const count=events.length,result=await m.setViewport({x:73,y:96,zoom});
+        assert.equal(result.k,zoom,'setViewport retains the XYPanZoom completion result');
+        assert.equal(events.length,count+1);assert.deepEqual(events.at(-1),m.getViewport());
+        assert.equal(m.getContainer().querySelector('.bpmn-xyflow-bendpoint-hit'),hit,'zoom preserves endpoint target identity');
+        assert.equal(Number(hit.getAttribute('r'))*zoom,10);
+        const segment=m.getContainer().querySelector('.bpmn-xyflow-segment-handle rect');
+        assert.equal(Number(segment.getAttribute('width'))*zoom,20);assert.equal(Number(segment.getAttribute('height'))*zoom,20);
+        assert.equal(await m.getXML(),before);assert.equal(m.commandStack.size(),size);assert.deepEqual(m.getSelection(),[edge.id]);
+      }
+      const count=events.length,fit=m.fitView();assert.deepEqual(m.getViewport(),fit);assert.equal(events.length,count+1);
+      assert.equal(m.getContainer().querySelector('.bpmn-xyflow-bendpoint-hit'),hit);assert.equal(Number(hit.getAttribute('r'))*fit.zoom,10);
+      assert.equal(await m.getXML(),before);assert.equal(m.commandStack.size(),size);
+      assert.throws(()=>m.setViewport({x:0,y:0,zoom:NaN}),/finite/);assert.equal(events.length,count+1,'invalid viewport emits no change');
+    }
+  }finally{root.close();}
+});
+
+test('promoted selected hit circles edit their exact source, target and interior owner at every zoom', async () => {
+  const root=await harness();
+  try {
+    for(const zoom of [.2,1,3])for(const kind of ['source','target','interior']){
+      const h=await root.create(),{m,edge,other,c}=h;
+      m.updateWaypoints(edge,[{x:350,y:300},{x:500,y:390},{x:650,y:300}]);m.clearSelection();m.setViewport({x:50,y:75,zoom});
+      const index=kind==='source'?0:kind==='target'?2:1,start={...edge.waypoints[index]};
+      const before=await m.getXML(),size=m.commandStack.size(),otherPoints=xy(other),opposite={...edge.waypoints[kind==='source'?2:0]};
+      h.hover(edge,start);const hit=h.handle(index);h.down(hit,start);h.up(start,hit);
+      assert.deepEqual(m.getSelection(),[edge.id]);assert.equal(await m.getXML(),before);assert.equal(m.commandStack.size(),size);
+      const destination=kind==='interior'?{x:535,y:425}:{x:c.x,y:c.y+24.5};
+      h.down(hit,start);h.target(kind==='interior'?null:c);h.move(destination);assert.notEqual(await m.getXML(),before,'selected promoted control activates actual route preview');
+      h.up(destination);assert.deepEqual(xy(other),otherPoints);assert.equal(m.commandStack.size(),size+1);
+      if(kind==='interior')assert.deepEqual(xy(edge)[index],destination);
+      else {assert.equal(edge[kind],c);assert.deepEqual(xy(edge)[kind==='source'?edge.waypoints.length-1:0],opposite);}
+      await exactHistory(m,before,await m.getXML());m.destroy();
     }
   }finally{root.close();}
 });

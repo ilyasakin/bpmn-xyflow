@@ -9,6 +9,7 @@ import { spawn } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import puppeteer from 'puppeteer';
 import { BpmnModdle } from 'bpmn-moddle';
+import { selectedBendpoint } from '../helpers/native-bendpoint-control.mjs';
 
 const port=Number(process.env.BPMN_ADVANCED_PORT||5239),base=`http://localhost:${port}`;
 const server=spawn(process.execPath,['lib/demo/serve.mjs'],{env:{...process.env,PORT:String(port)},stdio:['ignore','pipe','inherit']});
@@ -253,16 +254,16 @@ try {
 
   await run('message-target-reconnect',cases['order-payment-delivery'],async page=>{
     const before=await state(page);await selectEdge(page,'OrderMessage');
-    const count=await page.evaluate(()=>window.modeler.getElement('OrderMessage').waypoints.length),from=await control(page,`.bpmn-xyflow-bendpoint[data-bend-index="${count-1}"]`),to=await screen(page,{x:200,y:430});
+    const count=await page.evaluate(()=>window.modeler.getElement('OrderMessage').waypoints.length),from=await selectedBendpoint(page,'OrderMessage',count-1),to=await screen(page,{x:200,y:430});
     await drag(page,from,to);const after=await state(page);assert.equal(after.byId.OrderMessage.$type,'bpmn:MessageFlow');assert.equal(after.byId.OrderMessage.$parent,after.byId.OrderCollaboration);assert.equal(after.byId.OrderMessage.sourceRef,after.byId.SubmitOrder);assert.equal(after.byId.OrderMessage.targetRef,after.byId.ValidateOrder);near(after.di('OrderMessage').waypoint.at(-1),{x:200,y:430},2);await historyCycle(page,before,after);
     // Pinned bpmn-js reconnect rules reject a cross-pool gateway, but convert
     // a same-pool activity target from MessageFlow into SequenceFlow.
     await selectEdge(page,'OrderMessage');let last=await page.evaluate(()=>window.modeler.getElement('OrderMessage').waypoints.length-1);
     const invalid=await shapePoint(page,'FulfillmentFork');await hit(page,invalid,'FulfillmentFork');
-    await drag(page,await control(page,`.bpmn-xyflow-bendpoint[data-bend-index="${last}"]`),invalid);await unchanged(page,after,'message reconnect to a cross-pool gateway is rejected');
+    await drag(page,await selectedBendpoint(page,'OrderMessage',last),invalid);await unchanged(page,after,'message reconnect to a cross-pool gateway is rejected');
     await selectEdge(page,'OrderMessage');last=await page.evaluate(()=>window.modeler.getElement('OrderMessage').waypoints.length-1);
     const samePool=await shapePoint(page,'ReceiveDelivery',{x:0,y:20});await hit(page,samePool,'ReceiveDelivery');
-    await drag(page,await control(page,`.bpmn-xyflow-bendpoint[data-bend-index="${last}"]`),samePool);
+    await drag(page,await selectedBendpoint(page,'OrderMessage',last),samePool);
     const converted=await state(page),flow=converted.byId.OrderMessage;
     assert.equal(flow.$type,'bpmn:SequenceFlow');assert.equal(flow.$parent,converted.byId.BuyerProcess);
     assert.equal(flow.sourceRef,converted.byId.SubmitOrder);assert.equal(flow.targetRef,converted.byId.ReceiveDelivery);assert.equal(flow.name,after.byId.OrderMessage.name);
@@ -278,10 +279,10 @@ try {
   await run('data-association-source-and-owner-reconnect',cases['order-payment-delivery'],async page=>{
     // Public API prepares a data input association; both reconnects are native.
     const ids=await page.evaluate(()=>{const m=window.modeler,parent=m.getElement('SellerPool'),a=m.addShape('bpmn:DataObjectReference',{x:1050,y:630},{parent}),b=m.addShape('bpmn:DataStoreReference',{x:1180,y:630},{parent}),flow=m.connect(a,m.getElement('ValidateOrder'));if(!flow)throw Error('Data association setup failed');return{a:a.id,b:b.id,flow:flow.id};});
-    const before=await state(page);await selectEdge(page,ids.flow);const target=await shapePoint(page,ids.b,{x:0,y:20});await drag(page,await control(page,'.bpmn-xyflow-bendpoint[data-bend-index="0"]'),target);
+    const before=await state(page);await selectEdge(page,ids.flow);const target=await shapePoint(page,ids.b,{x:0,y:20});await drag(page,await selectedBendpoint(page,ids.flow,0),target);
     const sourceChanged=await state(page),association=sourceChanged.byId[ids.flow];assert.equal(association.$type,'bpmn:DataInputAssociation');assert.equal(association.sourceRef[0],sourceChanged.byId[ids.b]);assert.equal(association.$parent,sourceChanged.byId.ValidateOrder);
     assert.equal(association.targetRef.id,before.byId[ids.flow].targetRef.id,'external reconnect reuses its existing placeholder');assert.equal(association.targetRef.$type,'bpmn:Property');assert.equal(sourceChanged.byId.ValidateOrder.ioSpecification,undefined);assert.equal(sourceChanged.byId.ValidateOrder.properties.length,1);await historyCycle(page,before,sourceChanged);
-    await selectEdge(page,ids.flow);const last=await page.evaluate(id=>window.modeler.getElement(id).waypoints.length-1,ids.flow);await drag(page,await control(page,`.bpmn-xyflow-bendpoint[data-bend-index="${last}"]`),await screen(page,{x:1160,y:430}));
+    await selectEdge(page,ids.flow);const last=await page.evaluate(id=>window.modeler.getElement(id).waypoints.length-1,ids.flow);await drag(page,await selectedBendpoint(page,ids.flow,last),await screen(page,{x:1160,y:430}));
     const ownerChanged=await state(page),moved=ownerChanged.byId[ids.flow];assert.equal(moved.$parent,ownerChanged.byId.ShipOrder);assert.ok(ownerChanged.byId.ShipOrder.dataInputAssociations.includes(moved));assert.ok(!(ownerChanged.byId.ValidateOrder.dataInputAssociations||[]).includes(moved));assert.ok(ownerChanged.byId.ShipOrder.properties.includes(moved.targetRef));assert.equal(moved.targetRef.$type,'bpmn:Property');assert.equal(moved.targetRef.name,'__targetRef_placeholder');assert.equal(ownerChanged.byId.ShipOrder.ioSpecification,undefined);assert.equal((ownerChanged.byId.ValidateOrder.properties||[]).length,0,'unused old placeholder is cleaned');assert.equal(moved.sourceRef[0],ownerChanged.byId[ids.b]);await historyCycle(page,sourceChanged,ownerChanged);await reopen(page,ownerChanged);
   });
 

@@ -9,6 +9,7 @@ import path from 'node:path';
 import {createRequire} from 'node:module';
 import puppeteer from 'puppeteer';
 import {BpmnModdle} from 'bpmn-moddle';
+import {selectedBendpoint} from '../helpers/native-bendpoint-control.mjs';
 import {assertUpstreamFlowAppendReopen} from '../helpers/flow-append-reopen-oracle.mjs';
 import {assertFlowAppendGeometry} from '../helpers/flow-append-geometry-oracle.mjs';
 const require=createRequire(import.meta.url),up=createRequire(require.resolve('bpmn-js/package.json'));
@@ -196,10 +197,10 @@ async function routePreview(page,id,before){const points=await page.evaluate(id=
 async function ownerEdit(page,kind,{target=false}={}){
  const owner='ApproveFlow',before=await selectEdge(page,owner,{x:1020,y:500});let from,to;
  if(kind==='segment'){from=await screen(page,{x:780,y:450});to=await screen(page,{x:820,y:450});await hit(page,from,owner);}
- else if(kind==='bend'){from=await control(page,'.bpmn-xyflow-bendpoint[data-bend-index="2"]');to={x:from.x+45,y:from.y+35};}
- else{from=await control(page,'.bpmn-xyflow-bendpoint[data-bend-index="4"]');to=await screen(page,{x:940,y:130});await hit(page,to,'ReworkRequest');}
+ else if(kind==='bend'){from=await selectedBendpoint(page,owner,2);to={x:from.x+45,y:from.y+35};}
+ else{from=await selectedBendpoint(page,owner,4);to=await screen(page,{x:940,y:130});await hit(page,to,'ReworkRequest');}
  await gesture(page,from,to,{cancel:true,preview:()=>routePreview(page,owner,before.edges[owner].points)});assert.equal((await state(page)).xml,before.xml);assert.deepEqual((await state(page)).history,before.history);
- await selectEdge(page,owner,{x:1020,y:500});if(kind!=='segment')from=await control(page,`.bpmn-xyflow-bendpoint[data-bend-index="${kind==='bend'?2:4}"]`);
+ await selectEdge(page,owner,{x:1020,y:500});if(kind!=='segment')from=await selectedBendpoint(page,owner,kind==='bend'?2:4);
  await gesture(page,from,to,{preview:()=>routePreview(page,owner,before.edges[owner].points)});const after=await state(page);assert.notDeepEqual(after.edges[owner].points,before.edges[owner].points);
  if(kind==='segment'||kind==='bend'){
   assert.equal(before.edges[owner].points.length,5,'fixed asymmetric oracle starts with five points');
@@ -220,7 +221,7 @@ async function projectedDrop(page,owner,requestedClient){
  return observed;
 }
 async function nativeEndpointControl(page,id,index){
- if(await page.evaluate(()=>window.flowTest.engine)==='local')return control(page,`.bpmn-xyflow-bendpoint[data-bend-index="${index}"]`);
+ if(await page.evaluate(()=>window.flowTest.engine)==='local')return selectedBendpoint(page,id,index);
  const p=await page.evaluate(({id,index})=>{const handles=document.querySelectorAll(`.djs-bendpoints[data-element-id="${id}"] > .djs-bendpoint:not(.floating)`),el=handles[index];if(!el)throw Error('reference endpoint handle missing');const b=el.getBoundingClientRect();return{x:b.x+b.width/2,y:b.y+b.height/2};},{id,index});
  await hit(page,p,id);return p;
 }
@@ -228,13 +229,13 @@ async function dependentRedock(page,target){
  const initial=await state(page),index=target?initial.edges.PolicyAssociation.points.length-1:0;
  const observations=[];let prior=await selectEdge(page,'PolicyAssociation',{x:850,y:550});
  for(const [owner,position]of [['ApproveFlow',{x:780,y:460}],['ReviewFlow',{x:360,y:175.5}]]){
-  const from=await control(page,`.bpmn-xyflow-bendpoint[data-bend-index="${index}"]`),to=await screen(page,position);await hit(page,to,owner);
+  const from=await selectedBendpoint(page,'PolicyAssociation',index),to=await screen(page,position);await hit(page,to,owner);
   await gesture(page,from,to,{cancel:true,preview:()=>routePreview(page,'PolicyAssociation',prior.edges.PolicyAssociation.points)});
   const cancelled=await state(page);assert.equal(cancelled.xml,prior.xml);assert.deepEqual(cancelled.history,prior.history);
-  await selectEdge(page,'PolicyAssociation',{x:850,y:550});let handle=await control(page,`.bpmn-xyflow-bendpoint[data-bend-index="${index}"]`);
+  await selectEdge(page,'PolicyAssociation',{x:850,y:550});let handle=await selectedBendpoint(page,'PolicyAssociation',index);
   const invalid=await screen(page,{x:1400,y:850});await hit(page,invalid,null);
   await gesture(page,handle,invalid,{preview:()=>routePreview(page,'PolicyAssociation',prior.edges.PolicyAssociation.points)});assert.equal((await state(page)).xml,prior.xml,'invalid background redock is atomic');assert.deepEqual((await state(page)).history,prior.history);
-  await selectEdge(page,'PolicyAssociation',{x:850,y:550});handle=await control(page,`.bpmn-xyflow-bendpoint[data-bend-index="${index}"]`);await gesture(page,handle,to,{preview:()=>routePreview(page,'PolicyAssociation',prior.edges.PolicyAssociation.points)});
+  await selectEdge(page,'PolicyAssociation',{x:850,y:550});handle=await selectedBendpoint(page,'PolicyAssociation',index);await gesture(page,handle,to,{preview:()=>routePreview(page,'PolicyAssociation',prior.edges.PolicyAssociation.points)});
   const observed=await projectedDrop(page,owner,to);
   observations.push({owner,requestedGraph:position,requestedClient:to,observed});
   const after=await state(page),edge=after.edges.PolicyAssociation;near(edge.points[index],observed.projected,'dependent endpoint projects the actual native pointer onto its chosen owner route',.0001);

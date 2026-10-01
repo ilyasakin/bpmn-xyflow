@@ -71,3 +71,31 @@ test('pinned dragging restores selected A after reconnecting hovered B', async (
     assert.equal(edge.source.id, 'SpareSource'); assert.deepEqual(selection.get().map(e => e.id), ['FlowA']);
   } finally { m.destroy(); }
 });
+
+test('pinned route previews differ outside marker definitions for insertion, existing bends and reconnect', async () => {
+  const cases = [
+    { fixture: 'orthogonal', id: 'FlowB', index: 1, insert: true, from: { x: 320, y: 560 }, to: { x: 320, y: 630 } },
+    { fixture: 'diagonal', id: 'FlowA', index: 1, insert: true, from: { x: 490, y: 400 }, to: { x: 490, y: 470 } },
+    { fixture: 'orthogonal', id: 'FlowA', index: 2, insert: false, from: { x: 430, y: 380 }, to: { x: 470, y: 410 } },
+    { fixture: 'orthogonal', id: 'FlowA', index: 0, insert: false, from: { x: 280, y: 240 }, to: { x: 280, y: 80 }, hover: 'SpareSource' }
+  ];
+  for (const entry of cases) {
+    const m = await editor(await readFile('test/fixtures/hover-native/' + entry.fixture + '.bpmn', 'utf8'));
+    try {
+      const registry = m.get('elementRegistry'), edge = registry.get(entry.id), visual = registry.getGraphics(edge).querySelector('.djs-visual'), dragging = m.get('dragging');
+      const original = visual.querySelector(':scope > path,:scope > polyline').getAttribute('d');
+      const before = await save(m), beforeHistory = m.get('commandStack')._stackIdx;
+      m.get('bendpointMove').start(input(m, entry.from.x, entry.from.y, entry.id), edge, entry.index, entry.insert);
+      dragging.move(input(m, entry.to.x, entry.to.y, entry.id));
+      if (entry.hover) { dragging.hover({ element: registry.get(entry.hover), gfx: registry.getGraphics(entry.hover) }); dragging.move(input(m, entry.to.x, entry.to.y, entry.hover)); }
+      const context = dragging.context().data.context, preview = context.connectionPreviewGfx;
+      assert.ok(preview.isConnected); assert.ok(context.draggerGfx.isConnected);
+      assert.equal(preview.querySelector('path').getAttribute('d'), visual.querySelector('path').getAttribute('d'), 'a broad path selector compares identical arrowhead definitions');
+      assert.ok(preview.querySelector('path').closest('defs'), 'the misleading first path belongs to marker definitions');
+      const changed = preview.querySelector(':scope > path,:scope > polyline'); assert.ok(changed && !changed.closest('defs'));
+      assert.notEqual(changed.getAttribute('d'), original, 'actual visible route preview changes');
+      assert.equal(visual.querySelector(':scope > path,:scope > polyline').getAttribute('d'), original, 'original visible route remains unchanged during preview');
+      dragging.cancel(); assert.equal(await save(m), before); assert.equal(m.get('commandStack')._stackIdx, beforeHistory);
+    } finally { m.destroy(); }
+  }
+});

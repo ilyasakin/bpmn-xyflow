@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import { mkdir,readFile,writeFile } from 'node:fs/promises';
 import puppeteer from 'puppeteer';
 import { BpmnModdle } from 'bpmn-moddle';
+import { selectedBendpoint } from '../helpers/native-bendpoint-control.mjs';
 const port=Number(process.env.BPMN_CONNECTIONS_PORT||5235),base=`http://localhost:${port}`;
 const child=spawn(process.execPath,['lib/demo/serve.mjs'],{env:{...process.env,PORT:String(port)},stdio:['ignore','pipe','inherit']});child.stdout.on('data',()=>{});
 const oracle=new BpmnModdle(),results=[];let browser;
@@ -36,9 +37,7 @@ async function drag(page,from,to,{cancel=false,alt=false,shift=false}={}) {
   try {await page.mouse.move(from.x,from.y);await page.mouse.down();await page.mouse.move(to.x,to.y,{steps:10});if(cancel)await page.keyboard.press('Escape');await page.mouse.up();}
   finally {if(alt)await page.keyboard.up('Alt');if(shift)await page.keyboard.up('Shift');}
 }
-async function handlePoint(page,index) {
-  const selector=`.bpmn-xyflow-bendpoint[data-bend-index="${index}"]`,el=await page.waitForSelector(selector),box=await el.boundingBox();const p={x:box.x+box.width/2,y:box.y+box.height/2};await hit(page,p,null,selector);return p;
-}
+async function handlePoint(page,index,id='Flow') { return selectedBendpoint(page,id,index); }
 async function undo(page,xml) {assert.equal(await page.$eval('#undo-btn',e=>e.disabled),false);await page.click('#undo-btn');assert.equal((await state(page)).xml,xml,'native undo restores exact XML/DI');}
 async function redo(page,xml) {assert.equal(await page.$eval('#redo-btn',e=>e.disabled),false);await page.click('#redo-btn');assert.equal((await state(page)).xml,xml,'native redo restores exact XML/DI');}
 function orthogonal(points) {assert.ok(points.every((p,i)=>!i||Math.abs(p.x-points[i-1].x)<0.01||Math.abs(p.y-points[i-1].y)<0.01),`route stays orthogonal: ${JSON.stringify(points)}`);}
@@ -271,7 +270,7 @@ try {
   await run('conditional-fixture-reconnect',conditional,0.899250875,async page=>{
     const id='sid-82C30D2C-10BC-4035-8A14-B50298F120E9';
     const found=await page.evaluate(id=>{const m=window.modeler,e=m.getElement(id),target=m.getGraph().nodes.find(n=>n.businessObject?.name==='T2.0');return e&&target?{targetId:target.id,x:target.x,y:target.y,height:target.height,index:e.waypoints.length-1}:null;},id);
-    assert.ok(found,'reported conditional flow and T2.0 exist');const before=await state(page);await selectEdge(page,id);const start=await handlePoint(page,found.index),end=await point(page,{x:found.x,y:found.y+found.height*0.8});await drag(page,start,end);const after=await state(page),edge=after.flows.find(edge=>edge.id===id);assert.equal(edge.target,found.targetId);near(edge.points.at(-1),{x:found.x,y:found.y+found.height*0.8},2,'reported T2.0 chosen drop point survives');await undo(page,before.xml);
+    assert.ok(found,'reported conditional flow and T2.0 exist');const before=await state(page);await selectEdge(page,id);const start=await handlePoint(page,found.index,id),end=await point(page,{x:found.x,y:found.y+found.height*0.8});await drag(page,start,end);const after=await state(page),edge=after.flows.find(edge=>edge.id===id);assert.equal(edge.target,found.targetId);near(edge.points.at(-1),{x:found.x,y:found.y+found.height*0.8},2,'reported T2.0 chosen drop point survives');await undo(page,before.xml);
   });
   await writeFile('test-artifacts/browser-connections-results.json',JSON.stringify(results,null,2));const failures=results.filter(r=>r.status==='failed');assert.equal(failures.length,0,failures.map(r=>`${r.name}: ${r.error}`).join('\n'));console.log(`PASS ${results.length} native connection groups`);
 }finally{await browser?.close();child.kill('SIGTERM');}

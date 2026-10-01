@@ -31,7 +31,11 @@ command/history paths. Exact local pointer docking remains unchanged.
 A click promotes the same SVG hit nodes into the selected set. This preserves
 native double-click targeting, including when another edge was selected.
 Promotion restores the existing selected hit radius of 10 CSS pixels
-(`10 / zoom` in graph coordinates). Existing selected controls and handlers
+(`10 / zoom` in graph coordinates), including later zoom changes. The promoted
+root and visible marker clear their transient pointer-event styles; the
+retained transparent hit circle stays interactive. Its owner, waypoint index
+and center match the visible radius-4 marker. It may be the topmost target at
+that center, preserving the native click target across promotion. Existing selected controls and handlers
 retain their established behavior; this work does not claim a new universal
 selected-versus-hover geometry equivalence.
 
@@ -50,6 +54,9 @@ selected-versus-hover geometry equivalence.
   eligible shape allows that shape’s normal port to return
 - Overlay graphics are excluded from standalone SVG export and never enter
   BPMN DI
+- Global mousemove events with Window, missing, detached or outside-canvas
+  targets clear transient hover as appropriate without interrupting an active
+  move, resize or reconnect operation
 
 Known local behavior is asserted separately from upstream: double-click can
 remove an interior bendpoint, whereas pinned upstream opens label editing;
@@ -59,14 +66,28 @@ upstream command that may be recorded after an activated out-and-back drag.
 
 ## Verification status
 
-`test/modeling/hover-controls.test.mjs` adds 11 structural groups covering
+`test/modeling/hover-controls.test.mjs` contains 14 structural groups covering
 ownership, geometry, threshold, lifecycle, promotion, double-click, history,
-create-port transitions and export isolation. They pass together with the 22
+create-port transitions, global event targets and export isolation. They pass together with the 22
 retained connection/routing/targeting groups. These invoke registered handlers
-and do not certify native SVG hit behavior.
+and do not certify native SVG hit behavior. The viewport callback test uses
+absolute SVG dimensions because Happy DOM cannot resolve percentage SVG
+lengths; it exercises the real XYPanZoom callback, event count and completion
+result, including selected-target identity and size after fit/zoom.
 
 `test/modeling/browser-hover-connections.mjs` prepares 16 paired groups
 (32 engine cases), using real Chromium pointer/keyboard input against each
 engine. It includes the previously measured booking boundary approach-path
-case and explicit known differences. Hosted native execution remains pending.
-The original 27 native arrow groups remain unchanged and required.
+case and explicit known differences. Initial hosted execution exposed both
+the global event-target bug and native-harness assumptions: upstream can show
+segment hit regions while fixed bendpoints are hidden, preview paths must be
+read outside marker definitions, and a background click must exclude the
+minimap and prove deselection. The corrected suite retains positive activation
+and exact model/history assertions. Existing radius cases now also apply real
+Ctrl+wheel after ordinary and promoted selection, then drag/cancel a selected
+segment. Hosted verification of these corrections remains pending.
+
+The original 27 native arrow groups remain required. Selected-waypoint guards
+now accept only the exact matching visible marker or its promoted hit circle,
+checking owner, index, shared selected group, center, radii and visibility;
+the source/drop geometry and history assertions are unchanged.
