@@ -19,7 +19,8 @@ export const BROWSER_SUITES = Object.freeze({
   'test:browser:advanced': 'test/modeling/browser-advanced-interactions.mjs',
   'test:browser:hits': 'test/modeling/browser-hit-priority.mjs',
   'test:browser:labels': 'test/modeling/browser-label-resize.mjs',
-  'test:browser:io': 'test/modeling/browser-io-replacement.mjs'
+  'test:browser:io': 'test/modeling/browser-io-replacement.mjs',
+  'test:browser:flow': 'test/modeling/browser-flow-annotations.mjs'
 });
 
 const OWNER_KEY = 'BPMN_BROWSER_SUITE_OWNER';

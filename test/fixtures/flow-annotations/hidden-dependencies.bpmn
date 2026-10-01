@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:b="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:audit="urn:audit" xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0" xmlns:color="http://www.omg.org/spec/BPMN/non-normative/color/1.0" xmlns:xml="http://www.w3.org/XML/1998/namespace" xmlns="" targetNamespace="urn:review">
+  <bpmn:process xmlns:v="urn:vendor:old" xmlns:q="urn:q:old" xmlns:audit="urn:audit" id="P" audit:watchedRef="F">
+    <bpmn:task id="A">
+      <bpmn:outgoing>F</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="B">
+      <bpmn:incoming>F</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:sequenceFlow xmlns:audit="urn:audit" id="F" sourceRef="A" targetRef="B" audit:ownerRef="F">
+      <bpmn:extensionElements>
+        <v:payload xmlns:v="urn:vendor:old" id="vendor-same" ref="q:Thing">before<!-- FLOW-META -->after<?audit retain?>last</v:payload>
+      </bpmn:extensionElements>
+    </bpmn:sequenceFlow>
+    <bpmn:textAnnotation id="N" />
+    <bpmn:textAnnotation id="N2" />
+    <bpmn:association id="D" sourceRef="F" targetRef="N" />
+    <bpmn:association id="E" sourceRef="D" targetRef="N2" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="Diagram">
+    <bpmndi:BPMNPlane id="Plane" bpmnElement="P">
+      <bpmndi:BPMNShape id="A_di" bpmnElement="A">
+        <dc:Bounds x="300.25" y="300.5" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="B_di" bpmnElement="B">
+        <dc:Bounds x="800.25" y="300.5" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="N_di" bpmnElement="N">
+        <dc:Bounds x="600.25" y="90.5" width="100" height="40" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="N2_di" bpmnElement="N2">
+        <dc:Bounds x="1000.25" y="90.5" width="100" height="40" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge xmlns:v="urn:vendor:points" id="F_di" bpmnElement="F" v:point0Mark="F-0" v:point1Mark="F-1">
+        <di:waypoint xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:v="urn:vendor:points" xsi:type="dc:Point" x="400.25" y="340.5"><!-- F-0 --><?audit point?></di:waypoint>
+        <di:waypoint xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:v="urn:vendor:points" xsi:type="dc:Point" x="800.25" y="340.5"><!-- F-1 --><?audit point?></di:waypoint>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

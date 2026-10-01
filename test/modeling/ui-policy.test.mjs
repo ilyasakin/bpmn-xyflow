@@ -80,18 +80,19 @@ test('common-type controls hide empty replacement and impossible lane actions; T
  }finally{h.close();}
 });
 
-test('flow annotation append is deferred in executable controls while node annotation remains atomic',async()=>{
+test('flow and node annotation controls append atomically with exact undo',async()=>{
  const h=await editor(),{m}=h;
  try{
   const task=m.getElement('Task_1'),edge=m.connect(task,m.addShape('bpmn:Task',{x:600,y:300}));
   const pool1=m.addShape('bpmn:Participant',{x:500,y:700}),pool2=m.addShape('bpmn:Participant',{x:1200,y:700}),message=m.connect(pool1,pool2);
   for(const flow of [edge,message]){
    assert.ok(getAppendOptions(flow).some(entry=>entry.actionName==='append.text-annotation'));
-   assert.deepEqual(getExecutableAppendOptions(flow),[]);m.select(flow.id);
-   const before=await m.getXML(),size=m.commandStack.size();assert.equal(h.button('append.text-annotation'),null);
+   assert.ok(getExecutableAppendOptions(flow).some(entry=>entry.actionName==='append.text-annotation'));m.select(flow.id);
+   const before=await m.getXML(),size=m.commandStack.size();assert.ok(h.button('append.text-annotation'));
    await h.call(m.getSvg(),'contextmenu',{target:m.getContainer().querySelector(`[data-element-id="${flow.id}"]`)});
-   assert.equal([...m.getContainer().querySelectorAll('.bpmn-xyflow-context-menu > div')].some(row=>row.textContent==='Add text annotation'),false);
+   assert.equal([...m.getContainer().querySelectorAll('.bpmn-xyflow-context-menu > div')].some(row=>row.textContent==='Add text annotation'),true);
    m.cancel();assert.equal(await m.getXML(),before);assert.equal(m.commandStack.size(),size);
+   await h.call(h.button('append.text-annotation'),'click');const link=m.getGraph().edges.find(candidate=>candidate.source===flow);assert.ok(link);assert.equal(link.target.type,'bpmn:TextAnnotation');assert.equal(m.commandStack.size(),size+1);await valid(m);m.undo();assert.equal(await m.getXML(),before);
   }
   m.select(task.id);const before=await m.getXML(),size=m.commandStack.size();assert.ok(h.button('append.text-annotation'));await h.call(h.button('append.text-annotation'),'click');
   const annotation=m.getGraph().nodes.find(node=>node.type==='bpmn:TextAnnotation'),association=m.getGraph().edges.find(value=>value.source===task&&value.target===annotation);assert.ok(association);assert.equal(association.type,'bpmn:Association');assert.equal(m.commandStack.size(),size+1);const appended=await m.getXML();await valid(m);

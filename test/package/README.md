@@ -27,6 +27,11 @@ Coverage:
   default and malformed-option refusal, explicit owned-IO cleanup across two
   diagrams, preserved metadata and Property identity, exact undo/redo, and
   independent composition with `removeContents`.
+- Flow-owned annotation associations execute through the packed `connect`,
+  `reconnect` and `updateWaypoints` APIs. Both endpoint directions, redocking,
+  owner changes, dependent route updates, metadata, clipboard edge IDs, malformed
+  routes and exact XML history/reopen are checked. Shape-only methods remain
+  narrow in the declaration tests; `appendShape` remains private.
 
 The DOM harness does not provide browser geometry or gesture coverage. Those are
 covered by the separate browser suites. `NodeNext` is a **declaration-resolution**

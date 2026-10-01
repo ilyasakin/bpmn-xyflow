@@ -1,10 +1,28 @@
 {
   "upstream": "bpmn-io/bpmn-js",
   "version": "18.30.1",
-  "purpose": "Pure contextual rule predicates only; the XYFlow engine remains unchanged.",
+  "purpose": "Pure contextual predicates and connection attachment geometry; the XYFlow engine remains unchanged.",
   "files": {
     "rules/BpmnRules.js": "f6d231883613b4ebc4ecfaa8742636ed08e1adf2467f2cf2bffc5622f5313014",
     "modeling/util/ModelingUtil.js": "459b9c18c163b9d0fe162a407dec4b51f7e11dee5ae6a4a4a5dee8bdd001b33f",
     "snapping/BpmnSnappingUtil.js": "cd7b9604625dc487d27c63bd4ec654f4c9d7ab293098f73b6c19aac4152c6cc6"
+  },
+  "additionalSources": {
+    "modeling/behavior/util/ConnectionLayoutUtil.js": {
+      "source": "lib/features/modeling/behavior/util/ConnectionLayoutUtil.js",
+      "sha256": "21fd0e29792f14e372a74d3cb6d1cf26372a09f0a3df67d727f7e10c34a9a9d3"
+    },
+    "modeling/behavior/util/LayoutUtil.js": {
+      "source": "lib/features/modeling/behavior/util/LayoutUtil.js",
+      "sha256": "646b82ae4d47c953809a018c3282bda6309d3cb98c96007dc09765c24c06fffe"
+    },
+    "modeling/behavior/util/LineAttachmentUtil.js": {
+      "source": "lib/features/modeling/behavior/util/LineAttachmentUtil.js",
+      "sha256": "3f2e47dd8e2fb1c67e7e66ad8c7a0673129a7d4d6a0096e8aabccca94ad3b4ef"
+    },
+    "modeling/behavior/util/GeometricUtil.js": {
+      "source": "lib/features/modeling/behavior/util/GeometricUtil.js",
+      "sha256": "38738a254c403f642a8941ce3a361aaf35e0e44d25245690fd6052b5b4ab6528"
+    }
   }
 }

@@ -30,6 +30,7 @@ with tempfile.TemporaryDirectory(prefix="bpmn-xml-schema-") as directory:
     subprocess.run(["node", "--test", "test/modeling/ui-policy.test.mjs"], cwd=ROOT, env=env, check=True)
     subprocess.run(["node", "--test", "test/modeling/label-resize.test.mjs"], cwd=ROOT, env=env, check=True)
     subprocess.run(["node", "--test", "test/modeling/io-conversion.test.mjs"], cwd=ROOT, env=env, check=True)
+    subprocess.run(["node", "--test", "test/modeling/flow-dependencies.test.mjs"], cwd=ROOT, env=env, check=True)
     subprocess.run(["node", "test/xml-modeler-parity.mjs"], cwd=ROOT, env=env, check=True)
     artifacts = sorted(Path(directory).glob("*.bpmn"))
     if len(artifacts) < 6:
@@ -40,4 +41,10 @@ with tempfile.TemporaryDirectory(prefix="bpmn-xml-schema-") as directory:
             raise RuntimeError(f"Unexpected DOCTYPE in {artifact.name}")
         schema.assertValid(document)
         print(f"OK official BPMN20.xsd: {artifact.name}", flush=True)
+    for fixture in sorted((ROOT / "test/fixtures/flow-native").glob("*.bpmn")):
+        document = etree.parse(str(fixture), parser)
+        if document.docinfo.doctype:
+            raise RuntimeError(f"Unexpected DOCTYPE in {fixture.name}")
+        schema.assertValid(document)
+        print(f"OK official BPMN20.xsd native fixture: {fixture.name}", flush=True)
     print(f"Validated {len(artifacts)} generated BPMN exports with lxml {etree.LXML_VERSION}")

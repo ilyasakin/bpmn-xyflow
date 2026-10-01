@@ -278,7 +278,7 @@ export interface ConnectionOptions {
   businessObject?: ModdleElement;
   di?: ModdleElement;
   waypoints?: Point[];
-  /** Diagram-coordinate docking hints, projected onto each shape's outline. */
+  /** Diagram-coordinate docking hints, projected onto a shape outline or connection route. */
   connectionStart?: Point;
   connectionEnd?: Point;
 }
@@ -313,6 +313,7 @@ export interface ClipboardNode extends Bounds {
   di: ModdleElement;
 }
 export interface ClipboardEdge {
+  id: string;
   sourceId: string;
   targetId: string;
   type: string;
@@ -335,8 +336,8 @@ export interface Modeler extends DiagramAPI {
   moveShapes(nodes: GraphNode | GraphNode[], delta: Point, parent?: GraphNode | GraphRoot): boolean;
   resizeShape(node: GraphNode, bounds: Bounds): GraphNode | false;
   updateWaypoints(edge: GraphEdge, waypoints: Point[]): GraphEdge | false;
-  reconnect(edge: GraphEdge, side: 'source' | 'target', endpoint: GraphNode, points?: Point[]): GraphEdge | null;
-  connect(source: GraphNode, target: GraphNode, options?: ConnectionOptions): GraphEdge | null;
+  reconnect(edge: GraphEdge, side: 'source' | 'target', endpoint: GraphNode | GraphEdge, points?: Point[]): GraphEdge | null;
+  connect(source: GraphNode | GraphEdge, target: GraphNode | GraphEdge, options?: ConnectionOptions): GraphEdge | null;
   insertShape(nodeOrType: GraphNode | string, connection: GraphEdge, position?: Point): GraphNode | null;
   delete(element: GraphElement): boolean | void;
   addLane(shape: GraphNode, location?: LaneLocation): GraphNode | null;

@@ -505,7 +505,8 @@ test('replacing a populated activity preserves owned data associations and IO it
 
 test('non-destructive subprocess variant replacement retains artifact and lane-set identities',async()=>{
  const m=await model('test/fixtures/scenarios/order-payment-delivery.bpmn'),sub=m.getElement('Payment'),moddle=m.getModdle();
- const annotation=m.addShape('bpmn:TextAnnotation',{x:680,y:640},{parent:sub});m.updateLabel(annotation,'Keep this subprocess note');
+ // Explicit retained BO models an imported nested artifact; new notes belong to the active canvas root.
+ const annotation=m.addShape('bpmn:TextAnnotation',{x:680,y:640},{parent:sub,businessObject:moddle.create('bpmn:TextAnnotation',{id:'ImportedPaymentNote'})});m.updateLabel(annotation,'Keep this subprocess note');
  const laneSet=moddle.create('bpmn:LaneSet',{id:'PaymentLaneSet'}),lane=moddle.create('bpmn:Lane',{id:'PaymentLane'});lane.$parent=laneSet;lane.flowNodeRef=[m.getElement('CapturePayment').businessObject];laneSet.lanes=[lane];laneSet.$parent=sub.businessObject;sub.businessObject.laneSets=[laneSet];
  const before=await m.getXML();m.replace(sub,'bpmn:Transaction');assert.ok(sub.businessObject.artifacts.includes(annotation.businessObject));assert.equal(annotation.businessObject.$parent,sub.businessObject);assert.equal(sub.businessObject.laneSets[0],laneSet);assert.equal(laneSet.$parent,sub.businessObject);await oracle(m);m.undo();assert.equal(await m.getXML(),before);m.destroy();
 });
@@ -595,7 +596,8 @@ test('contextual move applies upstream event replacements, artifact ownership an
  const m=await model(),sub=m.addShape('bpmn:SubProcess',{x:850,y:600});
  const start=m.addShape('bpmn:StartEvent',{x:500,y:400},{eventDefinitionType:'bpmn:TimerEventDefinition'}),before=await m.getXML();
  assert.equal(m.moveShape(start,{x:300,y:150},sub),true);assert.equal(start.businessObject.eventDefinitions.length,0);assert.equal(start.parent,sub);assert.equal(start.businessObject.$parent,sub.businessObject);m.undo();assert.equal(await m.getXML(),before);m.redo();await oracle(m);
- const annotation=m.addShape('bpmn:TextAnnotation',{x:1100,y:750},{parent:sub}),oldOwner=annotation.businessObject.$parent,annotationBefore=await m.getXML();
+ const created=m.addShape('bpmn:TextAnnotation',{x:1100,y:750},{parent:sub});assert.equal(created.parent,m.getGraph().roots[0]);assert.equal(created.businessObject.$parent,m.getGraph().roots[0].businessObject);m.undo();
+ const annotation=m.addShape('bpmn:TextAnnotation',{x:1100,y:750},{parent:sub,businessObject:m.getModdle().create('bpmn:TextAnnotation',{id:'ImportedNestedNote'})}),oldOwner=annotation.businessObject.$parent,annotationBefore=await m.getXML();
  assert.ok(m.moveShape(annotation,{x:-500,y:-500},m.getGraph().roots[0]));assert.ok(!oldOwner.artifacts.includes(annotation.businessObject));assert.equal(annotation.businessObject.$parent,m.getGraph().roots[0].businessObject);m.undo();assert.equal(await m.getXML(),annotationBefore);
  const pool=m.addShape('bpmn:Participant',{x:1200,y:900}),lanes=m.splitLane(pool,2);assert.equal(m.copy([lanes[0]]),null);assert.equal(m.moveShape(lanes[0],{x:20,y:0}),false);await oracle(m);m.destroy();
 });

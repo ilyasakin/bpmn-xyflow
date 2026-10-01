@@ -15,3 +15,7 @@ copy only reviewed predicate/helper changes, update hashes/version and rerun the
 adapter differential matrix plus independent real-business mutations and browser
 validation. Function equality validates the adapter; it is not by itself proof
 of end-to-end parity.
+
+The four additional modeling/behavior/util files are unchanged pinned connection
+attachment geometry helpers. ConnectionDependents wraps their pure adjustment
+function; provenance records exact paths and hashes. No upstream engine is used.

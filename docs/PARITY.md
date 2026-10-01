@@ -6,8 +6,8 @@ round-trip through this project's own parser is insufficient evidence of validit
 
 ## Current reconstruction — 2026-10-01
 
-The current branch starts from published library
-`7bc8a3a2610267a11d18556720b8744e93924e3d`. Its hosted native gate remains red:
+The recovered branch starts from library
+`7bc8a3a2610267a11d18556720b8744e93924e3d`. That historical native gate was red:
 four hit comparisons and nine label assertions failed in
 [run 36793352184](https://github.com/ilyasakin/bpmn-xyflow/actions/runs/36793352184).
 The remaining earlier smoke/core/advanced/connection/touch/contextual/framework/
@@ -15,7 +15,7 @@ viewer/business suites passed at that revision.
 
 This is a **new reconstruction** of the bounded IO conversion, label snapping and
 hit-policy correction. The previous unpublished local snapshot is unavailable;
-its commit, test counts and review do not certify these new bytes. Fresh source and semantic review is complete. The reconstructed snapshot passes
+its commit, test counts and review do not certify these new bytes. Fresh source and semantic review of IO/label/hit checkpoint `2832d9f9` is complete. That snapshot passes
 297 unit tests, 135 official XSD exports, XML/security checks, lint, build, workflow
 validation and 73-file packed-consumer checks. Native verification remains
 required before acceptance.
@@ -27,8 +27,17 @@ The current scope is:
 - Explicit undoable cleanup for IO-bearing catch/throw family conversion,
   preserving compatible properties, references, extensions and exact history
 
-Later flow-owned annotation and Group category/lifecycle work is a separate
-recovery stage. It is not part of this checkpoint and has no current acceptance.
+The IO/label/hit reconstruction was published as `e606d75`. Its native IO cases,
+original arrow groups and earlier core suites passed; one boundary-hover hit and
+upstream-only label reopen normalization remain under investigation. Test-only
+follow-up `a7d407c` records exact reference normalization and hover diagnostics;
+its hosted results are pending.
+
+The separate local flow follow-up now implements connection-owned annotations,
+dependent routes, ownership/deletion/clipboard handling and minimal append pan.
+It has independent source review and fresh structural evidence, described in
+[flow annotations](FLOW-ANNOTATIONS.md); its native 19-case acceptance is pending.
+Group category/lifecycle and foreground ordering remain a separate recovery stage.
 
 Published site `65bf8846d1e8f32c3ec09e22706ea939bcac870d` pins `7bc8a3a` and passed
 its served-production gate. Manual preview QA previously verified the reported
@@ -70,7 +79,8 @@ passed evidence.
 | Export/frameworks/package | Reopen, SVG, framework lifecycle and packed Bundler/NodeNext/runtime gates remain required on new source |
 | Attribution | Retained upstream license and visible bpmn.io attribution must remain unchanged and tested |
 | Site | Current site pins the older baseline; update only after reviewed library publication and rerun served-production/native preview checks |
-| Flow annotations and Group lifecycle | Separate later recovery stage, outside this checkpoint; overall core parity remains open |
+| Flow annotations | Reconstructed local source is independently reviewed; fresh aggregate and native19 acceptance remain required |
+| Group lifecycle | Separate later recovery stage; overall core parity remains open |
 
 ## Remaining acceptance gates
 
@@ -80,8 +90,8 @@ passed evidence.
    suite, including corrected hit/label cases and the new IO cases
 3. Diagnose failures without weakening meaningful gesture or semantic assertions;
    update the paired site only with a verified library revision
-4. Recover and separately review the later flow/Group scope, then complete its
-   native gates before an overall parity statement
+4. Complete the separate reconstructed flow aggregate/native gates; recover and
+   review Group scope separately before any overall parity statement
 
 Touch shape dragging/resizing did not activate in either pinned engine in the
 recorded baseline. The differential pass establishes the measured behavior only;

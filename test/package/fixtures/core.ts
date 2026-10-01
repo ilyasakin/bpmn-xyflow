@@ -68,6 +68,24 @@ if (node) {
     else console.log(source.x, source.y);
     modeler.updateWaypoints(edge, [{ x: 0, y: 0 }, { x: 10, y: 10 }]);
     modeler.reconnect(edge, 'target', node);
+    const annotation = modeler.addShape('bpmn:TextAnnotation', { x: 200, y: 150 });
+    if (annotation) {
+      const association = modeler.connect(edge, annotation);
+      modeler.connect(annotation, edge, { connectionEnd: { x: 50, y: 80 } });
+      if (association) modeler.reconnect(association, 'source', edge, [{ x: 10, y: 20 }, { x: 50, y: 80 }]);
+    }
+    // @ts-expect-error geometry movement remains shape-only
+    modeler.moveShape(edge, { x: 10, y: 5 });
+    // @ts-expect-error resize bounds belong to shapes, not connections
+    modeler.resizeShape(edge, { x: 10, y: 10, width: 100, height: 80 });
+    // @ts-expect-error replacement remains shape-only
+    modeler.replace(edge, 'bpmn:Task');
+    // @ts-expect-error a connection cannot host a boundary event
+    modeler.attachBoundary(node, edge);
+    // @ts-expect-error roots are not supported connect endpoints
+    modeler.connect(graph.roots[0], node);
+    // @ts-expect-error the private append action is not a public method
+    modeler.appendShape(edge, 'bpmn:TextAnnotation');
     modeler.insertShape('bpmn:Task', edge, { x: 100, y: 100 });
     const flowType: SequenceFlowType = 'conditional';
     modeler.setSequenceFlowType(edge, flowType, 'approved === true');
@@ -77,7 +95,9 @@ if (node) {
     // @ts-expect-error a condition is expression text
     modeler.setSequenceFlowType(edge, 'conditional', 42);
   }
-  modeler.copy([node]);
+  const clipboard = modeler.copy([node]);
+  const copiedEdgeIds: string[] = clipboard?.edges.map(edge => edge.id) || [];
+  console.log(copiedEdgeIds);
   modeler.paste({ x: 200, y: 200 });
   modeler.replace(node, 'bpmn:ServiceTask');
   const target: ReplacementTarget = { type: 'bpmn:BoundaryEvent', eventDefinitionType: 'bpmn:TimerEventDefinition', cancelActivity: false };
