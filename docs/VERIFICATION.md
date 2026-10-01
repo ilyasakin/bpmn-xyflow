@@ -1,29 +1,39 @@
 # Verification checkpoints — 2026-10-01
 
-This records revision-bound evidence. It is **not a full core-parity completion
-claim**. [PARITY.md](PARITY.md) is the current acceptance ledger;
+This records revision-bound core acceptance. It does not establish upstream
+API/plugin compatibility or exhaustive behavioral equivalence.
+[PARITY.md](PARITY.md) is the current acceptance ledger;
 [SCENARIOS.md](SCENARIOS.md) describes workflows and sources.
 
-## Current evidence and open gates
+## Completed bounded acceptance
 
-- Latest fully green configured library revision: **`2aef246`**, including all
-  32 hover cases, in [run 36854573667](https://github.com/ilyasakin/bpmn-xyflow/actions/runs/36854573667)
-- Later global-history revision: **`d484f24`**. All prior gates and two new history
-  cases pass in [run 36856440928](https://github.com/ilyasakin/bpmn-xyflow/actions/runs/36856440928);
-  the remaining history case fails because its setup tries to zoom in at maximum zoom
-- Current local checkpoint: **`c424e41c`**, combining the reviewed wheel-setup
-  correction with import/navigation race fix **`381e1346`**. Fresh checks pass
-  489 units, 398 generated-export XSD validations plus ten native fixtures, lint
-  (zero errors, 37 warnings), workflow validation and build. Packed consumers pass
-  with 85 package files, Bundler/NodeNext/runtime checks and React/Vue/Svelte
-  bundles. No hosted native result is available yet
-- Current published site: **`c3501f3`**, with paste/file Import XML. Six of eight
-  new native import cases pass. Reviewed local corrections address a raw fixture
-  baseline missing `xmlns:xsi` and the real bubbling file-cancel path. Site
-  `fc402b5` passes all 12 local tests, lint, types and production build; its
-  native rerun is pending
-- Manual arrow, hover and Group QA passed on site **`ffb1`** / library **`e209`**.
-  That session also exposed the global-history discrepancy now being corrected
+- Current fully green configured library revision: **`5a994b6`**, in
+  [run 36859641614](https://github.com/ilyasakin/bpmn-xyflow/actions/runs/36859641614).
+  All 22 core-control cases, including three global-history cases, and all
+  retained native suites pass. Build, packed consumers and CodeQL also pass;
+  CodeQL reports no new alerts
+- Corresponding local source checkpoint: **`8550b0f9`**, combining the reviewed
+  wheel-setup correction with import/navigation race fix **`381e1346`**. Checks
+  pass 489 units, 398 generated-export XSD validations plus ten native fixtures,
+  lint (zero errors, 37 warnings), workflow validation and build. Packed consumers
+  pass with 85 package files, Bundler/NodeNext/runtime checks and React/Vue/Svelte
+  bundles
+- Current paired site: **`99e608a`**, pinning **`5a994b6`**. Full CI and all eight
+  native Import XML cases pass in
+  [run 36862006191](https://github.com/ilyasakin/ilyasakin.github.io/actions/runs/36862006191).
+  CodeQL reports no new alerts and the deployment is Ready
+- Final manual QA passed on the exact **`99e608a` / `5a994b6`** site/library pair.
+  No defect was found in the exercised paths. Earlier arrow, hover and Group QA
+  on **`ffb1` / `e209`** exposed the global-history discrepancy; the final pass
+  includes the corrected history and import behavior
+
+The preceding hover checkpoint `2aef246` was fully green, including all 32 hover
+cases, in [run 36854573667](https://github.com/ilyasakin/bpmn-xyflow/actions/runs/36854573667).
+Intermediate global-history revision `d484f24` passed all prior gates and two new
+history cases in [run 36856440928](https://github.com/ilyasakin/bpmn-xyflow/actions/runs/36856440928);
+its third case attempted to zoom in at maximum zoom. Site `c3501f3` passed six of
+eight import cases; the other two exposed a raw fixture namespace baseline and
+bubbling file-cancel issue. The current green runs supersede those failure statuses.
 
 The import/navigation fix separates parse-request cancellation from committed
 rendering. Independent review reran the original failure, eight additional
@@ -32,13 +42,32 @@ missing-diagram failures preserve active navigation, exact XML, graph/DI-array
 identities, selection, camera and opaque metadata. Valid replacement cancels
 stale work, with history and navigation bookkeeping committed only for the
 current document. The final readiness event uses the same definition/history
-check as Undo/Back. Focused and full local checks do not substitute for hosted
-native acceptance.
+check as Undo/Back. Hosted core-history and site-import acceptance now pass at
+the revisions above; the queued-operation structural matrix remains a distinct
+evidence type from native browser input.
 
-A completed result belongs only to its exact source revision and asserted scope.
-There is no full core-parity completion claim. Keep intentional reference
-precision, import ordering and shared-title differences separate from matching
-behavior, and retain strict local Undo/cancel and metadata checks.
+### Final manual observations
+
+- Global Undo/Redo switched between outer and subprocess roots and restored the
+  exact observed cameras
+- Edited Order workflow export → paste import → reopen produced a byte-identical
+  15,064-byte re-export, zero warnings and reset history. Malformed input and
+  cancellation preserved XML, Undo availability and camera
+- Original Conditional checks passed for the chosen right-side source, target
+  drop Y, opposite-anchor preservation, fractional U-shaped segment editing,
+  exact Undo and orthogonal routes after node movement
+- Unselected hover controls appeared and disappeared correctly; source and target
+  reconnect and background cancellation passed without unwanted history entries
+- Group creation, rename, resize, Undo and CategoryValue export passed; the
+  attribution overlay and viewer navigation passed, with zero navigation warnings
+
+The final manual pass exercised paste import. File-chooser behavior, mid-drag
+Escape and touch retain hosted-only evidence; they were not repeated manually.
+The bounded core acceptance gates are complete at the stated revisions. A result
+belongs only to its exact source and asserted scope. This is not blanket upstream
+API/plugin compatibility: reference precision, import ordering, shared-title
+behavior and the documented capability limits remain explicit. Local Undo/cancel
+and metadata invariants remain regression requirements.
 
 ## How to reproduce
 
@@ -218,11 +247,12 @@ is a shared limitation; it does not certify modeling support or rollback of an
 unactivated gesture. Per-viewer pointer tracking prevents a second contact from
 becoming an accidental click, including lost-capture/release ordering.
 
-## Open acceptance and capability limits
+## Continuing regression requirements and capability limits
 
-- Complete the exact local/hosted global-history and import/navigation checkpoint;
-  preserve every suite already green at `2aef246`
-- Finish the site Import XML native rerun and paired-site history/import QA
+- Final manual and configured automated acceptance is complete for `99e608a` /
+  `5a994b6`; later source changes require their own verification
+- Preserve the green global-history, import/navigation and all retained gates on
+  later source revisions
 - External-label resizing, explicit IO cleanup and flow-owned annotations are
   implemented and passed their native gates at the green revision; they remain
   regression requirements, rather than outstanding implementation gaps

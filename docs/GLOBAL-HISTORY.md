@@ -51,8 +51,13 @@ actual rename, Back, Undo and Redo buttons to require global chronology, and thr
 new cases cover parent deletion, collapse/new-branch redo invalidation, and real
 wheel camera changes followed by Undo during an active drag. These retain exact
 XML/history, independent exported metadata, and actual import/reopen checks. The
-changed browser cases are prepared and not locally executed. Hosted browser acceptance remains required before claiming
-the manual navigation-history finding resolved in the preview.
+complete 22-case native suite passes at library `5a994b6`, including all three
+new history cases, in
+[run 36859641614](https://github.com/ilyasakin/bpmn-xyflow/actions/runs/36859641614).
+The earlier maximum-zoom wheel setup was corrected to choose a direction with
+available range; active native zoom, drag cancellation, XML and history assertions
+remain required. Final manual replay on site `99e608a` / library `5a994b6`
+confirmed cross-root Undo/Redo and exact restoration of the observed cameras.
 
 ## Import and navigation concurrency
 
@@ -81,3 +86,16 @@ failures, valid replacement, same-graph supersession, clear/destroy, and an acti
 positive drag cancelled by failed import. These complement the existing native
 core navigation/history and site import gates; they do not constitute new manual
 or native-browser execution evidence.
+
+The paired site `99e608a` pins this library and passes all eight native Import XML
+cases plus its complete CI in
+[run 36862006191](https://github.com/ilyasakin/ilyasakin.github.io/actions/runs/36862006191).
+Library and site CodeQL report no new alerts. This establishes the configured
+automated gates at those revisions. Final manual QA of the same deployment
+found no defect in the exercised history/import paths: edited Order XML exported,
+was pasted into Import XML and reopened with byte-identical 15,064-byte re-export,
+zero warnings and reset history. Malformed input and cancellation preserved XML,
+Undo and camera. The final manual pass used paste import; file-chooser behavior
+and mid-drag Escape retain hosted-only evidence. Bounded history/import acceptance
+is complete, while the expanded-diagram distinction and other documented limits
+remain unchanged.

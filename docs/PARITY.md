@@ -55,40 +55,55 @@ XML/history and semantic/DI assertions remain strict. See
 
 Manual arrow, hover and Group QA passed on site `ffb1` with library `e209`.
 That session also exposed a document-history discrepancy across subprocess
-navigation. The resulting global-history change is a later capability correction,
-not evidence covered by the preceding green revision. Published `d484f24` passes
-all prior gates and two of the three new history cases in
+navigation. Intermediate global-history revision `d484f24` passed all prior
+gates and two of the three new history cases in
 [run 36856440928](https://github.com/ilyasakin/bpmn-xyflow/actions/runs/36856440928).
-The remaining case tries to zoom in from the maximum zoom during setup; its
-reviewed correction chooses a wheel direction with available zoom range.
+The third case tried to zoom in from maximum zoom during setup; the corrected
+case chooses a wheel direction with available zoom range.
 
-Current local checkpoint `c424e41c` combines that test-only wheel correction with
-independently reviewed import/navigation race fix `381e1346`. Failed XML or
-missing-diagram preflight must preserve an already committed drill/Back operation,
-its camera, graph/DI identities, metadata and global history. New valid imports
-supersede stale navigation and reset history only for the committed document.
-The exact checkpoint passes 489 units, 398 generated-export XSD validations plus
-ten native fixtures, lint (zero errors, 37 warnings), workflow validation and
-build. Packed consumers pass with 85 package files, Bundler/NodeNext/runtime
-checks and React/Vue/Svelte bundles. It has no hosted native result yet. See [document history](GLOBAL-HISTORY.md).
+Current published library `5a994b6` passes the complete configured hosted gate in
+[run 36859641614](https://github.com/ilyasakin/bpmn-xyflow/actions/runs/36859641614):
+all 22 core-control cases, including the three new global-history cases, all
+retained native suites, build and packed consumers. CodeQL passes with no new
+alerts. This revision includes independently reviewed import/navigation race fix
+`381e1346`. Failed XML or missing-diagram preflight preserves an already committed
+drill/Back operation, its camera, graph/DI identities, metadata and global
+history. New valid imports supersede stale navigation and reset history only for
+the committed document. See [document history](GLOBAL-HISTORY.md).
+
+The corresponding local source checkpoint `8550b0f9` passed 489 units, 398
+generated-export XSD validations plus ten native fixtures, lint (zero errors,
+37 warnings), workflow validation and build. Packed consumers passed with 85
+package files, Bundler/NodeNext/runtime checks and React/Vue/Svelte bundles.
 
 The previously reported quadratic Text.js expression is replaced by equivalent
 linear trailing-whitespace handling. Published security revision `2eb1f7c` and
 combined `fae65847` passed hosted CodeQL with no new alerts. The upstream source,
 local one-operation patch and retained license are recorded separately.
 
-Current published site `c3501f3` includes the paste/file Import XML UI. Six of its
-eight new native import cases pass. The remaining cases exposed a raw fixture
-baseline missing an `xmlns:xsi` declaration and the real bubbling file-cancel
-path. Both corrections are independently reviewed in site `fc402b5`; all 12 local
-tests, lint, types and the production build pass. The native rerun is pending. Import failure/cancel must retain the prior diagram, selection, camera
-and history; successful replacement and dirty-document confirmation remain
-explicit acceptance requirements. The earlier site `65bf8846`/library `7bc8a3a`
-served-production pass is historical evidence only.
+Current paired site `99e608a` pins library `5a994b6`. Its complete CI and all eight
+native Import XML cases pass in
+[run 36862006191](https://github.com/ilyasakin/ilyasakin.github.io/actions/runs/36862006191);
+CodeQL reports no new alerts and the deployment is Ready. These results include
+the reviewed corrections to the raw fixture namespace baseline and bubbling
+file-cancel path that failed at site `c3501f3`. Paste/file import, dirty-document
+confirmation, failed-import/cancel preservation and successful replacement now
+have hosted evidence. The earlier site `65bf8846`/library `7bc8a3a`
+served-production pass remains historical evidence only.
 
-The original 27 native connection groups remain required on every new revision.
-A green configured run does not establish full core equivalence; the ongoing
-history/import changes and their paired site acceptance keep this task open.
+Final manual QA passed on the exact `99e608a` / `5a994b6` pair, with no defect
+found in the exercised paths. Global Undo/Redo switched roots and restored the
+observed cameras. An edited Order workflow exported, pasted into Import XML and
+reopened with byte-identical 15,064-byte re-export, zero warnings and reset
+history; malformed input and cancellation preserved XML, Undo and camera.
+Original Conditional connection, hover, Group editing/export, attribution and
+viewer-navigation checks also passed. The detailed evidence and distinction
+between manual and hosted-only paths are in [VERIFICATION.md](VERIFICATION.md).
+
+The bounded core acceptance gates recorded here are complete at these revisions.
+The original 27 connection groups and all other regression gates remain required
+on later source changes. This conclusion retains the explicit behavior limits
+and differences below; it is not blanket upstream API/plugin compatibility.
 
 ## References and scope
 
@@ -111,22 +126,22 @@ evidence.
 
 | Core area | Current evidence and remaining gate |
 | --- | --- |
-| XML/DI/extensions/security | Hosted `2aef246` is green; the import/navigation race correction at local `c424e41c` passes all local gates; its hosted run remains pending |
-| Renderer/viewport/hit selection | Established native hit, Group frame and hover cases pass at `2aef246`; retain strict geometry and input evidence after later changes |
-| Creation/replacement | Native IO cleanup and existing creation/replacement gates pass at `2aef246`; preserve semantic, metadata and packed-consumer checks |
-| Move/resize/containment | Established core/advanced and original connection gates pass at `2aef246` and remain required |
-| Connection gestures | All original 27 native groups pass at `2aef246`; manual source/drop/route evidence remains a regression requirement |
-| Undo/redo/delete/copy | Established local history/copy/deletion gates pass; cross-root chronological history at `d484f24` has two new native cases passing and one setup failure corrected locally |
-| External labels | All 23 native width/grid/modifier/reopen cases and Group label gates pass at `2aef246` |
-| Pools/lanes/subprocesses | Established core/advanced gates pass; global history and pending drill/Back/import timing require acceptance at the current checkpoint |
-| Keyboard/search/align/space | Established native/core gates pass at `2aef246`; retain them on new source |
+| XML/DI/extensions/security | Library `5a994b6` passes the full hosted gate and CodeQL; local source `8550b0f9` passes units, XML/security and official schema checks |
+| Renderer/viewport/hit selection | Established native hit, Group frame and hover cases pass at `5a994b6`; retain strict geometry and input evidence after later changes |
+| Creation/replacement | Native IO cleanup and creation/replacement gates pass at `5a994b6`; semantic, metadata and packed-consumer checks remain required |
+| Move/resize/containment | Core/advanced and original connection gates pass at `5a994b6` |
+| Connection gestures | All original 27 native groups pass at `5a994b6`; final paired-site source/drop/route and exact Undo checks also pass |
+| Undo/redo/delete/copy | Existing local history/copy/deletion and all three new global-history native cases pass at `5a994b6` |
+| External labels | All 23 native width/grid/modifier/reopen cases and Group label gates pass at `5a994b6` |
+| Pools/lanes/subprocesses | Core/advanced and global-history native gates pass; pending drill/Back/import timing also has deterministic structural coverage |
+| Keyboard/search/align/space | Established native/core gates pass at `5a994b6` |
 | Touch | Ten differential groups pass within the measured reference behavior; this does not establish general touch modeling support |
-| Export/frameworks/package | Established reopen, SVG, framework and packed-consumer gates pass at `2aef246`; the current local checkpoint also passes build/package; its hosted result remains pending |
+| Export/frameworks/package | Hosted reopen, SVG, framework and packed-consumer gates pass at `5a994b6` |
 | Attribution | Retained upstream license and visible bpmn.io attribution remain required and tested |
-| Site | Published `c3501f3` includes Import XML; six of eight new native cases pass, with two reviewed local corrections at `fc402b5` passing local tests/build and awaiting native rerun |
-| Flow annotations | All 27 native groups pass at `2aef246`, including separately asserted reference input-policy differences |
+| Site | `99e608a` pins `5a994b6`; full CI, all eight native Import XML cases and CodeQL pass, deployment Ready; final manual QA passes for the exercised paths |
+| Flow annotations | All 27 native groups pass at `5a994b6`, including separately asserted reference input-policy differences |
 | Group lifecycle | All 16 native cases pass: eight matching and eight precisely asserted reference differences; retain strict local metadata/history |
-| Hover-only connection controls | All 32 native cases pass at `2aef246`; manual hover QA also passed on the earlier `ffb1`/`e209` pair |
+| Hover-only connection controls | All 32 native cases pass at `5a994b6`; final paired-site hover appearance, source/target reconnect and background cancellation checks also pass |
 
 Consistent foreground external labels and Group frames include approved
 import-order differences from the pinned reference. Group frames follow the
@@ -134,17 +149,17 @@ reference's normal creation level rather than its import-order quirk. These
 intentional differences, and measured precision/shared-title differences, remain
 separate from equal-behavior assertions.
 
-## Remaining acceptance gates
+## Completed acceptance and continuing regression requirements
 
-1. Obtain hosted evidence for the locally verified `c424e41c` checkpoint covering
-   global chronological history, the wheel setup correction and import/navigation
-   races while retaining every established native suite
-2. Finish the site Import XML native rerun for the two corrected cases,
-   preserving dirty-document confirmation, failure/cancel rollback and inert XML
-3. Verify the paired site against the reviewed library revision, including global
-   history across drill/Back and successful/failed document replacement
-4. Diagnose any new failure from concrete native input, model and DI evidence;
-   keep precise reference differences explicit and avoid broad normalization
+The recorded automated and manual acceptance gates are complete for site
+`99e608a` and library `5a994b6`. Manual testing used paste import; file-chooser
+behavior, mid-drag Escape and touch retain hosted-only evidence from this final
+acceptance pass. No manual execution is claimed for those paths.
+
+Retain every green native, semantic, schema, security and package gate after any
+later source change. Investigate new findings from concrete input, model and DI
+evidence, keeping precise reference differences explicit. A docs-only update
+does not broaden verified scope.
 
 Touch shape dragging/resizing did not activate in either pinned engine in the
 recorded baseline. The differential pass establishes the measured behavior only;
