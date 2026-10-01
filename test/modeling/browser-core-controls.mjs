@@ -13,9 +13,7 @@ import puppeteer from 'puppeteer';
 import { BpmnModdle } from 'bpmn-moddle';
 
 const port=Number(process.env.BPMN_CORE_CONTROLS_PORT||5237),base=`http://localhost:${port}`;
-const child=spawn(process.execPath,['lib/demo/serve.mjs'],{env:{...process.env,PORT:String(port)},stdio:['ignore','pipe','inherit']});
-child.stdout.on('data',()=>{});
-const oracle=new BpmnModdle(),results=[];let browser;
+const oracle=new BpmnModdle(),results=[];let browser,child,serverOutput='';
 const order=await readFile('test/fixtures/scenarios/order-payment-delivery.bpmn','utf8');
 const approval=await readFile('test/fixtures/scenarios/approval-rejection-rework.bpmn','utf8');
 const back='[data-action="navigate-back"]';
@@ -80,7 +78,7 @@ async function paletteTaskDrag(page,end,options){const button=await elementWithT
 function condition(flow){const expression=flow.conditionExpression;return expression?{type:expression.$type,body:expression.body,language:expression.language}:null;}
 function assertApprovalMetadata(before,after){assert.equal(after.byId.ApprovalDecision.default.id,before.byId.ApprovalDecision.default.id);assert.deepEqual(condition(after.byId.ApproveFlow),condition(before.byId.ApproveFlow));assert.equal(after.byId.ApproveFlow.name,before.byId.ApproveFlow.name);assert.equal(after.byId.RejectFlow.name,before.byId.RejectFlow.name);}
 async function runCase(name,xml,run,{zoom=.85}={}){
-  const page=await browser.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));await page.setViewport({width:1800,height:1200});
+  const page=await browser.newPage(),errors=[];page.setDefaultTimeout(10000);page.on('pageerror',error=>errors.push(error.message));await page.setViewport({width:1800,height:1200});
   try{
     await page.goto(`${base}/modeler/`,{waitUntil:'networkidle0'});await page.waitForFunction(()=>!!window.modeler?.getGraph());
     const warnings=await page.evaluate(async({xml,zoom})=>{const modeler=window.modeler,result=await modeler.importXML(xml);await modeler.setViewport({x:160,y:120,zoom},{duration:0});return result.warnings.map(warning=>warning.message);},{xml,zoom});assert.deepEqual(warnings,[],'fixture import');
@@ -93,8 +91,9 @@ async function runCase(name,xml,run,{zoom=.85}={}){
 }
 
 try{
-  const deadline=Date.now()+60000;while(true){try{if((await fetch(`${base}/modeler/`,{signal:AbortSignal.timeout(5000)})).ok)break;}catch{}if(child.exitCode!==null||Date.now()>deadline)throw new Error('Core controls demo server startup timeout');await new Promise(resolve=>setTimeout(resolve,150));}
-  browser=await puppeteer.launch({headless:'shell'});await mkdir('test-artifacts',{recursive:true});
+  child=spawn(process.execPath,['lib/demo/serve.mjs'],{env:{...process.env,PORT:String(port)},stdio:['ignore','pipe','inherit']});child.stdout.on('data',chunk=>{serverOutput+=String(chunk);});
+  const deadline=Date.now()+60000;while(true){const actual=serverOutput.match(/demo listening on http:\/\/localhost:(\d+)/);if(actual&&Number(actual[1])!==port)throw Error(`Core controls server bound unexpected port ${actual[1]}`);try{if(actual&&(await fetch(`${base}/modeler/`,{signal:AbortSignal.timeout(5000)})).ok)break;}catch{}if(child.exitCode!==null||Date.now()>deadline)throw new Error('Core controls demo server startup timeout');await new Promise(resolve=>setTimeout(resolve,150));}
+  browser=await puppeteer.launch({headless:'shell',protocolTimeout:30000});await mkdir('test-artifacts',{recursive:true});
 
   await runCase('order-drill-child-edit-back-history',order,async page=>{
     const original=await readModel(page),documentation=docs(original.byId.CapturePayment);
@@ -107,10 +106,60 @@ try{
     await returnToParent(page);
     let model=await readModel(page);assert.equal(model.byId.CapturePayment.name,'Capture reviewed payment');assert.deepEqual(docs(model.byId.CapturePayment),documentation);
     const bothEdits=model.xml;
-    await undo(page);model=await readModel(page);assert.equal(model.byId.ValidateOrder.name,original.byId.ValidateOrder.name);assert.equal(model.byId.CapturePayment.name,'Capture reviewed payment','outer Undo cannot discard child edits');
-    await redo(page,bothEdits);
-    await drill(page);await undo(page);model=await readModel(page);assert.equal(model.byId.CapturePayment.name,original.byId.CapturePayment.name);assert.equal(model.byId.ValidateOrder.name,'Validate order and address');
+    await undo(page);await currentRoot(page,'Payment');model=await readModel(page);assert.equal(model.byId.CapturePayment.name,original.byId.CapturePayment.name);assert.equal(model.byId.ValidateOrder.name,'Validate order and address','Undo follows global chronology');
+    assert.equal(await page.$eval(back,button=>button.hidden),false,'history root switch restores Back');
+    const outerEdit=model.xml;
+    await undo(page);await currentRoot(page,'OrderCollaboration');model=await readModel(page);assert.equal(model.byId.ValidateOrder.name,original.byId.ValidateOrder.name);assert.equal(model.byId.CapturePayment.name,original.byId.CapturePayment.name);
+    await redo(page,outerEdit);await currentRoot(page,'OrderCollaboration');
+    await redo(page,bothEdits);await currentRoot(page,'Payment');await returnToParent(page);assert.equal((await readModel(page)).xml,bothEdits);
+    await drill(page);await returnToParent(page);await undo(page);await currentRoot(page,'Payment');assert.equal((await readModel(page)).xml,outerEdit,'navigation adds no history entry');
     await redo(page,bothEdits);await returnToParent(page);assert.equal((await readModel(page)).xml,bothEdits);
+  });
+
+  // Materialize this fork's expanded-subprocess drill plane before taking the
+  // exact history baseline. Existing-plane navigation itself must be a no-op.
+  async function prepareHistory(page){await drill(page);await returnToParent(page);const before=await readModel(page);assert.deepEqual(await history(page),{size:0,undo:false,redo:false});return before;}
+  async function reopenHistory(page,expected){
+    const view=await page.evaluate(()=>({diagramId:window.modeler.getGraph().diagram.id,viewport:window.modeler.getViewport()}));
+    const warnings=await page.evaluate(async({xml,view})=>{const result=await window.modeler.importXML(xml,view.diagramId);await window.modeler.setViewport(view.viewport,{duration:0});return result.warnings.map(w=>w.message);},{xml:expected.xml,view});
+    assert.deepEqual(warnings,[]);assert.equal((await readModel(page)).xml,expected.xml,'edited export reimports with exact semantic/DI/raw XML');assert.deepEqual(await history(page),{size:0,undo:false,redo:false});
+  }
+  await runCase('global-history-delete-parent-and-child-replay',order,async page=>{
+    const baseline=await prepareHistory(page);await drill(page);await rename(page,'CapturePayment','Reviewed charge');const edited=await readModel(page);
+    assert.equal(edited.xml,baseline.xml.replace('name="Capture payment"','name="Reviewed charge"'),'only the selected semantic title changed');
+    await returnToParent(page);await clickShape(page,'Payment',{x:20,y:35});await page.click('.bpmn-xyflow-context-pad button[title="Delete"]');
+    const deleted=await readModel(page);assert.equal(deleted.byId.Payment,undefined);assert.equal(deleted.byId.CapturePayment,undefined);assert.equal((await history(page)).size,2,'cascaded parent deletion is one compound history entry');
+    for(let cycle=0;cycle<3;cycle++){
+      await undo(page,edited.xml);await currentRoot(page,'OrderCollaboration');
+      await undo(page,baseline.xml);await currentRoot(page,'Payment');assert.deepEqual(await page.evaluate(()=>window.modeler.getSelection()),[]);
+      await redo(page,edited.xml);await currentRoot(page,'Payment');
+      await redo(page,deleted.xml);await currentRoot(page,'OrderCollaboration');
+    }
+    await undo(page,edited.xml);await drill(page);assert.equal((await readModel(page)).xml,edited.xml);await reopenHistory(page,edited);
+  });
+  await runCase('global-history-collapse-and-new-branch',order,async page=>{
+    const baseline=await prepareHistory(page);await drill(page);await rename(page,'CapturePayment','Captured and audited');const edited=await readModel(page);await returnToParent(page);
+    await context(page,'Payment',{x:20,y:35});await clickText(page,'.bpmn-xyflow-context-menu > div','Toggle expanded / collapsed');const collapsed=await readModel(page);assert.equal(collapsed.di('Payment').isExpanded,false);assert.equal((await history(page)).size,2);
+    await undo(page,edited.xml);await currentRoot(page,'OrderCollaboration');await undo(page,baseline.xml);await currentRoot(page,'Payment');
+    await redo(page,edited.xml);await redo(page,collapsed.xml);await currentRoot(page,'OrderCollaboration');
+    await undo(page,edited.xml);await undo(page,baseline.xml);await currentRoot(page,'Payment');await returnToParent(page);
+    await rename(page,'ValidateOrder','Revised outer branch');assert.equal((await history(page)).redo,false,'a new outer edit invalidates both child and collapse redo');
+    const branched=await readModel(page);assert.equal(branched.xml,baseline.xml.replace('name="Validate order"','name="Revised outer branch"'));
+    await drill(page);assert.equal((await history(page)).redo,false);await undo(page,baseline.xml);await currentRoot(page,'OrderCollaboration');await redo(page,branched.xml);await reopenHistory(page,branched);
+  });
+  await runCase('global-history-viewport-and-active-drag-interruption',order,async page=>{
+    const baseline=await prepareHistory(page);await rename(page,'ValidateOrder','Outer before charge');const outerEdit=await readModel(page);await drill(page);await rename(page,'CapturePayment','Child before cancellation');const both=await readModel(page);
+    async function wheelZoom(id){const before=await page.evaluate(()=>window.modeler.getViewport()),p=await shapePoint(page,id);await expectHit(page,p,id);await page.mouse.move(p.x,p.y);await page.keyboard.down('Control');try{await page.mouse.wheel({deltaY:-180});}finally{await page.keyboard.up('Control');}await page.waitForFunction(before=>Math.abs(window.modeler.getViewport().zoom-before.zoom)>1e-6,{},before);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));return page.evaluate(()=>window.modeler.getViewport());}
+    const childCamera=await wheelZoom('CapturePayment');assert.equal((await readModel(page)).xml,both.xml);assert.equal((await history(page)).size,2);
+    await returnToParent(page);const outerCamera=await wheelZoom('ValidateOrder');assert.equal((await readModel(page)).xml,both.xml);
+    const beforeBounds=await page.evaluate(()=>{const n=window.modeler.getElement('ValidateOrder');return{x:n.x,y:n.y};}),start=await shapePoint(page,'ValidateOrder');await expectHit(page,start,'ValidateOrder');
+    await page.mouse.move(start.x,start.y);await page.mouse.down();try{
+      await page.mouse.move(start.x+55,start.y+35,{steps:12});assert.notDeepEqual(await page.evaluate(()=>{const n=window.modeler.getElement('ValidateOrder');return{x:n.x,y:n.y};}),beforeBounds,'the interrupted shape gesture had a nonzero preview');
+      await shortcut(page,'z');await currentRoot(page,'Payment');assert.equal((await readModel(page)).xml,outerEdit.xml);assert.deepEqual(await page.evaluate(()=>window.modeler.getViewport()),childCamera);
+    }finally{await page.mouse.up().catch(()=>{});}
+    assert.equal((await readModel(page)).xml,outerEdit.xml);assert.equal((await history(page)).size,1,'releasing the interrupted drag adds no entry');
+    await undo(page,baseline.xml);await currentRoot(page,'OrderCollaboration');assert.deepEqual(await page.evaluate(()=>window.modeler.getViewport()),outerCamera);
+    await redo(page,outerEdit.xml);await redo(page,both.xml);await currentRoot(page,'Payment');assert.deepEqual(await page.evaluate(()=>window.modeler.getViewport()),childCamera);await reopenHistory(page,both);
   });
 
   for(const mode of ['context-pad','context-drag','right-click'])await runCase(`valid-append-${mode}`,approval,async page=>{
@@ -243,4 +292,4 @@ try{
   });
 
   await writeFile('test-artifacts/browser-core-controls-results.json',JSON.stringify(results,null,2));const failed=results.filter(result=>result.status==='failed');assert.equal(failed.length,0,failed.map(result=>`${result.name}: ${result.error}`).join('\n'));console.log(`PASS ${results.length} native core-control groups`);
-}finally{await browser?.close();child.kill('SIGTERM');}
+}finally{await browser?.close();child?.kill('SIGTERM');}

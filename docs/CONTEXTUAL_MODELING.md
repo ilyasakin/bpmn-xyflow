@@ -126,7 +126,12 @@ The context pad, menus and command preflight share executable action policy.
 Append variants retain the pinned upstream target types, including event-based
 and compensation-specific choices; invalid appends do not create orphan tasks.
 Back navigation is available in the editor toolbar and exposes `navigation.change`
-for hosts. Failed imports preserve the previous navigation/history state.
+for hosts. Undo/redo follows one global chronological stack across diagrams.
+Replaying a command in another diagram activates that root synchronously, clears
+foreign selection, and restores its latest visited viewport. Navigation itself
+adds no command and does not invalidate redo. Failed imports preserve the previous
+navigation/history state. See [global history](GLOBAL-HISTORY.md) for verification
+scope and the existing expanded-subprocess drill behavior.
 
 Ordinary Task resizing is an intentional fork extension, enabled by default for
 compatibility. `taskResize: false` uses upstream resize eligibility. Event/gateway,

@@ -238,7 +238,7 @@ test('imported connection label rename/reconnect/undo keeps visible text and sem
  m.undo();assert.equal(edge.label.businessObject,edge.businessObject);
  await oracle(m);m.destroy();
 });
-test('subprocess drill-in displays existing contents and preserves independent history on back/reentry',async()=>{
+test('subprocess drill-in retains global history across back/reentry',async()=>{
  const m=await model('test/fixtures/scenarios/order-payment-delivery.bpmn');
  const outer=m.getElement('ValidateOrder'),sub=m.getElement('Payment');
  m.updateLabel(outer,'Validated outside');
@@ -251,10 +251,10 @@ test('subprocess drill-in displays existing contents and preserves independent h
  assert.equal(m.canRedo(),true);
  assert.equal(await m.navigateBack(),true);assert.equal(m.getGraph(),originalOuter);
  assert.equal(m.getElement('CapturePayment').businessObject.name,'Captured inside');
- m.undo();assert.equal(outer.businessObject.name,'Validate order');m.redo();
- await m.drillInto(m.getElement('Payment'));
+ m.undo();assert.equal(child.businessObject.name,oldName);assert.equal(outer.businessObject.name,'Validated outside');
  assert.equal(m.getElement('CapturePayment'),child);assert.equal(m.canRedo(),true);
- m.redo();assert.equal(child.x,original.x+25);m.undo();m.undo();assert.equal(child.businessObject.name,oldName);
+ m.undo();assert.equal(outer.businessObject.name,'Validate order');m.redo();m.redo();
+ assert.equal(m.getElement('CapturePayment'),child);m.redo();assert.equal(child.x,original.x+25);m.undo();m.undo();assert.equal(child.businessObject.name,oldName);
  m.redo();m.redo();
  await m.navigateBack();
  const xml=await m.getXML();await oracle(m);await m.importXML(xml);
@@ -397,9 +397,10 @@ test('child additions mirror into expanded parent while existing view coordinate
  m.updateLabel(m.getElement(added.id),'New child visible');m.undo();m.redo();
  await m.drillInto(m.getElement('Payment'));assert.equal(m.getElement('CapturePayment').x,childX);
  assert.equal(m.getElement(added.id).businessObject.name,'New child visible');
+ m.undo();assert.notEqual(m.getElement(added.id).businessObject.name,'New child visible');
  m.undo();assert.ok(!m.getElement(edge.id));m.undo();assert.ok(!m.getElement(added.id));
  await m.navigateBack();assert.ok(!m.getElement(added.id));
- await m.drillInto(m.getElement('Payment'));m.redo();m.redo();await m.navigateBack();await oracle(m);
+ await m.drillInto(m.getElement('Payment'));m.redo();m.redo();m.redo();await m.navigateBack();await oracle(m);
  const xml=await m.getXML();await m.importXML(xml);assert.ok(m.getElement(added.id));await m.drillInto(m.getElement('Payment'));assert.equal(m.getElement('CapturePayment').x,childX);m.destroy();
 });
 test('expanding imported separate-plane subprocess hydrates children and preserves independent source DI',async()=>{

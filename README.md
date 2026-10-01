@@ -87,7 +87,7 @@ an explicitly configured `minZoom` remains a lower limit.
 - Copy / paste (`Cmd+C` / `Cmd+V` / `Cmd+D` to duplicate)
 - Modeling rules + connection-type inference
 - BoundaryEvent attach / detach on drop
-- SubProcess drill-in / collapse, with a per-level command stack
+- SubProcess drill-in / collapse, with global undo/redo across diagrams
 - Snap to siblings + 5px grid + alignment guides; `Shift` constrains
   to dominant axis
 - Descriptor-driven BPMN XML parse/write with independent upstream validation

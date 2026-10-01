@@ -58,13 +58,13 @@ test('End, stale append controls, cancelled append and invalid cross-pool drop n
  }finally{h.close();}
 });
 
-test('Back control survives failed import, switches independent histories, and cleans up on root import/destroy',async()=>{
+test('Back control survives failed import, follows global history roots, and cleans up on root import/destroy',async()=>{
  const h=await editor('test/fixtures/scenarios/order-payment-delivery.bpmn'),{m}=h;
  try{
   const back=h.button('navigate-back');assert.ok(back.hidden);m.updateLabel(m.getElement('ValidateOrder'),'Outer edit');await m.drillInto(m.getElement('Payment'));assert.equal(back.hidden,false);assert.equal(back.disabled,false);
   m.updateLabel(m.getElement('CapturePayment'),'Child edit');const child=await m.getXML(),history=m.commandStack.size();await assert.rejects(m.importXML('<invalid>'));assert.equal(back.hidden,false);assert.equal(back.disabled,false);assert.equal(await m.getXML(),child);assert.equal(m.commandStack.size(),history);
-  const first=h.call(back,'click'),second=h.call(back,'click');await Promise.all([first,second]);assert.ok(back.hidden);assert.ok(m.getElement('Payment'));m.undo();assert.notEqual(m.getElement('ValidateOrder').businessObject.name,'Outer edit');
-  await m.drillInto(m.getElement('Payment'));assert.equal(m.getElement('CapturePayment').businessObject.name,'Child edit');m.undo();assert.notEqual(m.getElement('CapturePayment').businessObject.name,'Child edit');m.redo();
+  const first=h.call(back,'click'),second=h.call(back,'click');await Promise.all([first,second]);assert.ok(back.hidden);assert.ok(m.getElement('Payment'));assert.equal(m.undo(),true);assert.equal(back.hidden,false);assert.notEqual(m.getElement('CapturePayment').businessObject.name,'Child edit');
+  assert.equal(m.undo(),true);assert.ok(back.hidden);assert.notEqual(m.getElement('ValidateOrder').businessObject.name,'Outer edit');m.redo();m.redo();assert.equal(back.hidden,false);assert.equal(m.getElement('CapturePayment').businessObject.name,'Child edit');assert.equal(await m.getXML(),child);
   await m.importXML(await readFile('test/fixtures/bpmn/basic.bpmn','utf8'));assert.ok(back.hidden);assert.ok(back.disabled);await valid(m);
  }finally{h.close();assert.equal(document.querySelector('[data-action="navigate-back"]'),null);}
 });

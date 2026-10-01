@@ -29,3 +29,31 @@ test('diagram reconciliation preserves command graph identities and refreshes re
   assert.deepEqual(taskAttachers, []);
   assert.equal(edge.source, task);
 });
+
+test('unchanged routes preserve original docking hints; edited topology, geometry and DI reject stale hints', () => {
+  const sourceBO = { id: 'S' }, targetBO = { id: 'T' }, edgeBO = { id: 'E' }, di = {};
+  const build = (original = false) => {
+    const source = { id: 'S', businessObject: sourceBO, x: 10, y: 20, width: 100, height: 80 };
+    const target = { id: 'T', businessObject: targetBO, x: 250, y: 20, width: 100, height: 80 };
+    const edge = { id: 'E', businessObject: edgeBO, di, source, target, waypoints: [{ x: 110, y: 60 }, { x: 250, y: 60 }] };
+    if (original) edge.waypoints.forEach((p, i) => { p.original = { x: i ? 300 : 60, y: 60, tag: `anchor-${i}` }; });
+    return { nodes: [source, target], edges: [edge], roots: [], elementsById: new Map([['S', source], ['T', target], ['E', edge]]), warnings: [] };
+  };
+  const old = build(true), fresh = build(), expected = old.edges[0].waypoints.map(p => ({ ...p }));
+  reconcileGraph(old, fresh); assert.deepEqual(old.edges[0].waypoints, expected);
+  for (const change of [
+    graph => { graph.edges[0].waypoints[0].x += .001; },
+    graph => { graph.edges[0].waypoints.push({ x: 300, y: 60 }); },
+    graph => { graph.edges[0].businessObject = { id: 'E' }; },
+    graph => { graph.edges[0].di = {}; },
+    graph => { graph.nodes[0].businessObject = { id: 'S' }; },
+    graph => { graph.nodes[1].businessObject = { id: 'T' }; },
+    graph => { graph.nodes[0].x++; },
+    graph => { graph.nodes[1].height++; }
+  ]) {
+    const previous = build(true), next = build(); change(next); reconcileGraph(previous, next);
+    assert.ok(previous.edges[0].waypoints.every(point => !Object.hasOwn(point, 'original')), 'changed route context must discard cached docking');
+  }
+  const withFreshHint = build(); withFreshHint.edges[0].waypoints[0].original = { x: 11, y: 12 };
+  const prior = build(true); reconcileGraph(prior, withFreshHint); assert.deepEqual(prior.edges[0].waypoints[0].original, { x: 11, y: 12 });
+});
