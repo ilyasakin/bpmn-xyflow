@@ -10,6 +10,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import puppeteer from 'puppeteer';
 import { BpmnModdle } from 'bpmn-moddle';
+import { assertLabelReferenceImport } from '../helpers/label-reopen-oracle.mjs';
 
 const require=createRequire(import.meta.url),oracle=new BpmnModdle();
 assert.equal(require('bpmn-js/package.json').version,'18.30.1');
@@ -218,14 +219,14 @@ async function reopen(page,id,expected) {
   // separately authored outputs would conflate gesture rounding with import
   // layout and could falsely report a one-pixel renderer discrepancy.
   const engine=await page.evaluate(()=>window.labelEngine.engine),other=await setup(engine==='local'?'upstream':'local',expected.xml,expected.viewport.zoom);
-  let reference;
+  let reference,referenceTransforms;
   try{
     reference=await state(other.page,id);assert.deepEqual(other.errors,[]);
     assert.deepEqual(reference.label,actual.label,'both engines preserve the identical saved label DI');
     assert.deepEqual(bounds(reference.visual),bounds(actual.visual),'both engines reopening identical XML have exact display geometry');
-    assert.equal(await canonical(reference.definitions),await canonical(actual.definitions),'both engines reopen identical semantics and DI');
+    referenceTransforms=await assertLabelReferenceImport(engine==='local'?actual.xml:reference.xml,engine==='upstream'?actual.xml:reference.xml);
   }finally{await other.page.close();await page.bringToFront();}
-  return{savedDI:actual.label,committedDisplay:bounds(expected.visual),reopenedDisplay:bounds(actual.visual),referenceEngine:engine==='local'?'upstream':'local',referenceDisplay:bounds(reference.visual),linesBefore:expected.visual.lines,linesAfter:actual.visual.lines};
+  return{savedDI:actual.label,committedDisplay:bounds(expected.visual),reopenedDisplay:bounds(actual.visual),referenceEngine:engine==='local'?'upstream':'local',referenceDisplay:bounds(reference.visual),referenceTransforms,linesBefore:expected.visual.lines,linesAfter:actual.visual.lines};
 }
 async function renameUnlabelled(page,id,text) {
   const p=await page.evaluate(id=>{const e=window.labelEngine,n=e.node(id),v=e.viewport(),r=e.container.getBoundingClientRect();return{x:r.left+v.x+(n.x+n.width/2)*v.zoom,y:r.top+v.y+(n.y+n.height/2)*v.zoom};},id);await hit(page,p,id);

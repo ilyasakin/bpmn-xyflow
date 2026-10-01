@@ -86,6 +86,54 @@ async function sample(page,center,offset,id) {
   const selection=await page.evaluate(()=>window.hitEngine.selection());
   return{offset,point:p,target,selection,expectedShape:id};
 }
+async function diagnoseBookingEndpoint(page) {
+  // Diagnostic evidence only. Keep the original strict paired probes above;
+  // these do not turn a known mismatch into a passing parity classification.
+  const before=await state(page);
+  const history=()=>page.evaluate(()=>window.upstream?{index:window.upstream.get('commandStack')._stackIdx,undo:window.upstream.get('commandStack').canUndo(),redo:window.upstream.get('commandStack').canRedo()}:{size:window.modeler.commandStack.size(),undo:window.modeler.canUndo(),redo:window.modeler.canRedo()});
+  const originalHistory=await history(),observations=[];
+  for(const entry of ['inherited','reset','route-hover','fresh'])for(const dx of [-.1,0,.1])for(const offset of [-6,0,6]) {
+    if(entry==='fresh') {
+      const warnings=await page.evaluate(async({xml})=>{
+        const v=window.hitEngine.viewport(),m=window.upstream||window.modeler,result=await m.importXML(xml);
+        if(window.upstream){const c=m.get('canvas'),container=window.hitEngine.container;c.viewbox({x:-v.x/v.zoom,y:-v.y/v.zoom,width:container.clientWidth/v.zoom,height:container.clientHeight/v.zoom});}
+        else await m.setViewport(v,{duration:0});
+        return result.warnings.map(w=>w.message);
+      },{xml:before.xml});assert.deepEqual(warnings,[],'fresh diagnostic fixture import');
+    }
+    if(entry!=='inherited')await clearSelection(page);
+    if(entry==='route-hover') {
+      const interior=await screen(page,{x:490,y:260});
+      await page.mouse.move(interior.x,interior.y);await settle(page);
+      assert.equal((await hit(page,interior)).id,'ReservationFlow2','diagnostic hover is activated on the actual route');
+    }
+    const inherited=await page.evaluate(()=>({selection:window.hitEngine.selection(),hovered:[...document.querySelectorAll('#viewer .hover,#viewer .is-hovered')].map(el=>({id:el.closest('[data-element-id]')?.getAttribute('data-element-id')||null,classes:el.getAttribute('class')}))}));
+    const p=await screen(page,{x:480+dx,y:260});p.y+=offset;
+    await page.mouse.move(p.x,p.y);await settle(page);
+    const geometry=await page.evaluate(p=>{
+      const target=document.elementFromPoint(p.x,p.y),viewport=document.querySelector('#viewer .bpmn-xyflow-viewport,#viewer .viewport');
+      const matrix=m=>m&&Object.fromEntries(['a','b','c','d','e','f'].map(k=>[k,m[k]]));
+      const inspect=el=>{
+        const ctm=el.getScreenCTM?.(),local=ctm?new DOMPoint(p.x,p.y).matrixTransform(ctm.inverse()):null,style=getComputedStyle(el);
+        return{tag:el.tagName,id:el.closest('[data-element-id]')?.getAttribute('data-element-id'),class:el.getAttribute('class'),dom:el.outerHTML,
+          screenCTM:matrix(ctm),localPoint:local&&{x:local.x,y:local.y},pointerEvents:style.pointerEvents,display:style.display,visibility:style.visibility,
+          strokeWidth:style.strokeWidth,lineCap:style.strokeLinecap,stroke:style.stroke,opacity:style.opacity,
+          inStroke:local&&el.isPointInStroke?el.isPointInStroke(local):null,inFill:local&&el.isPointInFill?el.isPointInFill(local):null};
+      };
+      const selectors=['[data-element-id="ReservationFlow2"] .djs-hit','[data-element-id="ReservationFlow2"] .bpmn-xyflow-connection-hit',
+        '.djs-bendpoints[data-element-id="ReservationFlow2"] circle','.bpmn-xyflow-bendpoints [data-element-id="ReservationFlow2"]',
+        '[data-element-id="FlightTimeout"] .djs-hit','[data-element-id="FlightTimeout"] .bpmn-xyflow-shape-hit'];
+      return{viewport:window.hitEngine.viewport(),viewportCTM:matrix(viewport?.getScreenCTM()),target:target&&inspect(target),
+        stack:document.elementsFromPoint(p.x,p.y).slice(0,12).map(el=>({id:el.closest('[data-element-id]')?.getAttribute('data-element-id')||null,tag:el.tagName,classes:el.getAttribute('class')})),
+        candidates:[...new Set(selectors.flatMap(selector=>[...document.querySelectorAll(selector)]))].map(inspect)};
+    },p);
+    await page.mouse.click(p.x,p.y);await settle(page);
+    observations.push({entry,inherited,graphDx:dx,screenDy:offset,point:p,geometry,selection:await page.evaluate(()=>window.hitEngine.selection())});
+    assert.equal((await state(page)).xml,before.xml,'endpoint diagnostic input is selection only');
+    assert.deepEqual(await history(),originalHistory,'endpoint diagnostic input adds no command');
+  }
+  return{status:'diagnostic-only',observations};
+}
 async function evidence(page,name,engine,data) {
   await writeFile(`test-artifacts/browser-hit-${name}-${engine}.json`,JSON.stringify(data,null,2));
   await writeFile(`test-artifacts/browser-hit-${name}-${engine}.bpmn`,await page.evaluate(()=>window.hitEngine.xml()));
@@ -117,6 +165,10 @@ async function paired(name,xml,zoom,center,id,{ring,label=false,connections=['Fl
       }
       assert.equal((await state(page)).xml,before.xml,'native selection probes do not mutate semantic XML or DI');assert.deepEqual(errors,[]);
       pair[engine]=probes;await evidence(page,name,engine,{zoom,center,id,probes});
+      if(name==='booking-attached-boundary') {
+        const diagnostics=await diagnoseBookingEndpoint(page);
+        await writeFile(`test-artifacts/browser-hit-${name}-${engine}-diagnostics.json`,JSON.stringify(diagnostics,null,2));
+      }
     }
     // All outcomes must match. The sole intentional policy difference is
     // imported external labels above later-imported routes; pinned upstream
