@@ -53,3 +53,31 @@ wheel camera changes followed by Undo during an active drag. These retain exact
 XML/history, independent exported metadata, and actual import/reopen checks. The
 changed browser cases are prepared and not locally executed. Hosted browser acceptance remains required before claiming
 the manual navigation-history finding resolved in the preview.
+
+## Import and navigation concurrency
+
+Import requests and committed diagram renders have separate generations. Parsing,
+requested-diagram lookup and graph preparation must succeed before an import
+supersedes the current render. A malformed document or missing requested diagram
+therefore leaves an already pending drill/Back operation able to finish normally,
+with its existing XML, history and cached target camera.
+
+Before commit, the latest request wins: an older delayed parse cannot later
+replace the document, even if the newer request fails. After a valid import has
+committed its graph and is waiting for fit, a newer failed preflight does not
+cancel that valid render or its Modeler bookkeeping. A newer valid replacement,
+clear, or destroy still cancels older rendering. Stale awaited navigation cannot
+apply its Back path or viewport to the newer graph.
+
+Undo/Redo remain synchronous booleans. They return false while navigation or the
+current import is pending, and cannot replay old document commands into a newly
+committed graph before its successful import clears history. Failed preflight
+preserves existing commands and permits replay once the pending operation settles.
+The navigation pending event covers import as well as drill/Back transitions.
+
+Thirteen deterministic structural groups exercise queued fit frames, delayed
+concurrent parses, both pending drill/Back directions, malformed/missing-diagram
+failures, valid replacement, same-graph supersession, clear/destroy, and an active
+positive drag cancelled by failed import. These complement the existing native
+core navigation/history and site import gates; they do not constitute new manual
+or native-browser execution evidence.

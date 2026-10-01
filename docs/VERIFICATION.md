@@ -1,74 +1,44 @@
-# Verification checkpoints — 2026-09-30
+# Verification checkpoints — 2026-10-01
 
 This records revision-bound evidence. It is **not a full core-parity completion
 claim**. [PARITY.md](PARITY.md) is the current acceptance ledger;
 [SCENARIOS.md](SCENARIOS.md) describes workflows and sources.
 
-## Current: three hosted assertions remain under diagnosis
+## Current evidence and open gates
 
-- Published library: **`2c9296645f88d039078537612e23d3677089dd8f`**
-- Reviewed source snapshot: **`6bec456f`**
-- Current hosted result: **not green**; core 19, connections 27, contextual
-  actions nine and touch ten pass
-- Remaining failing assertions: smoke double-click bendpoint deletion (three points remain
-  three), advanced outside-host boundary-drop assertion, and advanced same-pool
-  message reconnect
-- Published paired site: **`d0b904a488172be26b142e62a28d08e6ce1a5653`**, pinning
-  `2c929664`; production CI [36788799750](https://github.com/ilyasakin/ilyasakin.github.io/actions/runs/36788799750)
-  and Ready preview passed
+- Latest fully green configured library revision: **`2aef246`**, including all
+  32 hover cases, in [run 36854573667](https://github.com/ilyasakin/bpmn-xyflow/actions/runs/36854573667)
+- Later global-history revision: **`d484f24`**. All prior gates and two new history
+  cases pass in [run 36856440928](https://github.com/ilyasakin/bpmn-xyflow/actions/runs/36856440928);
+  the remaining history case fails because its setup tries to zoom in at maximum zoom
+- Current local checkpoint: **`c424e41c`**, combining the reviewed wheel-setup
+  correction with import/navigation race fix **`381e1346`**. Fresh checks pass
+  489 units, 398 generated-export XSD validations plus ten native fixtures, lint
+  (zero errors, 37 warnings), workflow validation and build. Packed consumers pass
+  with 85 package files, Bundler/NodeNext/runtime checks and React/Vue/Svelte
+  bundles. No hosted native result is available yet
+- Current published site: **`c3501f3`**, with paste/file Import XML. Six of eight
+  new native import cases pass. Reviewed local corrections address a raw fixture
+  baseline missing `xmlns:xsi` and the real bubbling file-cancel path. Site
+  `fc402b5` passes all 12 local tests, lint, types and production build; its
+  native rerun is pending
+- Manual arrow, hover and Group QA passed on site **`ffb1`** / library **`e209`**.
+  That session also exposed the global-history discrepancy now being corrected
 
-The previous published library `59cd24e5feb2d3af9506333db10abdd4bd523b12`
-passed 27 native connection groups, nine contextual-action groups, ten touch
-comparison groups and existing smoke/framework/viewer/business-scenario gates.
-**Six cases failed across the 19 core-control and 17 advanced-interaction groups.**
-The combined checkpoint was therefore not fully green. Site `f94828d` pins that
-library and passed its separate served-production browser CI; its narrower gate
-does not erase the library failures. The new run progresses beyond the original
-six failing assertions; the three later failures above still block a green result.
-Their current diagnosis must not be restated as three confirmed fork defects:
+The import/navigation fix separates parse-request cancellation from committed
+rendering. Independent review reran the original failure, eight additional
+preservation/supersession cases and all 13 race tests. Malformed, DTD and
+missing-diagram failures preserve active navigation, exact XML, graph/DI-array
+identities, selection, camera and opaque metadata. Valid replacement cancels
+stale work, with history and navigation bookkeeping committed only for the
+current document. The final readiness event uses the same definition/history
+check as Undo/Back. Focused and full local checks do not substitute for hosted
+native acceptance.
 
-- Smoke prepared inconsistent graph/DI/render geometry and hit the wrong endpoint
-- Executing pinned upstream replacement/modeling confirms same-pool MessageFlow
-  reconnection converts to a SequenceFlow owned by the target process; a cross-pool
-  gateway target is rejected. The blanket same-pool no-op expectation is incorrect.
-  The revised test checks both cases plus exact undo/redo/reopen, but still needs
-  hosted execution
-- Boundary-center overlap is awaiting an actual upstream native comparison before
-  any change to default layering or interaction behavior
-
-### What changed for the six failures
-
-| Correction | Verification retained |
-| --- | --- |
-| Process-only lanes collect semantic members even when graph children are initially empty | Every member is assigned once, sibling memberships stay unchanged, one history entry and exact repeated undo/redo |
-| Boundary drag skips unrelated sibling/grid snapping | Grabbed drop position and local invalid-drop/cancel probes pass; the later native outside-host-drop assertion still fails |
-| Replacement undo preserves absent original BPMNLabel and graph-DI alias | Independent boundary/event/gateway probes restore original label object, DI absence, alias and geometry through three cycles |
-| A plain or zero-net diagonal-edge gesture removes its provisional bend before completion | Selection alone changes no XML/DI/history; subsequent reconnect creates exactly one undoable command |
-| Reopen checks semantic/DI equivalence rather than redundant waypoint xsi spelling | Both snapshots parse with independent upstream moddle without warnings; complete canonical XML, exact DI and resolved refs must match. Undo/cancel remain raw byte-exact |
-
-These are narrow corrections and assertion clarification, not integration of the
-remaining label-width/IO-conversion capabilities.
-
-### Current local evidence
-
-- **248 tracked-source unit tests passed**, run serially
-- **115 generated BPMN exports passed official XSD validation**, including actual
-  Modeler/UI/connection mutations; XML corpus and security checks also passed
-- Lint, library build and diff checks passed
-- Independent review reran three focused failure regressions and additional
-  original-label identity/DI and sibling-lane membership probes
-- The 261-test whole-working-tree development result includes 13 unintegrated
-  helper tests; it is deliberately **not** the current checkpoint count
-- Packed root/framework consumers passed at the preceding UI source checkpoint:
-  strict Bundler and NodeNext TypeScript, isolated root before optional framework
-  peers, all four Vite bundles and actual tarball runtime. The current published
-  checkpoint also passed hosted source, build and packed-consumer gates
-
-All 19 core-control groups now pass at `2c929664`. The 17-group advanced suite
-still has two failing assertions, and smoke has the bendpoint-deletion assertion
-failure. Resolve their fixture/expectation/baseline diagnoses and perform a fresh
-exact-revision rerun alongside the other suites. Local DOM
-callbacks prove state transitions and exports; they do not prove native hit testing, browser geometry or input delivery.
+A completed result belongs only to its exact source revision and asserted scope.
+There is no full core-parity completion claim. Keep intentional reference
+precision, import ordering and shared-title differences separate from matching
+behavior, and retain strict local Undo/cancel and metadata checks.
 
 ## How to reproduce
 
@@ -83,8 +53,9 @@ official Google Chrome and records its path/version without disabling the sandbo
 - `pnpm run test:unit`: modeling/geometry/rules/viewer tests, concurrency 1
 - `pnpm run test:xml` and `pnpm run test:xml-modeler`: individual oracle gates
 - `pnpm run build` and `pnpm run test:package`: built entrypoints and packed consumers
-- `pnpm test`: native smoke, React/multi, viewer, scenarios, contextual actions,
-  connections, touch, core controls and advanced interactions
+- `pnpm test`: configured native suites, including smoke, frameworks, viewer,
+  scenarios, contextual actions, connections, touch, core/advanced controls,
+  label resize, IO conversion, flow annotations, Group labels and hover controls
 - `pnpm check`: complete local sequence, requiring a supported browser environment
 
 The CI workflow runs every browser suite independently, retaining an overall
@@ -92,14 +63,81 @@ failure if any suite fails, then saves `test-artifacts/` evidence. Inspect indiv
 results and touch `sharedLimitation` records rather than only group totals.
 For authorized deployed-site checks, run
 `SITE_BASE_URL=<verified-preview-url> node test/viewer/site-browser-parity.mjs`.
-The site repository also runs its own `test/bpmn-browser.mjs` against a served
-production Next build.
+The site repository also runs its own `test/bpmn-browser.mjs` and Import XML
+native gate against a served production Next build.
 
 Local Chromium launch is blocked in this workspace. No browser security settings
 were disabled to work around that restriction. Use the supported hosted result
 for native acceptance.
 
 ## Historical evidence (superseded status, retained provenance)
+
+### Historical September 30 native interaction checkpoint
+
+- Then-published library: **`2c9296645f88d039078537612e23d3677089dd8f`**
+- Reviewed source snapshot: **`6bec456f`**
+- Hosted result at that revision: **not green**; core 19, connections 27, contextual
+  actions nine and touch ten pass
+- Remaining failing assertions: smoke double-click bendpoint deletion (three points remain
+  three), advanced outside-host boundary-drop assertion, and advanced same-pool
+  message reconnect
+- Published paired site: **`d0b904a488172be26b142e62a28d08e6ce1a5653`**, pinning
+  `2c929664`; production CI [36788799750](https://github.com/ilyasakin/ilyasakin.github.io/actions/runs/36788799750)
+  and Ready preview passed
+
+The previous published library `59cd24e5feb2d3af9506333db10abdd4bd523b12`
+passed 27 native connection groups, nine contextual-action groups, ten touch
+comparison groups and existing smoke/framework/viewer/business-scenario gates.
+**Six cases failed across the 19 core-control and 17 advanced-interaction groups.**
+The combined checkpoint was therefore not fully green. Site `f94828d` pins that
+library and passed its separate served-production browser CI; its narrower gate
+does not erase the library failures. That run progressed beyond the original
+six failing assertions; the three later failures above still blocked a green
+result at that revision.
+Their diagnosis at the time must not be restated as three confirmed fork defects:
+
+- Smoke prepared inconsistent graph/DI/render geometry and hit the wrong endpoint
+- Executing pinned upstream replacement/modeling confirms same-pool MessageFlow
+  reconnection converts to a SequenceFlow owned by the target process; a cross-pool
+  gateway target is rejected. The blanket same-pool no-op expectation is incorrect.
+  The revised test checks both cases plus exact undo/redo/reopen, but still needed
+  hosted execution at that checkpoint
+- Boundary-center overlap was awaiting an actual upstream native comparison before
+  any change to default layering or interaction behavior
+
+### What changed for the six failures
+
+| Correction | Verification retained |
+| --- | --- |
+| Process-only lanes collect semantic members even when graph children are initially empty | Every member is assigned once, sibling memberships stay unchanged, one history entry and exact repeated undo/redo |
+| Boundary drag skips unrelated sibling/grid snapping | Grabbed drop position and local invalid-drop/cancel probes pass; the later native outside-host-drop assertion still fails |
+| Replacement undo preserves absent original BPMNLabel and graph-DI alias | Independent boundary/event/gateway probes restore original label object, DI absence, alias and geometry through three cycles |
+| A plain or zero-net diagonal-edge gesture removes its provisional bend before completion | Selection alone changes no XML/DI/history; subsequent reconnect creates exactly one undoable command |
+| Reopen checks semantic/DI equivalence rather than redundant waypoint xsi spelling | Both snapshots parse with independent upstream moddle without warnings; complete canonical XML, exact DI and resolved refs must match. Undo/cancel remain raw byte-exact |
+
+Those were narrow corrections and assertion clarification. Label-width and IO
+conversion capabilities were integrated and verified at later checkpoints.
+
+### Local evidence at that checkpoint
+
+- **248 tracked-source unit tests passed**, run serially
+- **115 generated BPMN exports passed official XSD validation**, including actual
+  Modeler/UI/connection mutations; XML corpus and security checks also passed
+- Lint, library build and diff checks passed
+- Independent review reran three focused failure regressions and additional
+  original-label identity/DI and sibling-lane membership probes
+- The 261-test whole-working-tree development result includes 13 unintegrated
+  helper tests; it is deliberately **not** that checkpoint count
+- Packed root/framework consumers passed at the preceding UI source checkpoint:
+  strict Bundler and NodeNext TypeScript, isolated root before optional framework
+  peers, all four Vite bundles and actual tarball runtime. The then-published
+  checkpoint also passed hosted source, build and packed-consumer gates
+
+All 19 core-control groups passed at `2c929664`. The 17-group advanced suite
+then had two failing assertions, and smoke had the bendpoint-deletion assertion
+failure. Later fixture/reference corrections and exact-revision reruns resolved
+these failures. Local DOM callbacks establish state transitions and exports;
+native hit testing, browser geometry and input delivery require browser evidence.
 
 ### Initial local checkpoints
 
@@ -157,9 +195,8 @@ passed 222 local units and 99 XSD exports; the expanded 27 native groups passed.
 Manual preview QA at library **`e925a51` / site `79b4643`** verified chosen source
 port, target drop Y, orthogonal route behavior during shape movement, the exact
 fractional near-axis case and exact Undo. Creation coverage includes preview,
-final DI, export and actual viewer reimport for 12 variants. The current native
-failures remain separate acceptance blockers; old green results are not forward
-certification.
+final DI, export and actual viewer reimport for 12 variants. Later source changes
+require separate acceptance; old green results are not forward certification.
 
 ### Rule-aligned controls and native touch baseline
 
@@ -169,7 +206,8 @@ truthful disabled replacement rows, keyboard fixes and label deletion safeguards
 The independently reviewed source stage passed 244 units and 112 XSD exports
 before the final narrow lost-capture/annotation-deferral updates; packed consumers
 passed again after those updates. Hosted execution then identified the six
-failures summarized in the current section, despite the local passes.
+failures summarized in the historical September 30 checkpoint, despite the local
+passes.
 
 All ten touch differential groups passed at `59cd24e` using actual native input
 against pinned upstream and local engines. Tap selection, background pan/pinch,
@@ -182,30 +220,32 @@ becoming an accidental click, including lost-capture/release ordering.
 
 ## Open acceptance and capability limits
 
-- Resolve the three current native assertion diagnoses and rerun the corrected
-  exact revision; paired site `d0b904a` production CI/Ready preview already passed
-- External-label width resize is not yet integrated
-- IO-bearing cross-family replacement still needs explicit, undoable cleanup or
-  migration; safe refusal/disabled rows do not complete that capability
-- Flow-owned annotation append is deferred until dependent route propagation is
-  correct; node-owned annotation append remains supported
+- Complete the exact local/hosted global-history and import/navigation checkpoint;
+  preserve every suite already green at `2aef246`
+- Finish the site Import XML native rerun and paired-site history/import QA
+- External-label resizing, explicit IO cleanup and flow-owned annotations are
+  implemented and passed their native gates at the green revision; they remain
+  regression requirements, rather than outstanding implementation gaps
+- Consistent foreground external labels and Group frames intentionally differ
+  from reference import ordering; keep those cases separate from equal parity
 - Task resize is an intentional configurable extension, not upstream behavior
 - Touch group totals and the shared non-square event renderer/path limitation do
   not establish broader behavior than their recorded assertions
 
-Keep these limits visible even after the currently configured suites become green.
+Keep these limits visible even after configured suites become green.
 
-### Reviewed follow-up awaiting hosted execution
+### Historical follow-up prepared after `2c929664`
 
-The next source checkpoint corrects native smoke setup through public
-`updateWaypoints`, tests upstream-valid MessageFlow-to-SequenceFlow reconnect
-conversion, and targets a verified unobstructed boundary ring for invalid-drop
-rollback. It also preserves selected endpoint editing priority over an overlapping
-hover create port and applies the shared source eligibility rule to hover ports.
-No Viewer paint-order change is included.
+That follow-up corrected native smoke setup through public
+`updateWaypoints`, tested upstream-valid MessageFlow-to-SequenceFlow reconnect
+conversion, and targeted a verified unobstructed boundary ring for invalid-drop
+rollback. It also preserved selected endpoint editing priority over an overlapping
+hover create port and applied the shared source eligibility rule to hover ports.
+No Viewer paint-order change was included.
 
-Tracked source passes 249 unit tests, 115 generated-export XSD validations,
+That tracked source passed 249 unit tests, 115 generated-export XSD validations,
 lint, build and workflow validation. The new hit-priority suite contains ten
 paired native upstream/local groups plus one local endpoint/create-port group.
 It compares actual center and off-route hits instead of inferring interaction
-priority from source ordering alone. Its hosted results are pending.
+priority from source ordering alone. Those hosted results were pending at that
+milestone; later green revisions above supersede that status.

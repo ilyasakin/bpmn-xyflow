@@ -149,7 +149,33 @@ try{
   });
   await runCase('global-history-viewport-and-active-drag-interruption',order,async page=>{
     const baseline=await prepareHistory(page);await rename(page,'ValidateOrder','Outer before charge');const outerEdit=await readModel(page);await drill(page);await rename(page,'CapturePayment','Child before cancellation');const both=await readModel(page);
-    async function wheelZoom(id){const before=await page.evaluate(()=>window.modeler.getViewport()),p=await shapePoint(page,id);await expectHit(page,p,id);await page.mouse.move(p.x,p.y);await page.keyboard.down('Control');try{await page.mouse.wheel({deltaY:-180});}finally{await page.keyboard.up('Control');}await page.waitForFunction(before=>Math.abs(window.modeler.getViewport().zoom-before.zoom)>1e-6,{},before);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));return page.evaluate(()=>window.modeler.getViewport());}
+    async function wheelZoom(id){
+      const before=await page.evaluate(()=>window.modeler.getViewport()),p=await shapePoint(page,id);
+      // The demo leaves Viewer defaults unchanged. A fitted child may already
+      // be at maxZoom=4; choose a native wheel direction with available range.
+      const minZoom=.01,maxZoom=4;
+      assert.ok(Number.isFinite(before.zoom)&&before.zoom>=minZoom&&before.zoom<=maxZoom,'camera lies inside the demo zoom range');
+      const deltaY=before.zoom>Math.sqrt(minZoom*maxZoom)?180:-180;
+      assert.ok(deltaY>0?before.zoom>minZoom:before.zoom<maxZoom,'requested native wheel direction has room to change scale');
+      const evidence={id,before,point:p,minZoom,maxZoom,deltaY};
+      await page.evaluate(()=>{window.coreHistoryWheel=null;document.addEventListener('wheel',event=>{window.coreHistoryWheel={trusted:event.isTrusted,ctrlKey:event.ctrlKey,deltaY:event.deltaY,deltaMode:event.deltaMode};},{capture:true,once:true});});
+      try{
+        await expectHit(page,p,id);await page.mouse.move(p.x,p.y);await page.keyboard.down('Control');
+        try{await page.mouse.wheel({deltaY});}finally{await page.keyboard.up('Control');}
+        await page.waitForFunction(()=>window.coreHistoryWheel!==null);
+        evidence.input=await page.evaluate(()=>window.coreHistoryWheel);
+        assert.deepEqual(evidence.input,{trusted:true,ctrlKey:true,deltaY,deltaMode:0},'the real wheel event reaches the diagram');
+        await page.waitForFunction(before=>Math.abs(window.modeler.getViewport().zoom-before.zoom)>1e-6,{},before);
+        await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+        evidence.after=await page.evaluate(()=>window.modeler.getViewport());
+        assert.ok(evidence.after.zoom>=minZoom&&evidence.after.zoom<=maxZoom,'native zoom remains inside the available range');
+        assert.ok(deltaY>0?evidence.after.zoom<before.zoom:evidence.after.zoom>before.zoom,'the native wheel changes scale in the requested direction');
+        return evidence.after;
+      }finally{
+        evidence.observed=await page.evaluate(()=>window.modeler.getViewport()).catch(()=>null);
+        await writeFile(`test-artifacts/browser-core-controls-history-${id}-wheel.json`,JSON.stringify(evidence,null,2));
+      }
+    }
     const childCamera=await wheelZoom('CapturePayment');assert.equal((await readModel(page)).xml,both.xml);assert.equal((await history(page)).size,2);
     await returnToParent(page);const outerCamera=await wheelZoom('ValidateOrder');assert.equal((await readModel(page)).xml,both.xml);
     const beforeBounds=await page.evaluate(()=>{const n=window.modeler.getElement('ValidateOrder');return{x:n.x,y:n.y};}),start=await shapePoint(page,'ValidateOrder');await expectHit(page,start,'ValidateOrder');

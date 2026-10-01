@@ -45,27 +45,50 @@ smoke, 27 connection groups, all advanced cases, 27 flow groups and all 16 Group
 cases. Build, packed consumers and CodeQL pass. Its local checkpoint `2f207d2e`
 passed 453 units and 247 XSD exports plus ten native fixtures.
 
-Only the new 32-case hover gate remains open. Its local cases stopped in test
-setup because the background collector assumed a nonexistent Graph.root field;
-the actual API exposes roots. Three reference assertions exposed cumulative zoom
-moving the tested control off canvas, the pinned one-shot post-drag click trap,
-and one exact semantic sibling reorder after Delete/Undo. The test-only follow-up
-executes the serialized collector against both actual editors, retains strict
-visible-hit and delivered-input checks, permits a second native background click
-only when the real trap is observed, and limits the Delete/Undo allowance to the
-proven fixture/order. Production source is unchanged. Native32 rerun remains
-required; see [hover controls](HOVER-CONTROLS.md).
+The hover follow-up is now verified at published library `2aef246`: all configured
+hosted gates pass, including all 32 hover cases, in
+[run 36854573667](https://github.com/ilyasakin/bpmn-xyflow/actions/runs/36854573667).
+The test corrections use the real roots API, explicit ClickTrap evidence, exact
+fixture-specific reference ordering and measured SVG numeric storage. Local
+XML/history and semantic/DI assertions remain strict. See
+[hover controls](HOVER-CONTROLS.md).
+
+Manual arrow, hover and Group QA passed on site `ffb1` with library `e209`.
+That session also exposed a document-history discrepancy across subprocess
+navigation. The resulting global-history change is a later capability correction,
+not evidence covered by the preceding green revision. Published `d484f24` passes
+all prior gates and two of the three new history cases in
+[run 36856440928](https://github.com/ilyasakin/bpmn-xyflow/actions/runs/36856440928).
+The remaining case tries to zoom in from the maximum zoom during setup; its
+reviewed correction chooses a wheel direction with available zoom range.
+
+Current local checkpoint `c424e41c` combines that test-only wheel correction with
+independently reviewed import/navigation race fix `381e1346`. Failed XML or
+missing-diagram preflight must preserve an already committed drill/Back operation,
+its camera, graph/DI identities, metadata and global history. New valid imports
+supersede stale navigation and reset history only for the committed document.
+The exact checkpoint passes 489 units, 398 generated-export XSD validations plus
+ten native fixtures, lint (zero errors, 37 warnings), workflow validation and
+build. Packed consumers pass with 85 package files, Bundler/NodeNext/runtime
+checks and React/Vue/Svelte bundles. It has no hosted native result yet. See [document history](GLOBAL-HISTORY.md).
 
 The previously reported quadratic Text.js expression is replaced by equivalent
 linear trailing-whitespace handling. Published security revision `2eb1f7c` and
-combined `fae65847` pass hosted CodeQL with no new alerts. The upstream source,
+combined `fae65847` passed hosted CodeQL with no new alerts. The upstream source,
 local one-operation patch and retained license are recorded separately.
 
-Published site `65bf8846d1e8f32c3ec09e22706ea939bcac870d` pins `7bc8a3a` and passed
-its served-production gate. Manual preview QA previously verified the reported
-source-port, target-drop-Y, orthogonal-move and fractional-segment regressions at
-`e925a51` / `79b4643`. The original 27 native connection groups remain required
-on every new revision. No full-core completion claim follows from those cases.
+Current published site `c3501f3` includes the paste/file Import XML UI. Six of its
+eight new native import cases pass. The remaining cases exposed a raw fixture
+baseline missing an `xmlns:xsi` declaration and the real bubbling file-cancel
+path. Both corrections are independently reviewed in site `fc402b5`; all 12 local
+tests, lint, types and the production build pass. The native rerun is pending. Import failure/cancel must retain the prior diagram, selection, camera
+and history; successful replacement and dirty-document confirmation remain
+explicit acceptance requirements. The earlier site `65bf8846`/library `7bc8a3a`
+served-production pass is historical evidence only.
+
+The original 27 native connection groups remain required on every new revision.
+A green configured run does not establish full core equivalence; the ongoing
+history/import changes and their paired site acceptance keep this task open.
 
 ## References and scope
 
@@ -88,36 +111,40 @@ evidence.
 
 | Core area | Current evidence and remaining gate |
 | --- | --- |
-| XML/DI/extensions/security | Exact `fae65847` passes source/schema checks and CodeQL with no new alerts; the scoped follow-up requires fresh verification |
-| Renderer/viewport/hit selection | Baseline `4515` passes all 27 hit comparisons; Group frames and later interaction changes require their own native acceptance |
-| Creation/replacement | Baseline `4515` passes both native IO cleanup cases; preserve API, semantic and packed-consumer checks on later source |
-| Move/resize/containment | Existing core/advanced and original connection gates pass at baseline; retain them on new source |
-| Connection gestures | Original 27 native groups and manual source/drop/route evidence are regression requirements, not a full interaction guarantee |
-| Undo/redo/delete/copy | Existing flow native history/deletion/copy checks pass at `20fb`; Group corrections retain strict local XML/history, with their new combined native gate pending |
-| External labels | Baseline `4515` passes all 23 native width/grid/modifier/reopen cases; Group text-fit and owner-label changes require fresh execution |
-| Pools/lanes/subprocesses | Existing core/advanced gates pass at baseline and remain required |
-| Keyboard/search/align/space | Existing native/core gates remain required; no new capability claim |
-| Touch | Ten baseline differential groups pass within measured reference behavior; retain exact streams |
-| Export/frameworks/package | Reopen, SVG, framework lifecycle and packed Bundler/NodeNext/runtime gates remain required on new source |
-| Attribution | Retained upstream license and visible bpmn.io attribution must remain unchanged and tested |
-| Site | Current site pins the older baseline; update only after reviewed library publication and rerun served-production/native preview checks |
-| Flow annotations | Hosted `e209c17` passes all 27 groups, including separately asserted reference input-policy differences |
-| Group lifecycle | Hosted `fae65847` passes all 16 cases: eight matching and eight precisely asserted reference differences; retain this gate after later edits |
-| Hover-only connection controls | Hosted `e209c17` leaves only test-setup/reference failures in native32; reviewed test-only fixes retain all gesture, geometry and history requirements |
+| XML/DI/extensions/security | Hosted `2aef246` is green; the import/navigation race correction at local `c424e41c` passes all local gates; its hosted run remains pending |
+| Renderer/viewport/hit selection | Established native hit, Group frame and hover cases pass at `2aef246`; retain strict geometry and input evidence after later changes |
+| Creation/replacement | Native IO cleanup and existing creation/replacement gates pass at `2aef246`; preserve semantic, metadata and packed-consumer checks |
+| Move/resize/containment | Established core/advanced and original connection gates pass at `2aef246` and remain required |
+| Connection gestures | All original 27 native groups pass at `2aef246`; manual source/drop/route evidence remains a regression requirement |
+| Undo/redo/delete/copy | Established local history/copy/deletion gates pass; cross-root chronological history at `d484f24` has two new native cases passing and one setup failure corrected locally |
+| External labels | All 23 native width/grid/modifier/reopen cases and Group label gates pass at `2aef246` |
+| Pools/lanes/subprocesses | Established core/advanced gates pass; global history and pending drill/Back/import timing require acceptance at the current checkpoint |
+| Keyboard/search/align/space | Established native/core gates pass at `2aef246`; retain them on new source |
+| Touch | Ten differential groups pass within the measured reference behavior; this does not establish general touch modeling support |
+| Export/frameworks/package | Established reopen, SVG, framework and packed-consumer gates pass at `2aef246`; the current local checkpoint also passes build/package; its hosted result remains pending |
+| Attribution | Retained upstream license and visible bpmn.io attribution remain required and tested |
+| Site | Published `c3501f3` includes Import XML; six of eight new native cases pass, with two reviewed local corrections at `fc402b5` passing local tests/build and awaiting native rerun |
+| Flow annotations | All 27 native groups pass at `2aef246`, including separately asserted reference input-policy differences |
+| Group lifecycle | All 16 native cases pass: eight matching and eight precisely asserted reference differences; retain strict local metadata/history |
+| Hover-only connection controls | All 32 native cases pass at `2aef246`; manual hover QA also passed on the earlier `ffb1`/`e209` pair |
+
+Consistent foreground external labels and Group frames include approved
+import-order differences from the pinned reference. Group frames follow the
+reference's normal creation level rather than its import-order quirk. These
+intentional differences, and measured precision/shared-title differences, remain
+separate from equal-behavior assertions.
 
 ## Remaining acceptance gates
 
-1. Verify the exact test-only hover follow-up with actual-editor reference tests
-   and XSD exports; retain the unchanged, already verified source/build/security tree
-2. Publish only the exact approved tree to the existing draft PR and run every
-   native suite, retaining the green hit/label/IO baseline assertions
-3. Diagnose failures without weakening meaningful gesture or semantic assertions;
-   update the paired site only with a verified library revision
-4. Complete the corrected flow native27 and retain passing Group native16; keep explicit
-   reference precision, rendering and shared-title differences separate from
-   matching behavior
-5. Execute the prepared hover native32 gate, preserving selection, cancellation
-   and exact model history without widening static hits
+1. Obtain hosted evidence for the locally verified `c424e41c` checkpoint covering
+   global chronological history, the wheel setup correction and import/navigation
+   races while retaining every established native suite
+2. Finish the site Import XML native rerun for the two corrected cases,
+   preserving dirty-document confirmation, failure/cancel rollback and inert XML
+3. Verify the paired site against the reviewed library revision, including global
+   history across drill/Back and successful/failed document replacement
+4. Diagnose any new failure from concrete native input, model and DI evidence;
+   keep precise reference differences explicit and avoid broad normalization
 
 Touch shape dragging/resizing did not activate in either pinned engine in the
 recorded baseline. The differential pass establishes the measured behavior only;
