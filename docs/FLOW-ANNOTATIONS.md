@@ -57,7 +57,7 @@ suite, 11 focused tests passed on the new helper.
 
 ## Prepared native coverage
 
-`test/modeling/browser-flow-annotations.mjs` has 25 independently aggregated groups:
+`test/modeling/browser-flow-annotations.mjs` has 27 independently aggregated groups:
 
 - Four native upstream/local click and press-drag append pairs for sequence and message flows
 - Two asymmetric route midpoint/placement cases
@@ -66,7 +66,8 @@ suite, 11 focused tests passed on the new helper.
 - Source- and target-owned dependency propagation during segment editing
 - Owner bendpoint editing and target reconnect
 - Dependent source and target redocking to the same and another flow, with Escape and invalid-drop rollback
-- Six paired source/target controls for default integral grid, fractional projection and native Ctrl grid bypass
+- Six paired source/target controls for default integral grid, fractional projection and Ctrl pressed after native endpoint-drag activation
+- Two upstream source/target Ctrl+mousedown controls that pan the canvas with exact model/history no-op
 - Owner deletion, dependent cleanup and exact history
 - Sequence/message source-shape movement and sequence source-shape resize
 
@@ -93,8 +94,11 @@ BendpointSnapping priority 1500. An axis whose projection changes is marked
 snapped, suppressing its default 10-unit GridSnapping at priority 1200. An
 unchanged integral on-line projection sets neither flag, so the grid still acts:
 the measured `(366, 187)` pointer becomes `(370, 190)`. Native Ctrl controls in
-both endpoint directions bypass this grid and require `(366, 187)` in both
-engines. The fractional cases separately assert input rounding, changed snap
+both endpoint directions first activate an ordinary endpoint drag, then press
+Ctrl to bypass this grid and require `(366, 187)` in both engines. Holding Ctrl
+before mousedown instead invokes the pinned HandTool at priority 1500, before
+Bendpoints at priority 1000. Separate reference controls assert the resulting
+canvas pan and exact XML/history no-op; this path does not start a reconnect. The fractional cases separately assert input rounding, changed snap
 flags, grid suppression and final integer rounding in the reference; local
 preserves its delivered-pointer projection. Each measured difference is reported
 separately, with exact command/DI, complete-model, history and reopen assertions.

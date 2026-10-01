@@ -32,6 +32,7 @@ with tempfile.TemporaryDirectory(prefix="bpmn-xml-schema-") as directory:
     subprocess.run(["node", "--test", "test/modeling/io-conversion.test.mjs"], cwd=ROOT, env=env, check=True)
     subprocess.run(["node", "--test", "test/modeling/flow-dependencies.test.mjs"], cwd=ROOT, env=env, check=True)
     subprocess.run(["node", "--test", "test/modeling/group-lifecycle.test.mjs"], cwd=ROOT, env=env, check=True)
+    subprocess.run(["node", "--test", "test/modeling/group-native-setup.test.mjs"], cwd=ROOT, env=env, check=True)
     subprocess.run(["node", "--test", "test/modeling/connection-hit-targets.test.mjs"], cwd=ROOT, env=env, check=True)
     subprocess.run(["node", "--test", "test/modeling/data-reconnect-reference.test.mjs"], cwd=ROOT, env=env, check=True)
     subprocess.run(["node", "--test", "test/modeling/flow-append-geometry.test.mjs"], cwd=ROOT, env=env, check=True)
@@ -46,7 +47,7 @@ with tempfile.TemporaryDirectory(prefix="bpmn-xml-schema-") as directory:
             raise RuntimeError(f"Unexpected DOCTYPE in {artifact.name}")
         schema.assertValid(document)
         print(f"OK official BPMN20.xsd: {artifact.name}", flush=True)
-    for fixture in sorted([*(ROOT / "test/fixtures/flow-native").glob("*.bpmn"), *(ROOT / "test/fixtures/group-native").glob("*.bpmn")]):
+    for fixture in sorted([*(ROOT / "test/fixtures/flow-native").glob("*.bpmn"), *(ROOT / "test/fixtures/group-native").glob("*.bpmn"), *(ROOT / "test/fixtures/hover-native").glob("*.bpmn")]):
         document = etree.parse(str(fixture), parser)
         if document.docinfo.doctype:
             raise RuntimeError(f"Unexpected DOCTYPE in {fixture.name}")

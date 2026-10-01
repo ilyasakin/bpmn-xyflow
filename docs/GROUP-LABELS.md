@@ -3,7 +3,10 @@
 This is a fresh local Group follow-up after the reconstructed flow checkpoint.
 The new structural/reference tests and native preparation apply to the current
 bytes. The historical lost local tree is not their source of certification.
-Native Group16 remains unexecuted until its exact checkpoint runs in hosted CI.
+Hosted Group16 at `f1b912d` passed 12 cases and exposed four failures. The next
+test-only correction fixes reference palette activation, post-cancel selection
+and initial paint-fixture setup, and explicitly checks the measured shared-title
+deletion difference below. Its hosted rerun is pending.
 
 ## Standard semantic binding
 
@@ -64,6 +67,11 @@ preservation requirements:
 - Upstream changes a shared CategoryValue immediately but leaves peer labels
   visually stale until reopen. Local peers redraw immediately; both render the
   shared value after reopen
+- Deleting only GroupA in the pinned reference also deletes its external label,
+  whose LabelBehavior handler clears `ReviewValue.value` even though GroupB
+  still references it. Local keeps the surviving shared title. The upstream-only
+  oracle permits exactly GroupA/its DI removal and this one value clearing;
+  every other semantic field, reference, metadata item and DI entry stays exact
 - Undoing the first title on a newly created Group can remove upstream's prior
   category binding while retaining the newly authored label DI. Local history
   restores the exact pre-edit model
@@ -98,6 +106,15 @@ read-only geometry/model inspection supplies assertions. The located GroupA
 label Bounds inner XML is compared at its original shape/label location. Fixture
 inputs under `test/fixtures/group-native/` retain the surviving authored shared,
 single and overlap variants; all three validate against official BPMN20 XSD.
+The overlap paint setup supplies its missing Source/Target inverse flow refs
+and xsi declaration before taking the lifecycle baseline. Original fixture bytes
+stay unchanged, and subsequent local export/reopen and Undo/Redo remain exact.
+Reference palette creation uses its supported click-to-arm/move/place controls
+with positive activation evidence. Resize checks existing selection after Escape
+before clicking again. Shared deletion records owner-only selection, inactive
+label editing and a read-only command/value trace. Observers explicitly return
+void; a negative regression detects a returned value suppressing reference
+handlers.
 Owned server identity, bounded timeouts, independent aggregation and screenshots/
 XML/results follow the other native gates. Syntax or DOM checks do not certify
 native execution.

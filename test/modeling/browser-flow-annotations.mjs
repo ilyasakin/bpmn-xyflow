@@ -46,12 +46,15 @@ async function setup(xml,engine='local',{viewport={x:160,y:120,zoom:.9}}={}){
    if(engine==='upstream'){
     m.get('eventBus').on('bendpoint.move.move',20000,event=>{window.flowTest.referenceBendRawMove={id:event.context.connection.id,x:event.x,y:event.y,ctrlKey:event.originalEvent.ctrlKey,client:{x:event.originalEvent.clientX,y:event.originalEvent.clientY}};});
     m.get('eventBus').on('commandStack.connection.reconnect.preExecute',20000,event=>{window.flowTest.referenceReconnect={id:event.context.connection.id,docking:{...event.context.dockingOrPoints},side:event.context.hints?.docking};});
-    m.get('eventBus').on('bendpoint.move.move',500,event=>window.flowTest.referenceBendMoves.push({id:event.context.connection.id,x:event.x,y:event.y,allowed:event.context.allowed,hover:event.context.hover?.id}));
+    m.get('eventBus').on('bendpoint.move.move',500,event=>{window.flowTest.referenceBendMoves.push({id:event.context.connection.id,x:event.x,y:event.y,allowed:event.context.allowed,hover:event.context.hover?.id});});
     m.get('eventBus').on('bendpoint.move.end',1400,event=>{window.flowTest.referenceBeforeGrid={id:event.context.connection.id,x:event.x,y:event.y,snapped:{x:!!event.snapped?.x,y:!!event.snapped?.y},gridActive:m.get('gridSnapping').isActive(),gridSpacing:m.get('gridSnapping').getGridSpacing()};});
     m.get('eventBus').on('bendpoint.move.end',1150,event=>{window.flowTest.referenceBendEnd={id:event.context.connection.id,x:event.x,y:event.y,allowed:event.context.allowed,hover:event.context.hover?.id};});
    }
    // Observe the exact native MouseEvent used by both engines. Chromium may
    // quantize requested fractional CDP coordinates before dispatching it.
+   window.addEventListener('mousedown',event=>{
+    window.flowTest.lastMouseDown={trusted:event.isTrusted,button:event.button,ctrlKey:event.ctrlKey,altKey:event.altKey,metaKey:event.metaKey,client:{x:event.clientX,y:event.clientY}};
+   },true);
    window.addEventListener('mouseup',event=>{
     const t=window.flowTest,viewportNode=t.engine==='local'?t.m.viewer._internals.viewport:t.m.get('canvas')._viewport;
     const matrix=viewportNode.getScreenCTM(),p=new DOMPoint(event.clientX,event.clientY).matrixTransform(matrix.inverse());
@@ -63,7 +66,7 @@ async function setup(xml,engine='local',{viewport={x:160,y:120,zoom:.9}}={}){
  }catch(e){await page.close().catch(()=>{});throw e;}
 }
 async function state(page){
- const raw=await page.evaluate(async()=>{const t=window.flowTest;return{xml:await t.xml(),history:t.history(),viewport:t.viewport(),selection:t.selection(),nativeInput:{drop:t.lastMouseDrop||null,projection:t.lastProjection||null,referenceBeforeGrid:t.referenceBeforeGrid||null,referenceBendEnd:t.referenceBendEnd||null,referenceBendRawMove:t.referenceBendRawMove||null,referenceReconnect:t.referenceReconnect||null}};});
+ const raw=await page.evaluate(async()=>{const t=window.flowTest;return{xml:await t.xml(),history:t.history(),viewport:t.viewport(),selection:t.selection(),nativeInput:{down:t.lastMouseDown||null,drop:t.lastMouseDrop||null,projection:t.lastProjection||null,referenceBeforeGrid:t.referenceBeforeGrid||null,referenceBendEnd:t.referenceBendEnd||null,referenceBendRawMove:t.referenceBendRawMove||null,referenceReconnect:t.referenceReconnect||null}};});
  const parsed=await oracle.fromXML(raw.xml);assert.deepEqual(parsed.warnings,[],'independent exported XML parse');
  const di=parsed.rootElement.diagrams.flatMap(d=>d.plane.planeElement||[]);
  return{...raw,parsed,canonical:(await oracle.toXML(parsed.rootElement,{format:true})).xml,
@@ -83,11 +86,20 @@ async function selectEdge(page,id,position){
 }
 async function selectShape(page,id){const b=(await state(page)).shapes[id],p=await screen(page,{x:b.x+b.width/2,y:b.y+b.height/2});await hit(page,p,id);await page.mouse.click(p.x,p.y);await settle(page);assert.deepEqual(await page.evaluate(()=>window.flowTest.selection()),[id]);}
 async function control(page,selector){const h=await page.waitForSelector(selector),b=await h.boundingBox();assert.ok(b);const p={x:b.x+b.width/2,y:b.y+b.height/2};await hit(page,p,null,selector);return p;}
-async function gesture(page,from,to,{cancel=false,preview,modifier}={}){
- await page.evaluate(()=>{window.flowTest.lastMouseDrop=null;window.flowTest.lastProjection=null;window.flowTest.referenceBendMoves=[];window.flowTest.referenceBeforeGrid=null;window.flowTest.referenceBendEnd=null;window.flowTest.referenceBendRawMove=null;window.flowTest.referenceReconnect=null;});
- if(modifier)await page.keyboard.down(modifier);
- try{await page.mouse.move(from.x,from.y);await page.mouse.down();await page.mouse.move(to.x,to.y,{steps:12});await settle(page);if(preview)await preview();if(cancel)await page.keyboard.press('Escape');await page.mouse.up();await settle(page);}
- finally{await page.mouse.up().catch(()=>{});if(modifier)await page.keyboard.up(modifier).catch(()=>{});}
+async function gesture(page,from,to,{cancel=false,preview,modifier,modifierAfterActivation=false,beforeModifier}={}){
+ await page.evaluate(()=>{window.flowTest.lastMouseDown=null;window.flowTest.lastMouseDrop=null;window.flowTest.lastProjection=null;window.flowTest.referenceBendMoves=[];window.flowTest.referenceBeforeGrid=null;window.flowTest.referenceBendEnd=null;window.flowTest.referenceBendRawMove=null;window.flowTest.referenceReconnect=null;});
+ if(modifier&&!modifierAfterActivation)await page.keyboard.down(modifier);
+ try{
+  await page.mouse.move(from.x,from.y);await page.mouse.down();
+  if(modifier&&modifierAfterActivation){
+   // Upstream reserves Ctrl+mousedown for HandTool. Begin the real endpoint
+   // drag first, cross its 5 CSS-pixel threshold, then toggle grid bypass.
+   const distance=Math.hypot(to.x-from.x,to.y-from.y);assert.ok(distance>24);
+   await page.mouse.move(from.x+(to.x-from.x)*12/distance,from.y+(to.y-from.y)*12/distance,{steps:3});await settle(page);
+   if(beforeModifier)await beforeModifier();await page.keyboard.down(modifier);
+  }
+  await page.mouse.move(to.x,to.y,{steps:12});await settle(page);if(preview)await preview();if(cancel)await page.keyboard.press('Escape');await page.mouse.up();await settle(page);
+ }finally{await page.mouse.up().catch(()=>{});if(modifier)await page.keyboard.up(modifier).catch(()=>{});}
 }
 async function history(page,before,after,repeats=2){
  if(await page.evaluate(()=>window.flowTest.engine)==='local')assert.equal(after.history.size,before.history.size+1,'one complete UI action is one command');
@@ -289,6 +301,18 @@ try{
   const page=await create(await fixture(name));const initial=await state(page);for(let i=0;i<3;i++)await append(page,owner,'drag',{cancel:true});assert.equal((await state(page)).xml,initial.xml);const result=await append(page,owner,'click');return{edge:result.edge};
  });
  await run('repeated-auto-append-minimal-safe-pan',async create=>repeatedVisible(await create(await fixture('approval-source'), 'local',{viewport:{x:500,y:470,zoom:1}})));
+ for(const target of [false,true])await run(`reference-${target?'target':'source'}-ctrl-mousedown-pans-without-edit`,async create=>{
+  const page=await create(await fixture(target?'approval-target':'approval-source'),'upstream',{viewport:{x:160,y:120,zoom:1}}),before=await selectEdge(page,'PolicyAssociation',{x:850,y:550});
+  const index=target?before.edges.PolicyAssociation.points.length-1:0,from=await nativeEndpointControl(page,'PolicyAssociation',index),to={x:from.x+48,y:from.y+32};
+  await gesture(page,from,to,{modifier:'Control',preview:async()=>{
+   const active=await page.evaluate(()=>{const t=window.flowTest,d=t.m.get('dragging').context();return{down:t.lastMouseDown,prefix:d?.prefix,active:d?.active,bendMoves:t.referenceBendMoves.length,reconnect:t.referenceReconnect};});
+   assert.equal(active.down?.trusted,true);assert.equal(active.down.ctrlKey,true);assert.equal(active.prefix,'hand.move');assert.equal(active.active,true);assert.equal(active.bendMoves,0);assert.equal(active.reconnect,null);
+  }});
+  const after=await state(page);assert.equal(after.xml,before.xml);assert.equal(after.canonical,before.canonical);assert.deepEqual(after.history,before.history);assert.deepEqual(after.edges,before.edges);assert.deepEqual(after.shapes,before.shapes);assert.deepEqual(after.selection,before.selection);
+  near(after.viewport,{x:before.viewport.x+48,y:before.viewport.y+32},'reference Ctrl-start performs only the exact native canvas pan',.0001);assert.equal(after.viewport.zoom,before.viewport.zoom);
+  assert.equal(after.nativeInput.down.ctrlKey,true);assert.equal(after.nativeInput.drop.ctrlKey,true);assert.equal(after.nativeInput.referenceReconnect,null);await evidence(page,`reference-${target?'target':'source'}-ctrl-init-pan`,serial(after));
+  return{policy:'Pinned HandTool consumes Ctrl+primary mousedown before Bendpoints; grid bypass is tested separately after ordinary drag activation.',viewport:after.viewport};
+ });
  for(const mode of ['integral','fractional','integral-control'])for(const target of [false,true])await run(`native-dependent-${target?'target':'source'}-${mode}-projection-reference`,async create=>{
   const fractional=mode==='fractional',modifier=mode==='integral-control';
   const entries=[];
@@ -299,7 +323,12 @@ try{
    // Local explicit docking keeps the projection of the delivered pointer.
    const page=await create(await fixture(target?'approval-target':'approval-source'),engine,{viewport:{x:160,y:120,zoom:fractional?.9:1}}),before=await selectEdge(page,'PolicyAssociation',{x:850,y:550});
    const index=target?before.edges.PolicyAssociation.points.length-1:0,position=fractional?{x:360,y:175.5}:{x:366,y:187},to=await screen(page,position);await hit(page,to,'ReviewFlow');
-   await gesture(page,await nativeEndpointControl(page,'PolicyAssociation',index),to,{modifier:modifier?'Control':undefined,preview:async()=>{
+   await gesture(page,await nativeEndpointControl(page,'PolicyAssociation',index),to,{modifier:modifier?'Control':undefined,modifierAfterActivation:modifier,beforeModifier:async()=>{
+    const activated=await page.evaluate(()=>{const t=window.flowTest,d=t.engine==='upstream'?t.m.get('dragging').context():null;return{down:t.lastMouseDown,prefix:d?.prefix,active:d?.active,raw:t.referenceBendRawMove};});
+    assert.equal(activated.down?.trusted,true);assert.equal(activated.down.ctrlKey,false,'endpoint activation precedes the modifier');
+    if(engine==='upstream'){assert.equal(activated.prefix,'bendpoint.move');assert.equal(activated.active,true);assert.equal(activated.raw?.ctrlKey,false);}
+    else await routePreview(page,'PolicyAssociation',before.edges.PolicyAssociation.points);
+   },preview:async()=>{
     if(engine==='local')await routePreview(page,'PolicyAssociation',before.edges.PolicyAssociation.points);
     else{const active=await page.evaluate(()=>({move:window.flowTest.referenceBendMoves.at(-1),gfx:!!document.querySelector('.djs-bendpoint.djs-dragging')}));assert.ok(active.gfx);assert.equal(active.move?.id,'PolicyAssociation');assert.equal(active.move.hover,'ReviewFlow');assert.notDeepEqual({x:active.move.x,y:active.move.y},before.edges.PolicyAssociation.points[index]);}
    }});
@@ -347,5 +376,5 @@ try{
  });
  for(const [owner,name]of [['ReviewFlow','review-source'],['OrderMessage','message-source']])await run(`${owner}-source-shape-move-propagates`,async create=>shapeEdit(await create(await fixture(name)),owner));
  await run('ReviewFlow-source-shape-resize-propagates',async create=>shapeEdit(await create(await fixture('review-source')),'ReviewFlow',true));
- const failures=results.filter(r=>r.status==='failed');assert.equal(results.length,23);assert.equal(failures.length,0,failures.map(r=>`${r.name}: ${r.error}`).join('\n'));console.log(`PASS ${results.length} native flow annotation groups (${results.filter(r=>r.status==='intentional-difference').length} documented input-policy differences)`);
+ const failures=results.filter(r=>r.status==='failed');assert.equal(results.length,27);assert.equal(failures.length,0,failures.map(r=>`${r.name}: ${r.error}`).join('\n'));console.log(`PASS ${results.length} native flow annotation groups (${results.filter(r=>r.status==='intentional-difference').length} documented input-policy differences)`);
 }finally{await browser?.close();server?.kill('SIGTERM');}

@@ -34,7 +34,7 @@ jobs:
       - name: Verify every independent browser suite
         run: |
           status=0
-          for suite in test:smoke test:react test:multi test:browser:viewer test:browser:scenarios test:browser:actions test:browser:connections test:browser:touch test:browser:core test:browser:advanced test:browser:hits test:browser:labels test:browser:io test:browser:flow test:browser:groups; do
+          for suite in test:smoke test:react test:multi test:browser:viewer test:browser:scenarios test:browser:actions test:browser:connections test:browser:touch test:browser:core test:browser:advanced test:browser:hits test:browser:labels test:browser:io test:browser:flow test:browser:groups test:browser:hover; do
             echo "::group::$suite"
             if ! node test/run-browser-suite.mjs "$suite"; then
               status=1

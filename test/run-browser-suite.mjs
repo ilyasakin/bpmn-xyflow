@@ -21,7 +21,8 @@ export const BROWSER_SUITES = Object.freeze({
   'test:browser:labels': 'test/modeling/browser-label-resize.mjs',
   'test:browser:io': 'test/modeling/browser-io-replacement.mjs',
   'test:browser:flow': 'test/modeling/browser-flow-annotations.mjs',
-  'test:browser:groups': 'test/modeling/browser-group-labels.mjs'
+  'test:browser:groups': 'test/modeling/browser-group-labels.mjs',
+  'test:browser:hover': 'test/modeling/browser-hover-connections.mjs'
 });
 
 const OWNER_KEY = 'BPMN_BROWSER_SUITE_OWNER';

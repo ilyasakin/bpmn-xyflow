@@ -8,6 +8,8 @@ import path from 'node:path';
 import {createRequire} from 'node:module';
 import puppeteer from 'puppeteer';
 import {BpmnModdle} from 'bpmn-moddle';
+import {prepareGroupPaintFixture} from '../helpers/group-paint-fixture.mjs';
+import {assertUpstreamSharedGroupDelete} from '../helpers/group-delete-oracle.mjs';
 const require=createRequire(import.meta.url),up=createRequire(require.resolve('bpmn-js/package.json')),oracle=new BpmnModdle();assert.equal(require('bpmn-js/package.json').version,'18.30.1');
 const fixtureRoot='test/fixtures/group-native';
 if(process.env.BPMN_GROUP_FIXTURE_DIR){await mkdir(process.env.BPMN_GROUP_FIXTURE_DIR,{recursive:true});for(const name of ['shared','single','overlap'])await copyFile(`${fixtureRoot}/${name}.bpmn`,path.join(process.env.BPMN_GROUP_FIXTURE_DIR,`${name}.bpmn`));console.log('Wrote Group native fixtures');process.exit(0);}
@@ -23,19 +25,26 @@ async function setup(engine,xml){
    const labelUtil=await import(labelUrl),layout=await import(layoutUrl),container=document.querySelector('#viewer');let m,result;
    if(engine==='upstream'){window.modeler.destroy();container.replaceChildren();m=new window.BpmnJS({container});window.groupReference=m;result=await m.importXML(xml);const canvas=m.get('canvas');canvas.viewbox({x:-160/.9,y:-110/.9,width:container.clientWidth/.9,height:container.clientHeight/.9});
     window.groupTest={engine,m,container,node:id=>m.get('elementRegistry').get(id),xml:async()=>(await m.saveXML({format:true})).xml,selection:()=>m.get('selection').get().map(o=>o.id),history:()=>({index:m.get('commandStack')._stackIdx,undo:m.get('commandStack').canUndo(),redo:m.get('commandStack').canRedo()}),viewport:()=>{const v=canvas.viewbox();return{x:-v.x*v.scale,y:-v.y*v.scale,zoom:v.scale};}};
+    window.groupCreateEvidence={starts:0,moves:0};
+    for(const phase of ['start','move'])m.get('eventBus').on('create.'+phase,500,e=>{const evidence=window.groupCreateEvidence;evidence[phase==='start'?'starts':'moves']++;evidence.last={type:e.context.shape.type,x:e.x,y:e.y,allowed:e.context.canExecute,target:e.context.target?.id,trusted:e.originalEvent?.isTrusted};});
     m.get('eventBus').on('resize.move',e=>{window.groupResizeEvidence={id:e.context.shape.id,bounds:{...e.context.newBounds},count:(window.groupResizeEvidence?.count||0)+1};});
    }else{m=window.modeler;result=await m.importXML(xml);await m.setViewport({x:160,y:110,zoom:.9},{duration:0});window.groupTest={engine,m,container,node:id=>m.getElement(id),xml:()=>m.getXML(),selection:()=>m.getSelection(),history:()=>({size:m.commandStack.size(),undo:m.canUndo(),redo:m.canRedo()}),viewport:()=>m.getViewport()};}
-   Object.assign(window.groupTest,{labelUtil,layout});return result.warnings.map(w=>w.message);
+   Object.assign(window.groupTest,{labelUtil,layout,deleteTrace:[]});
+   if(engine==='upstream')for(const phase of ['preExecute','executed'])m.get('eventBus').on('commandStack.'+phase,20000,event=>{
+    const t=window.groupTest;if(!t.traceDelete)return;const c=event.context||{},value=t.node('GroupB')?.businessObject.categoryValueRef;
+    t.deleteTrace.push({phase,command:event.command,shape:c.shape?.id,element:c.element?.id,labelTarget:c.labelTarget?.id,elements:c.elements?.map(e=>e.id),newLabel:c.newLabel,hints:{unsetLabel:c.hints?.unsetLabel,removeShape:c.hints?.removeShape},selection:t.selection(),directEditing:m.get('directEditing').isActive(),sharedValue:{id:value?.id,value:value?.value??null}});
+   });
+   return result.warnings.map(w=>w.message);
   },{engine,xml,labelUrl:'/@fs/'+require.resolve('bpmn-js/lib/features/modeling/behavior/LabelBehavior.js'),layoutUrl:'/@fs/'+up.resolve('diagram-js/lib/layout/LayoutUtil.js')});assert.deepEqual(warnings,[]);return{page,errors,engine};
  }catch(e){await page.close().catch(()=>{});throw e;}
 }
 async function state(page){
  const raw=await page.evaluate(async()=>{const t=window.groupTest;const groups=t.engine==='local'?t.m.getGraph().nodes.filter(n=>n.type==='bpmn:Group'):t.m.get('elementRegistry').filter(n=>n.type==='bpmn:Group'&&!n.labelTarget);
-  return{xml:await t.xml(),engine:t.engine,history:t.history(),viewport:t.viewport(),selection:t.selection(),display:Object.fromEntries(groups.map(g=>[g.id,g.label?{x:g.label.x,y:g.label.y,width:g.label.width,height:g.label.height}:null])),rendered:Object.fromEntries(groups.map(g=>[g.id,[...t.container.querySelectorAll(`[data-element-id="${g.id}_label"] text tspan`)].map(t=>t.textContent).join(' ')]))};});
+  return{xml:await t.xml(),engine:t.engine,history:t.history(),viewport:t.viewport(),selection:t.selection(),deleteTrace:t.deleteTrace,deleteBefore:t.deleteBefore||null,display:Object.fromEntries(groups.map(g=>[g.id,g.label?{x:g.label.x,y:g.label.y,width:g.label.width,height:g.label.height}:null])),rendered:Object.fromEntries(groups.map(g=>[g.id,[...t.container.querySelectorAll(`[data-element-id="${g.id}_label"] text tspan`)].map(t=>t.textContent).join(' ')]))};});
  const parsed=await oracle.fromXML(raw.xml);assert.deepEqual(parsed.warnings,[]);const di=parsed.rootElement.diagrams.flatMap(d=>d.plane.planeElement||[]);
  return{...raw,parsed,canonical:await canonical(await oracle.fromXML(raw.xml),raw.engine==='upstream'),groups:Object.fromEntries(Object.values(parsed.elementsById).filter(o=>o.$type==='bpmn:Group').map(g=>[g.id,{id:g.id,valueId:g.categoryValueRef?.id,categoryId:g.categoryValueRef?.$parent?.id,value:g.categoryValueRef?.value||'',attrs:{...g.$attrs}}])),di:Object.fromEntries(di.map(d=>[d.bpmnElement.id,{id:d.id,bounds:d.bounds?rect(d.bounds):null,label:d.label?.bounds?rect(d.label.bounds):null}]))};
 }
-const serial=s=>({xml:s.xml,history:s.history,groups:s.groups,di:s.di,display:s.display,rendered:s.rendered});
+const serial=s=>({xml:s.xml,history:s.history,selection:s.selection,groups:s.groups,di:s.di,display:s.display,rendered:s.rendered,deleteBefore:s.deleteBefore,deleteTrace:s.deleteTrace});
 async function settle(page){await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));}
 async function screen(page,p){return page.evaluate(p=>{const t=window.groupTest,r=t.container.getBoundingClientRect(),v=t.viewport();return{x:r.left+v.x+p.x*v.zoom,y:r.top+v.y+p.y*v.zoom};},p);}
 async function target(page,p){return page.evaluate(p=>{const el=document.elementFromPoint(p.x,p.y),r=window.groupTest.container.getBoundingClientRect();return{id:el?.closest('[data-element-id]')?.getAttribute('data-element-id')||null,inside:p.x>=r.left&&p.x<Math.min(innerWidth,r.right)&&p.y>=r.top&&p.y<Math.min(innerHeight,r.bottom),dom:el?.outerHTML};},p);}
@@ -78,14 +87,29 @@ async function history(page,before,after,{firstLabel=false,owners=[],repeats=2}=
  }
 }
 async function reopen(page,s){const warnings=await page.evaluate(async({xml,v})=>{const t=window.groupTest,r=await t.m.importXML(xml);if(t.engine==='local')await t.m.setViewport(v,{duration:0});else t.m.get('canvas').viewbox({x:-v.x/v.zoom,y:-v.y/v.zoom,width:t.container.clientWidth/v.zoom,height:t.container.clientHeight/v.zoom});return r.warnings.map(w=>w.message);},{xml:s.xml,v:s.viewport});assert.deepEqual(warnings,[]);const after=await state(page);assert.equal(after.canonical,s.canonical);if(s.engine==='local'&&s.groups.GroupA)assert.equal(boundsInner(after.xml),boundsInner(s.xml));return after;}
-async function evidence(page,name,data){await writeFile(`test-artifacts/browser-group-${name}.json`,JSON.stringify(data,null,2));await writeFile(`test-artifacts/browser-group-${name}.bpmn`,await page.evaluate(()=>window.groupTest.xml()));await page.screenshot({path:`test-artifacts/browser-group-${name}.png`,fullPage:true});}
-async function run(engine,name,xml,fn,{difference=false}={}){let context;console.log(`START native Group ${engine} ${name}`);try{context=await setup(engine,xml);const details=await fn(context.page);assert.deepEqual(context.errors,[]);await evidence(context.page,`${engine}-${name}`,details);results.push({engine,name,status:difference?'intentional-difference':'passed',details});console.log(`PASS native Group ${engine} ${name}`);}catch(e){results.push({engine,name,status:'failed',error:e.stack||String(e)});console.error(`FAIL native Group ${engine} ${name}: ${e.stack||e}`);if(context)await evidence(context.page,`${engine}-${name}-failure`,{error:String(e)}).catch(()=>{});}finally{await writeFile('test-artifacts/browser-group-labels-results.json',JSON.stringify(results,null,2));await context?.page.close().catch(()=>{});}}
+async function evidence(page,name,data){const observations=await page.evaluate(()=>({selection:window.groupTest.selection(),create:window.groupCreateEvidence||null,resize:window.groupResizeEvidence||null}));await writeFile(`test-artifacts/browser-group-${name}.json`,JSON.stringify({data,observations},null,2));await writeFile(`test-artifacts/browser-group-${name}.bpmn`,await page.evaluate(()=>window.groupTest.xml()));await page.screenshot({path:`test-artifacts/browser-group-${name}.png`,fullPage:true});}
+async function run(engine,name,xml,fn,{difference=false}={}){let context;console.log(`START native Group ${engine} ${name}`);try{context=await setup(engine,xml);const details=await fn(context.page);assert.deepEqual(context.errors,[]);await evidence(context.page,`${engine}-${name}`,details);results.push({engine,name,status:difference?'intentional-difference':'passed',details});console.log(`PASS native Group ${engine} ${name}`);}catch(e){results.push({engine,name,status:'failed',error:e.stack||String(e)});console.error(`FAIL native Group ${engine} ${name}: ${e.stack||e}`);if(context)await evidence(context.page,`${engine}-${name}-failure`,{error:String(e),state:serial(await state(context.page))}).catch(()=>{});}finally{await writeFile('test-artifacts/browser-group-labels-results.json',JSON.stringify(results,null,2));await context?.page.close().catch(()=>{});}}
 async function paletteGroup(page,position={x:800,y:500}){
  const before=await state(page),selector=before.engine==='upstream'?'.djs-palette [data-action="create.group"]':'.bpmn-xyflow-palette button';
  const handle=before.engine==='upstream'?await page.waitForSelector(selector):await page.evaluateHandle(()=>[...document.querySelectorAll('.bpmn-xyflow-palette button')].find(e=>e.textContent==='+ Group'));
  const box=await handle.asElement().boundingBox();assert.ok(box);const start={x:box.x+box.width/2,y:box.y+box.height/2},end=await screen(page,position);
- try{await page.mouse.move(start.x,start.y);await page.mouse.down();await page.mouse.move(end.x,end.y,{steps:12});await settle(page);await page.mouse.up();}finally{await page.mouse.up().catch(()=>{});}await settle(page);
- const after=await state(page),ids=Object.keys(after.groups).filter(id=>!before.groups[id]);assert.equal(ids.length,1);const id=ids[0];assert.equal(after.di[id].bounds.width,300);assert.equal(after.di[id].bounds.height,300);assert.ok(after.groups[id].valueId);assert.ok(after.groups[id].categoryId);
+ assert.equal(await handle.asElement().evaluate((element,p)=>element.contains(document.elementFromPoint(p.x,p.y)),start),true,'palette input targets the visible Group entry');
+ assert.ok((await target(page,end)).inside,'chosen Group placement is inside the actual canvas');
+ if(before.engine==='upstream'){
+  // PaletteProvider starts on click or HTML dragstart, not mousedown. Use its
+  // advertised native click-to-arm/place path and prove actual create preview.
+  const counts=await page.evaluate(()=>({...window.groupCreateEvidence}));
+  await page.mouse.click(start.x,start.y);await page.mouse.move(end.x,end.y,{steps:12});await settle(page);
+  const preview=await page.evaluate(()=>{const d=window.groupTest.m.get('dragging').context(),g=document.querySelector('.djs-drag-group');return{evidence:window.groupCreateEvidence,active:d?.active,prefix:d?.prefix,type:d?.data?.context?.shape?.type,visible:!!g&&g.getBoundingClientRect().width>0};});
+  assert.ok(preview.evidence.starts>counts.starts&&preview.evidence.moves>counts.moves,'fresh native Group create events');assert.equal(preview.evidence.last.trusted,true);assert.equal(preview.evidence.last.type,'bpmn:Group');assert.ok(preview.evidence.last.allowed,'reference accepts the selected canvas target');assert.equal(preview.active,true);assert.equal(preview.prefix,'create');assert.equal(preview.type,'bpmn:Group');assert.ok(preview.visible,'actual Group create preview is visible');
+  await page.mouse.click(end.x,end.y);
+ }else{
+  try{await page.mouse.move(start.x,start.y);await page.mouse.down();await page.mouse.move(end.x,end.y,{steps:12});await settle(page);
+   const preview=await page.evaluate(()=>{const g=document.querySelector('.bpmn-xyflow-palette-ghost');return{visible:!!g&&g.getBoundingClientRect().width>0,text:g?.textContent};});assert.ok(preview.visible);assert.equal(preview.text,'Group');
+   await page.mouse.up();}finally{await page.mouse.up().catch(()=>{});}
+ }
+ await settle(page);
+ const after=await state(page),ids=Object.keys(after.groups).filter(id=>!before.groups[id]);assert.equal(ids.length,1);const id=ids[0];assert.deepEqual(after.di[id].bounds,{x:position.x-150,y:position.y-150,width:300,height:300},'native palette placement retains chosen center and reference default geometry');assert.ok(after.groups[id].valueId);assert.ok(after.groups[id].categoryId);
  const pruned=await oracle.fromXML(after.xml);await removeExpected(pruned,[id]);assert.equal(await canonical(pruned,before.engine==='upstream'),before.canonical,'palette creation changes only its new Group/category/DI in these non-enclosing fixtures');
  await history(page,before,after);return{id,before,after};
 }
@@ -100,7 +124,7 @@ async function deleteOnly(before,after,ids){const expected=await oracle.fromXML(
 async function paintLifecycle(page){
  // Separate setup inside the palette lifecycle case: creation must match normal
  // reference layering; imported/reopened order is the approved explicit delta.
- const parsed=await oracle.fromXML(await fixture('overlap'));await removeExpected(parsed,['Frame']);const xml=(await oracle.toXML(parsed.rootElement,{format:true})).xml;
+ const xml=await prepareGroupPaintFixture(await fixture('overlap'));
  await reopen(page,{xml,viewport:{x:160,y:110,zoom:.9},canonical:await canonical(await oracle.fromXML(xml),await page.evaluate(()=>window.groupTest.engine)==='upstream'),groups:{}});
  const {id,after}=await paletteGroup(page,{x:380,y:370}),b=after.di[id].bounds;
  await clickPoint(page,{x:b.x+b.width,y:240},id);assert.deepEqual(await page.evaluate(()=>window.groupTest.selection()),[id],'new Group border is above a crossing flow');
@@ -125,7 +149,14 @@ async function sharedLabels(page){
  assert.equal(after.groups.GroupA.valueId,after.groups.GroupB.valueId);assert.equal(after.groups.GroupB.value,'Renamed shared category');assert.equal(cleanText(after.rendered.GroupA),'Renamedsharedcategory');assert.equal(cleanText(after.rendered.GroupB),cleanText(after.engine==='upstream'?old:'Renamed shared category'),'exact shared-peer rendered outcome');
  await labelChangeOnly(before,after,after.engine==='upstream'?['GroupA']:['GroupA','GroupB']);await history(page,before,after,{owners:['GroupA']});
  const reopened=await reopen(page,after);assert.equal(cleanText(reopened.rendered.GroupA),'Renamedsharedcategory');assert.equal(cleanText(reopened.rendered.GroupB),'Renamedsharedcategory','both engines show shared semantic value after reopen');
- const baseline=await state(page);await border(page,'GroupA');await key(page,'Delete');const deleted=await state(page);assert.equal(deleted.groups.GroupA,undefined);assert.ok(deleted.groups.GroupB);assert.ok(deleted.parsed.elementsById.ReviewCategory);await deleteOnly(baseline,deleted,['GroupA']);await history(page,baseline,deleted,{owners:['GroupA']});await undo(page);const restored=await state(page);if(restored.engine==='local')assert.equal(boundsInner(restored.xml),boundsInner(baseline.xml));return{renamed:serial(after),deleted:serial(deleted)};
+ const baseline=await state(page);await border(page,'GroupA');
+ const selected=await page.evaluate(()=>{const t=window.groupTest,active=t.engine==='upstream'?t.m.get('directEditing').isActive():!!document.querySelector('[contenteditable="true"],[contenteditable="plaintext-only"]');return t.deleteBefore={selection:t.selection(),directEditing:active,text:document.activeElement?.isContentEditable?document.activeElement.textContent:null,value:t.node('GroupB').businessObject.categoryValueRef.value};});
+ assert.deepEqual(selected.selection,['GroupA'],'native Delete targets only GroupA, not its shared label');assert.equal(selected.directEditing,false,'native Delete cannot complete a pending label edit');
+ await page.evaluate(()=>{window.groupTest.traceDelete=true;window.groupTest.deleteTrace=[];});
+ await key(page,'Delete');const deleted=await state(page);assert.equal(deleted.groups.GroupA,undefined);assert.ok(deleted.groups.GroupB);assert.ok(deleted.parsed.elementsById.ReviewCategory);
+ if(deleted.engine==='upstream'){assert.equal(deleted.groups.GroupB.value,'');await assertUpstreamSharedGroupDelete(baseline.xml,deleted.xml);}
+ else{assert.equal(deleted.groups.GroupB.value,baseline.groups.GroupB.value);await deleteOnly(baseline,deleted,['GroupA']);}
+ await history(page,baseline,deleted,{owners:['GroupA']});await undo(page);const restored=await state(page);if(restored.engine==='local')assert.equal(boundsInner(restored.xml),boundsInner(baseline.xml));return{renamed:serial(after),deleted:serial(deleted)};
 }
 async function lastDelete(page){const before=await state(page);await border(page,'GroupA');await key(page,'Delete');const after=await state(page);assert.equal(after.groups.GroupA,undefined);assert.equal(after.parsed.elementsById.ReviewCategory,undefined);assert.equal(after.parsed.elementsById.ReviewValue,undefined);await deleteOnly(before,after,['GroupA']);await history(page,before,after,{owners:['GroupA']});await undo(page);const restored=await state(page);if(restored.engine==='local')assert.equal(boundsInner(restored.xml),boundsInner(before.xml));await reopen(page,restored);return{before:serial(before),deleted:serial(after)};}
 async function copyRename(page){
@@ -141,12 +172,12 @@ async function copyRename(page){
  const baseline=await state(page);await rename(page,id,'Copy only');const after=await state(page);assert.equal(after.groups[id].value,'Copy only');assert.equal(after.groups.GroupA.value,before.groups.GroupA.value);assert.equal(after.groups.GroupB.value,before.groups.GroupB.value);await labelChangeOnly(baseline,after,[id]);await history(page,baseline,after,{owners:[id]});await reopen(page,after);return{copy:id,value:after.groups[id]};
 }
 async function resizeOwner(page){
- await border(page,'GroupA');const before=await state(page),selector=before.engine==='upstream'?'.djs-resizer-nw':'.bpmn-xyflow-resize-handle[data-resize-dir="nw"]';
- async function gesture(cancel){const h=await page.waitForSelector(selector),b=await h.boundingBox(),from={x:b.x+b.width/2,y:b.y+b.height/2},to={x:from.x-36,y:from.y-27},count=await page.evaluate(()=>window.groupResizeEvidence?.count||0);try{await page.mouse.move(from.x,from.y);await page.mouse.down();await page.mouse.move(to.x,to.y,{steps:12});await settle(page);
+ await border(page,'GroupA');const before=await state(page),selector=before.engine==='upstream'?'.djs-resizer-GroupA.djs-resizer-nw':'.bpmn-xyflow-resize-handle[data-resize-dir="nw"]';
+ async function gesture(cancel){assert.deepEqual(await page.evaluate(()=>window.groupTest.selection()),['GroupA'],'the actual Group remains the sole resize target');const h=await page.waitForSelector(selector),b=await h.boundingBox(),from={x:b.x+b.width/2,y:b.y+b.height/2},to={x:from.x-36,y:from.y-27},count=await page.evaluate(()=>window.groupResizeEvidence?.count||0);assert.equal(await page.evaluate(({p,selector})=>!!document.elementFromPoint(p.x,p.y)?.closest(selector),{p:from,selector}),true,'native pointer targets the selected Group NW control');try{await page.mouse.move(from.x,from.y);await page.mouse.down();await page.mouse.move(to.x,to.y,{steps:12});await settle(page);
   if(before.engine==='upstream'){const active=await page.evaluate(()=>window.groupResizeEvidence);assert.ok(active?.count>count&&active.id==='GroupA');assert.ok(['x','y','width','height'].some(k=>active.bounds[k]!==before.di.GroupA.bounds[k]),'reference resize preview really changed selected Group bounds');}
   else assert.notDeepEqual((await state(page)).di.GroupA.bounds,before.di.GroupA.bounds,'local resize preview really activated');
   if(cancel)await page.keyboard.press('Escape');await page.mouse.up();}finally{await page.mouse.up().catch(()=>{});}await settle(page);}
- await gesture(true);assert.equal((await state(page)).xml,before.xml);assert.deepEqual((await state(page)).history,before.history);await border(page,'GroupA');await gesture(false);const after=await state(page);assert.notDeepEqual(after.di.GroupA.bounds,before.di.GroupA.bounds);
+ await gesture(true);assert.equal((await state(page)).xml,before.xml);assert.deepEqual((await state(page)).history,before.history);const selectionAfterCancel=await page.evaluate(()=>window.groupTest.selection());if(selectionAfterCancel.length!==1||selectionAfterCancel[0]!=='GroupA')await border(page,'GroupA');assert.deepEqual(await page.evaluate(()=>window.groupTest.selection()),['GroupA']);await gesture(false);const after=await state(page);assert.notDeepEqual(after.di.GroupA.bounds,before.di.GroupA.bounds);
  const expected=await page.evaluate(({label,oldBounds,newBounds})=>{const t=window.groupTest,ref=t.labelUtil.getReferencePoint(t.layout.getMid(label),t.labelUtil.asEdges(oldBounds)),d=t.labelUtil.getReferencePointDelta(ref,oldBounds,newBounds);return{x:label.x+d.x,y:label.y+d.y,width:label.width,height:label.height};},{label:before.display.GroupA,oldBounds:before.di.GroupA.bounds,newBounds:after.di.GroupA.bounds});
  assert.deepEqual(after.display.GroupA,expected);assert.deepEqual(after.di.GroupA.label,expected);assert.equal(after.groups.GroupA.value,before.groups.GroupA.value);await labelChangeOnly(before,after,['GroupA'],{ownerResize:true});await history(page,before,after,{owners:['GroupA'],repeats:3});await reopen(page,after);return{before:serial(before),after:serial(after),expected};
 }

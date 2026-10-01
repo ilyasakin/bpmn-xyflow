@@ -27,21 +27,33 @@ results establish that baseline only; later source needs its own native run.
 
 The reconstructed flow follow-up implements connection-owned annotations,
 dependent routes, ownership/deletion/clipboard handling and minimal append pan.
-Hosted flow revision `3fe41f8` is red. Reviewed repair commits `f8fa4ab9` and
-`b4a991c9` correct compatible target hit selection, semantic containment order and
-data-association IO allocation, and refine the reference-only native oracles.
-The exact isolated repair passes 365 unit tests, 193 official XSD mutation exports
-plus four native fixtures, lint, build, package78 and workflow validation. The
-repair is published as `063bac7647eca8335364d35c9828f66574b3d7a7`
-(tree `6988dcfc`), and its hosted native CI is running. The 23-case native flow
-rerun remains pending; see [flow annotations](FLOW-ANNOTATIONS.md).
+Earlier hosted revisions `3fe41f8` and `063bac7647eca8335364d35c9828f66574b3d7a7`
+exposed targeting, containment-order, IO allocation and native-reference gaps.
+The later exact `a5f89fbb` checkpoint passes 415 units, 242 official XSD mutation
+exports plus seven native fixtures, build and 85-file packed-consumer checks.
+Hosted revision `20fb` passes all 23 existing flow groups, including eight
+explicit precision/grid differences. Its two new Ctrl-bypass cases fail before
+reference drag activation. The reviewed native-input correction passes ten
+installed-event tests and retains all 25 cases, adding two Ctrl-start pan
+controls. The resulting 27-group native gate has not run. See [flow annotations](FLOW-ANNOTATIONS.md).
 
-The Group checkpoint `96fa1cbf` has reviewed category/lifecycle, frame layering,
-owner-label geometry and pinned text-fit corrections. Its exact source passes
-383 unit tests, 194 official XSD mutation exports plus seven native fixtures,
-and 85-file packed-consumer checks. Its 16 native cases have not run; see
-[Group labels](GROUP-LABELS.md). Integrating the flow repair with Group requires
-fresh verification of the combined source.
+The Group checkpoint `96fa1cbf` introduced reviewed category/lifecycle, frame
+layering, owner-label geometry and pinned text-fit corrections. Hosted Group
+revision `f1b912d` passes 12 of 16 cases. Four failures exposed reference palette
+activation, re-selection after canceled resize, an incomplete paint-fixture
+setup and shared-title clearing during upstream Group deletion. The reviewed
+test-only correction has six fresh reference/setup tests and five XSD-valid
+exports; its native rerun and combined-source aggregate remain pending. Local
+shared-title preservation and exact history stay strict. See
+[Group labels](GROUP-LABELS.md).
+
+Exact hover checkpoint `768762` passes 433 units, 242 official XSD mutation
+exports plus ten native fixtures, build and 85-file packed-consumer checks. Its
+reviewed paired native harness (32 engine cases) has not run. The reviewed
+renderer-security correction `740ee`, published as `2eb1f7c`, passes hosted
+CodeQL with no new alerts. It must be included in the next combined Group/Ctrl
+checkpoint. These results certify their stated revisions only; the combined
+tree requires fresh verification.
 
 Published site `65bf8846d1e8f32c3ec09e22706ea939bcac870d` pins `7bc8a3a` and passed
 its served-production gate. Manual preview QA previously verified the reported
@@ -70,12 +82,12 @@ evidence.
 
 | Core area | Current evidence and remaining gate |
 | --- | --- |
-| XML/DI/extensions/security | Independent moddle oracle, corpus/business fixtures, hostile-input tests and official XSD remain mandatory; rerun against reconstructed edits |
+| XML/DI/extensions/security | Exact `768762` passes 242 XSD mutation exports plus ten fixtures; security revision `2eb1f7c` passes hosted CodeQL with no new alerts; combined-tree verification remains required |
 | Renderer/viewport/hit selection | Baseline `4515` passes all 27 hit comparisons; Group frames and later interaction changes require their own native acceptance |
 | Creation/replacement | Baseline `4515` passes both native IO cleanup cases; preserve API, semantic and packed-consumer checks on later source |
 | Move/resize/containment | Existing core/advanced and original connection gates pass at baseline; retain them on new source |
 | Connection gestures | Original 27 native groups and manual source/drop/route evidence are regression requirements, not a full interaction guarantee |
-| Undo/redo/delete/copy | Baseline exact-history and IO refusal/cleanup cases pass; Group lifecycle and flow-repair history need combined-source verification |
+| Undo/redo/delete/copy | Existing flow native history/deletion/copy checks pass at `20fb`; Group corrections retain strict local XML/history, with their new combined native gate pending |
 | External labels | Baseline `4515` passes all 23 native width/grid/modifier/reopen cases; Group text-fit and owner-label changes require fresh execution |
 | Pools/lanes/subprocesses | Existing core/advanced gates pass at baseline and remain required |
 | Keyboard/search/align/space | Existing native/core gates remain required; no new capability claim |
@@ -83,21 +95,24 @@ evidence.
 | Export/frameworks/package | Reopen, SVG, framework lifecycle and packed Bundler/NodeNext/runtime gates remain required on new source |
 | Attribution | Retained upstream license and visible bpmn.io attribution must remain unchanged and tested |
 | Site | Current site pins the older baseline; update only after reviewed library publication and rerun served-production/native preview checks |
-| Flow annotations | Hosted `3fe41f8` failed; exact repair `b4a991c9` passes 365 units, 193 XSD exports plus four fixtures and package78; native23 rerun pending |
-| Group lifecycle | Exact `96fa1cbf` passes 383 units, 194 XSD mutation exports plus seven fixtures and package85; native16 unrun |
-| Hover-only connection controls | Numeric viewport precision is corrected; unselected hover-control activation remains an explicit remaining capability |
+| Flow annotations | Hosted `20fb`: 23 existing groups pass, including eight explicit differences; two Ctrl-bypass failures have a reviewed activation correction with ten focused tests. All original cases remain in the prepared native27 gate, including two new Ctrl-start pan controls |
+| Group lifecycle | Hosted `f1b912d`: 12/16 pass; reviewed test-only fixes pass six focused tests/five XSD exports; corrected native16 remains open |
+| Hover-only connection controls | Exact `768762` passes 433 units, 242 XSD exports plus ten fixtures and package85; paired native32 has not run |
 
 ## Remaining acceptance gates
 
-1. Verify the combined Group and flow-repair source with independent review,
-   semantic/XSD tests, build and packed consumers
+1. Include security correction `740ee` (hosted as CodeQL-green `2eb1f7c`) in the combined Group/Ctrl tree,
+   then verify that exact tree with independent review, semantic/XSD tests,
+   build, packed consumers and hosted CodeQL
 2. Publish only the exact approved tree to the existing draft PR and run every
    native suite, retaining the green hit/label/IO baseline assertions
 3. Diagnose failures without weakening meaningful gesture or semantic assertions;
    update the paired site only with a verified library revision
-4. Complete the repaired flow native23 and Group native16 gates
-5. Implement and verify reference hover-only connection controls, preserving
-   selection, cancellation and exact model history without widening static hits
+4. Complete the corrected flow native27 and Group native16 gates; keep explicit
+   reference precision, rendering and shared-title differences separate from
+   matching behavior
+5. Execute the prepared hover native32 gate, preserving selection, cancellation
+   and exact model history without widening static hits
 
 Touch shape dragging/resizing did not activate in either pinned engine in the
 recorded baseline. The differential pass establishes the measured behavior only;
