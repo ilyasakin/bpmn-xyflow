@@ -9,6 +9,7 @@ import path from 'node:path';
 import {createRequire} from 'node:module';
 import puppeteer from 'puppeteer';
 import {BpmnModdle} from 'bpmn-moddle';
+import {assertUpstreamFlowAppendReopen} from '../helpers/flow-append-reopen-oracle.mjs';
 const require=createRequire(import.meta.url),up=createRequire(require.resolve('bpmn-js/package.json'));
 const oracle=new BpmnModdle();assert.equal(require('bpmn-js/package.json').version,'18.30.1');
 const fixtureRoot='test/fixtures/flow-native';
@@ -29,8 +30,8 @@ async function setup(xml,engine='local',{viewport={x:160,y:120,zoom:.9}}={}){
  try{
   await page.setViewport({width:1800,height:1250});await page.goto(`${base}/modeler/`,{waitUntil:'networkidle0'});await page.waitForFunction(()=>!!window.modeler?.getGraph());
   if(engine==='upstream'){await page.addScriptTag({path:require.resolve('bpmn-js/dist/bpmn-modeler.development.js')});for(const name of ['diagram-js.css','bpmn-js.css'])await page.addStyleTag({path:require.resolve(`bpmn-js/dist/assets/${name}`)});}
-  const warnings=await page.evaluate(async({engine,xml,viewport,adjustUrl,canvasUrl,layoutUrl})=>{
-   const {getConnectionAdjustment}=await import(adjustUrl),{default:Canvas}=await import(canvasUrl),{getConnectionMid}=await import(layoutUrl);
+  const warnings=await page.evaluate(async({engine,xml,viewport,adjustUrl,canvasUrl,layoutUrl,bendpointUrl})=>{
+   const {getConnectionAdjustment}=await import(adjustUrl),{default:Canvas}=await import(canvasUrl),{getConnectionMid}=await import(layoutUrl),{getClosestPointOnConnection}=await import(bendpointUrl);
    const container=document.querySelector('#viewer');let m,result;
    if(engine==='upstream'){
     window.modeler.destroy();container.replaceChildren();m=new window.BpmnJS({container});result=await m.importXML(xml);window.reference=m;
@@ -40,13 +41,27 @@ async function setup(xml,engine='local',{viewport={x:160,y:120,zoom:.9}}={}){
     m=window.modeler;result=await m.importXML(xml);await m.setViewport(viewport,{duration:0});
     window.flowTest={engine,m,container,node:id=>m.getElement(id),xml:()=>m.getXML(),selection:()=>m.getSelection(),history:()=>({undo:m.canUndo(),redo:m.canRedo(),size:m.commandStack.size()}),viewport:()=>m.getViewport()};
    }
-   Object.assign(window.flowTest,{getConnectionAdjustment,Canvas,getConnectionMid});return result.warnings.map(w=>w.message);
-  },{engine,xml,viewport,adjustUrl:'/@fs/'+require.resolve('bpmn-js/lib/features/modeling/behavior/util/ConnectionLayoutUtil.js'),canvasUrl:'/@fs/'+up.resolve('diagram-js/lib/core/Canvas.js'),layoutUrl:'/@fs/'+up.resolve('diagram-js/lib/layout/LayoutUtil.js')});
+   Object.assign(window.flowTest,{getConnectionAdjustment,Canvas,getConnectionMid,getClosestPointOnConnection,mouseDropCount:0,referenceBendMoves:[]});
+   if(engine==='upstream'){
+    m.get('eventBus').on('bendpoint.move.move',20000,event=>{window.flowTest.referenceBendRawMove={id:event.context.connection.id,x:event.x,y:event.y,client:{x:event.originalEvent.clientX,y:event.originalEvent.clientY}};});
+    m.get('eventBus').on('commandStack.connection.reconnect.preExecute',20000,event=>{window.flowTest.referenceReconnect={id:event.context.connection.id,docking:{...event.context.dockingOrPoints},side:event.context.hints?.docking};});
+    m.get('eventBus').on('bendpoint.move.move',500,event=>window.flowTest.referenceBendMoves.push({id:event.context.connection.id,x:event.x,y:event.y,allowed:event.context.allowed,hover:event.context.hover?.id}));
+    m.get('eventBus').on('bendpoint.move.end',1200,event=>{window.flowTest.referenceBendEnd={id:event.context.connection.id,x:event.x,y:event.y,allowed:event.context.allowed,hover:event.context.hover?.id};});
+   }
+   // Observe the exact native MouseEvent used by both engines. Chromium may
+   // quantize requested fractional CDP coordinates before dispatching it.
+   window.addEventListener('mouseup',event=>{
+    const t=window.flowTest,viewportNode=t.engine==='local'?t.m.viewer._internals.viewport:t.m.get('canvas')._viewport;
+    const matrix=viewportNode.getScreenCTM(),p=new DOMPoint(event.clientX,event.clientY).matrixTransform(matrix.inverse());
+    t.lastMouseDrop={count:++t.mouseDropCount,trusted:event.isTrusted,button:event.button,client:{x:event.clientX,y:event.clientY},graph:{x:p.x,y:p.y},matrix:{a:matrix.a,b:matrix.b,c:matrix.c,d:matrix.d,e:matrix.e,f:matrix.f}};
+   },true);
+   return result.warnings.map(w=>w.message);
+  },{engine,xml,viewport,adjustUrl:'/@fs/'+require.resolve('bpmn-js/lib/features/modeling/behavior/util/ConnectionLayoutUtil.js'),canvasUrl:'/@fs/'+up.resolve('diagram-js/lib/core/Canvas.js'),layoutUrl:'/@fs/'+up.resolve('diagram-js/lib/layout/LayoutUtil.js'),bendpointUrl:'/@fs/'+up.resolve('diagram-js/lib/features/bendpoints/BendpointUtil.js')});
   assert.deepEqual(warnings,[],`${engine} import warnings`);return{page,errors,engine};
  }catch(e){await page.close().catch(()=>{});throw e;}
 }
 async function state(page){
- const raw=await page.evaluate(async()=>{const t=window.flowTest;return{xml:await t.xml(),history:t.history(),viewport:t.viewport(),selection:t.selection()};});
+ const raw=await page.evaluate(async()=>{const t=window.flowTest;return{xml:await t.xml(),history:t.history(),viewport:t.viewport(),selection:t.selection(),nativeInput:{drop:t.lastMouseDrop||null,projection:t.lastProjection||null,referenceBendEnd:t.referenceBendEnd||null,referenceBendRawMove:t.referenceBendRawMove||null,referenceReconnect:t.referenceReconnect||null}};});
  const parsed=await oracle.fromXML(raw.xml);assert.deepEqual(parsed.warnings,[],'independent exported XML parse');
  const di=parsed.rootElement.diagrams.flatMap(d=>d.plane.planeElement||[]);
  return{...raw,parsed,canonical:(await oracle.toXML(parsed.rootElement,{format:true})).xml,
@@ -54,7 +69,7 @@ async function state(page){
   edges:Object.fromEntries(di.filter(d=>d.waypoint).map(d=>[d.bpmnElement.id,{id:d.bpmnElement.id,type:d.bpmnElement.$type,source:d.bpmnElement.sourceRef?.id,target:d.bpmnElement.targetRef?.id,points:d.waypoint.map(point),owner:d.bpmnElement.$parent?.id,attrs:{...d.bpmnElement.$attrs},diAttrs:{...d.$attrs}}])),
   notes:Object.values(parsed.elementsById).filter(e=>e.$type==='bpmn:TextAnnotation').map(e=>({id:e.id,text:e.text,owner:e.$parent?.id}))};
 }
-const serial=s=>({xml:s.xml,history:s.history,viewport:s.viewport,selection:s.selection,shapes:s.shapes,edges:s.edges,notes:s.notes});
+const serial=s=>({xml:s.xml,history:s.history,viewport:s.viewport,selection:s.selection,shapes:s.shapes,edges:s.edges,notes:s.notes,nativeInput:s.nativeInput});
 async function settle(page){await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));}
 async function screen(page,p){return page.evaluate(p=>{const t=window.flowTest,r=t.container.getBoundingClientRect(),v=t.viewport();return{x:r.left+v.x+p.x*v.zoom,y:r.top+v.y+p.y*v.zoom};},p);}
 async function hit(page,p,id,selector){const target=await page.evaluate(({p,selector})=>{const el=document.elementFromPoint(p.x,p.y),r=window.flowTest.container.getBoundingClientRect();return{id:el?.closest('[data-element-id]')?.getAttribute('data-element-id')||null,selector:selector?!!el?.closest(selector):null,inside:p.x>=r.left&&p.x<Math.min(r.right,innerWidth)&&p.y>=r.top&&p.y<Math.min(r.bottom,innerHeight),tag:el?.tagName,cls:el?.getAttribute('class')};},{p,selector});assert.ok(target.inside,`visible native target ${JSON.stringify({p,target})}`);if(selector)assert.ok(target.selector,JSON.stringify(target));else assert.equal(target.id,id,JSON.stringify(target));return target;}
@@ -67,6 +82,7 @@ async function selectEdge(page,id,position){
 async function selectShape(page,id){const b=(await state(page)).shapes[id],p=await screen(page,{x:b.x+b.width/2,y:b.y+b.height/2});await hit(page,p,id);await page.mouse.click(p.x,p.y);await settle(page);assert.deepEqual(await page.evaluate(()=>window.flowTest.selection()),[id]);}
 async function control(page,selector){const h=await page.waitForSelector(selector),b=await h.boundingBox();assert.ok(b);const p={x:b.x+b.width/2,y:b.y+b.height/2};await hit(page,p,null,selector);return p;}
 async function gesture(page,from,to,{cancel=false,preview,modifier}={}){
+ await page.evaluate(()=>{window.flowTest.lastMouseDrop=null;window.flowTest.lastProjection=null;window.flowTest.referenceBendMoves=[];window.flowTest.referenceBendEnd=null;window.flowTest.referenceBendRawMove=null;window.flowTest.referenceReconnect=null;});
  if(modifier)await page.keyboard.down(modifier);
  try{await page.mouse.move(from.x,from.y);await page.mouse.down();await page.mouse.move(to.x,to.y,{steps:12});await settle(page);if(preview)await preview();if(cancel)await page.keyboard.press('Escape');await page.mouse.up();await settle(page);}
  finally{await page.mouse.up().catch(()=>{});if(modifier)await page.keyboard.up(modifier).catch(()=>{});}
@@ -81,9 +97,11 @@ async function history(page,before,after,repeats=2){
  }
 }
 function near(actual,expected,message,tolerance=1.5){assert.ok(actual&&Math.hypot(actual.x-expected.x,actual.y-expected.y)<=tolerance,`${message}: ${JSON.stringify(actual)} vs ${JSON.stringify(expected)}`);}
-async function reopen(page,expected){
+async function reopen(page,expected,appendContext){
  const warnings=await page.evaluate(async({xml,viewport})=>{const t=window.flowTest,r=await t.m.importXML(xml);if(t.engine==='local')await t.m.setViewport(viewport,{duration:0});else{const c=t.m.get('canvas');c.viewbox({x:-viewport.x/viewport.zoom,y:-viewport.y/viewport.zoom,width:t.container.clientWidth/viewport.zoom,height:t.container.clientHeight/viewport.zoom});}return r.warnings.map(w=>w.message);},{xml:expected.xml,viewport:expected.viewport});
- assert.deepEqual(warnings,[]);await settle(page);const after=await state(page);assert.deepEqual(after.edges,expected.edges,'actual reopen retains endpoint references, owner, metadata and exact waypoints');assert.deepEqual(after.shapes,expected.shapes);assert.deepEqual(after.notes,expected.notes);assert.equal(after.canonical,expected.canonical);return after;
+ assert.deepEqual(warnings,[]);await settle(page);const after=await state(page);assert.deepEqual(after.edges,expected.edges,'actual reopen retains endpoint references, owner, metadata and exact waypoints');assert.deepEqual(after.shapes,expected.shapes);assert.deepEqual(after.notes,expected.notes);
+ if(appendContext&&await page.evaluate(()=>window.flowTest.engine)==='upstream')await assertUpstreamFlowAppendReopen(expected.xml,after.xml,appendContext);
+ else assert.equal(after.canonical,expected.canonical);return after;
 }
 async function unchangedExceptGeometry(before,after,allowed,refChanges={}){
  const parsed=await oracle.fromXML(after.xml),prior=before.parsed,byId=parsed.elementsById;
@@ -132,7 +150,7 @@ async function unchangedExceptOwnerDeletion(before,after,ownerId,associationId){
  assert.equal(after.canonical,(await oracle.toXML(parsed.rootElement,{format:true})).xml,'owner deletion removes only that flow, its dependent association, their DI and direct flow references');
 }
 async function evidence(page,name,data){await writeFile(`test-artifacts/browser-flow-${name}.json`,JSON.stringify(data,null,2));await writeFile(`test-artifacts/browser-flow-${name}.bpmn`,await page.evaluate(()=>window.flowTest.xml()));await page.screenshot({path:`test-artifacts/browser-flow-${name}.png`,fullPage:true});}
-async function run(name,fn){const pages=[];console.log(`START native flow annotations ${name}`);try{const value=await fn(async(...args)=>{const c=await setup(...args);pages.push(c);return c.page;});for(const c of pages)assert.deepEqual(c.errors,[]);results.push({name,status:'passed',...value});console.log(`PASS native flow annotations ${name}`);}catch(e){results.push({name,status:'failed',error:e.stack||String(e)});console.error(`FAIL native flow annotations ${name}: ${e.stack||e}`);for(const [i,c]of pages.entries()){await c.page.bringToFront().catch(()=>{});await evidence(c.page,`${name}-${i}-failure`,{error:String(e),state:serial(await state(c.page))}).catch(()=>{});}}finally{await writeFile('test-artifacts/browser-flow-annotations-results.json',JSON.stringify(results,null,2));for(const c of pages)await c.page.close().catch(()=>{});}}
+async function run(name,fn){const pages=[];console.log(`START native flow annotations ${name}`);try{const value=await fn(async(...args)=>{const c=await setup(...args);pages.push(c);return c.page;});for(const c of pages)assert.deepEqual(c.errors,[]);results.push({name,status:'passed',...value});console.log(`${value?.status==='intentional-difference'?'INTENTIONAL DIFFERENCE':'PASS'} native flow annotations ${name}`);}catch(e){results.push({name,status:'failed',error:e.stack||String(e)});console.error(`FAIL native flow annotations ${name}: ${e.stack||e}`);for(const [i,c]of pages.entries()){await c.page.bringToFront().catch(()=>{});await evidence(c.page,`${name}-${i}-failure`,{error:String(e),state:serial(await state(c.page))}).catch(()=>{});}}finally{await writeFile('test-artifacts/browser-flow-annotations-results.json',JSON.stringify(results,null,2));for(const c of pages)await c.page.close().catch(()=>{});}}
 async function append(page,owner,mode,{cancel=false,drop={x:1030,y:740}}={}){
  const route=(await state(page)).edges[owner].points;
  const before=await selectEdge(page,owner,owner==='OrderMessage'?{x:118,y:365}:owner==='ApproveFlow'?{x:1020,y:route.some(p=>p.y===500)?500:348}:undefined);
@@ -152,7 +170,7 @@ async function append(page,owner,mode,{cancel=false,drop={x:1030,y:740}}={}){
  await unchangedExceptAppend(before,after,note.id,edge.id);
  const midpoint=await page.evaluate(owner=>window.flowTest.getConnectionMid(window.flowTest.node(owner)),owner);near(edge.points[0],midpoint,'automatic source anchor follows actual pinned half-length midpoint',.01);
  if(mode==='drag')near({x:after.shapes[note.id].x+after.shapes[note.id].width/2,y:after.shapes[note.id].y+after.shapes[note.id].height/2},drop,'annotation follows native chosen drop');
- await history(page,before,after);await reopen(page,after);return{before,after,note,edge};
+ await history(page,before,after);await reopen(page,after,{ownerId:owner,noteId:note.id,associationId:edge.id});return{before,after,note,edge};
 }
 async function adjustment(page,point,oldPoints,newPoints,hints={}){return page.evaluate(({point,oldPoints,newPoints,hints})=>window.flowTest.getConnectionAdjustment(point,newPoints,oldPoints,hints),{point,oldPoints,newPoints,hints});}
 async function assertDependent(page,before,after,owner,{hints={},target=false}={}){
@@ -179,9 +197,22 @@ async function ownerEdit(page,kind,{target=false}={}){
  if(kind==='reconnect'){assert.equal(after.edges[owner].target,'ReworkRequest');near(after.edges[owner].points.at(-1),{x:940,y:130},'chosen owner reconnect point');}
  await unchangedExceptGeometry(before,after,[owner,'PolicyAssociation'],kind==='reconnect'?{[owner]:['targetRef']}:{});await history(page,before,after,3);await reopen(page,after);return{before:serial(before),after:serial(after)};
 }
+async function projectedDrop(page,owner,requestedClient){
+ const observed=await page.evaluate(({owner,requestedClient})=>{const t=window.flowTest,drop=t.lastMouseDrop;if(!drop)throw Error('native mouseup was not recorded');return t.lastProjection={...drop,owner,requestedClient,projected:t.getClosestPointOnConnection(drop.graph,t.node(owner))};},{owner,requestedClient});
+ assert.equal(observed.trusted,true,'projection oracle requires a real browser MouseEvent');assert.equal(observed.button,0);assert.ok(observed.count>0);
+ // Native MouseEvent client coordinates may truncate each fractional CSS
+ // component by less than one pixel. Larger dispatch drift is a hard failure.
+ assert.ok(Math.abs(observed.client.x-requestedClient.x)<1.0001&&Math.abs(observed.client.y-requestedClient.y)<1.0001,`native requested/observed pointer ${JSON.stringify({requestedClient,observed})}`);
+ return observed;
+}
+async function nativeEndpointControl(page,id,index){
+ if(await page.evaluate(()=>window.flowTest.engine)==='local')return control(page,`.bpmn-xyflow-bendpoint[data-bend-index="${index}"]`);
+ const p=await page.evaluate(({id,index})=>{const handles=document.querySelectorAll(`.djs-bendpoints[data-element-id="${id}"] > .djs-bendpoint:not(.floating)`),el=handles[index];if(!el)throw Error('reference endpoint handle missing');const b=el.getBoundingClientRect();return{x:b.x+b.width/2,y:b.y+b.height/2};},{id,index});
+ await hit(page,p,id);return p;
+}
 async function dependentRedock(page,target){
  const initial=await state(page),index=target?initial.edges.PolicyAssociation.points.length-1:0;
- let prior=await selectEdge(page,'PolicyAssociation',{x:850,y:550});
+ const observations=[];let prior=await selectEdge(page,'PolicyAssociation',{x:850,y:550});
  for(const [owner,position]of [['ApproveFlow',{x:780,y:460}],['ReviewFlow',{x:360,y:175.5}]]){
   const from=await control(page,`.bpmn-xyflow-bendpoint[data-bend-index="${index}"]`),to=await screen(page,position);await hit(page,to,owner);
   await gesture(page,from,to,{cancel:true,preview:()=>routePreview(page,'PolicyAssociation',prior.edges.PolicyAssociation.points)});
@@ -190,14 +221,16 @@ async function dependentRedock(page,target){
   const invalid=await screen(page,{x:1400,y:850});await hit(page,invalid,null);
   await gesture(page,handle,invalid,{preview:()=>routePreview(page,'PolicyAssociation',prior.edges.PolicyAssociation.points)});assert.equal((await state(page)).xml,prior.xml,'invalid background redock is atomic');assert.deepEqual((await state(page)).history,prior.history);
   await selectEdge(page,'PolicyAssociation',{x:850,y:550});handle=await control(page,`.bpmn-xyflow-bendpoint[data-bend-index="${index}"]`);await gesture(page,handle,to,{preview:()=>routePreview(page,'PolicyAssociation',prior.edges.PolicyAssociation.points)});
-  const after=await state(page),edge=after.edges.PolicyAssociation;near(edge.points[index],position,'dependent endpoint projects to chosen actual owner route',.1);
+  const observed=await projectedDrop(page,owner,to);
+  observations.push({owner,requestedGraph:position,requestedClient:to,observed});
+  const after=await state(page),edge=after.edges.PolicyAssociation;near(edge.points[index],observed.projected,'dependent endpoint projects the actual native pointer onto its chosen owner route',.0001);
   assert.equal(edge[target?'target':'source'],owner);assert.equal(edge[target?'source':'target'],prior.edges.PolicyAssociation[target?'source':'target']);
   assert.deepEqual(edge.points.filter((_,i)=>i!==index),prior.edges.PolicyAssociation.points.filter((_,i)=>i!==index));
   for(const id of ['ApproveFlow','ReviewFlow'])assert.deepEqual(after.edges[id],prior.edges[id],'redocking a dependent cannot change either owner');
   await unchangedExceptGeometry(prior,after,['PolicyAssociation'],{PolicyAssociation:[target?'targetRef':'sourceRef']});
   await history(page,prior,after,2);prior=after;
  }
- await reopen(page,prior);return{before:serial(initial),after:serial(prior)};
+ await reopen(page,prior);await evidence(page,`dependent-${target?'target':'source'}-observed-redock`,{observations,before:serial(initial),after:serial(prior)});return{observations,before:serial(initial),after:serial(prior)};
 }
 async function shapeEdit(page,owner,resize=false){
  const first=await state(page),id=first.edges[owner].source;await selectShape(page,id);const before=await state(page),b=before.shapes[id];
@@ -253,6 +286,42 @@ try{
   const page=await create(await fixture(name));const initial=await state(page);for(let i=0;i<3;i++)await append(page,owner,'drag',{cancel:true});assert.equal((await state(page)).xml,initial.xml);const result=await append(page,owner,'click');return{edge:result.edge};
  });
  await run('repeated-auto-append-minimal-safe-pan',async create=>repeatedVisible(await create(await fixture('approval-source'), 'local',{viewport:{x:500,y:470,zoom:1}})));
+ for(const fractional of [false,true])for(const target of [false,true])await run(`native-dependent-${target?'target':'source'}-${fractional?'fractional':'integral'}-projection-reference`,async create=>{
+  const entries=[];
+  for(const engine of ['upstream','local']){
+   // An integral graph input at scale 1 isolates the common native projection
+   // contract. The local scale-.9 cases below separately capture Chromium's
+   // fractional CSS-pixel quantization. Upstream Dragging/BendpointMove round
+   // graph coordinates, so fractional-input equality must not be presumed.
+   const page=await create(await fixture(target?'approval-target':'approval-source'),engine,{viewport:{x:160,y:120,zoom:fractional?.9:1}}),before=await selectEdge(page,'PolicyAssociation',{x:850,y:550});
+   const index=target?before.edges.PolicyAssociation.points.length-1:0,position=fractional?{x:360,y:175.5}:{x:366,y:187},to=await screen(page,position);await hit(page,to,'ReviewFlow');
+   await gesture(page,await nativeEndpointControl(page,'PolicyAssociation',index),to,{preview:async()=>{
+    if(engine==='local')await routePreview(page,'PolicyAssociation',before.edges.PolicyAssociation.points);
+    else{const active=await page.evaluate(()=>({move:window.flowTest.referenceBendMoves.at(-1),gfx:!!document.querySelector('.djs-bendpoint.djs-dragging')}));assert.ok(active.gfx);assert.equal(active.move?.id,'PolicyAssociation');assert.equal(active.move.hover,'ReviewFlow');assert.notDeepEqual({x:active.move.x,y:active.move.y},before.edges.PolicyAssociation.points[index]);}
+   }});
+   const observed=await projectedDrop(page,'ReviewFlow',to),after=await state(page),edge=after.edges.PolicyAssociation;
+   if(!fractional)near(observed.graph,position,'integral reference input is actually delivered',.0001);
+   let expected=observed.projected;
+   if(engine==='upstream'){
+    const reference=await page.evaluate(()=>{const t=window.flowTest;return{raw:t.referenceBendRawMove,end:t.referenceBendEnd,command:t.referenceReconnect,projectedRoundedInput:t.getClosestPointOnConnection({x:Math.round(t.lastMouseDrop.graph.x),y:Math.round(t.lastMouseDrop.graph.y)},t.node('ReviewFlow'))};});
+    assert.equal(reference.raw?.id,'PolicyAssociation');assert.deepEqual(reference.raw.client,observed.client,'last native move and mouseup reach the same delivered pixel');
+    assert.deepEqual({x:reference.raw.x,y:reference.raw.y},{x:Math.round(observed.graph.x),y:Math.round(observed.graph.y)},'pinned Dragging rounds the delivered graph input');
+    assert.equal(reference.end?.id,'PolicyAssociation');assert.equal(reference.end.hover,'ReviewFlow');near(reference.end,reference.projectedRoundedInput,'pinned BendpointSnapping projects the rounded native input',1e-8);
+    expected={x:Math.round(reference.projectedRoundedInput.x),y:Math.round(reference.projectedRoundedInput.y)};
+    assert.equal(reference.command?.id,'PolicyAssociation');assert.equal(reference.command.side,target?'target':'source');assert.deepEqual(reference.command.docking,expected,'pinned BendpointMove rounds the processed point before reconnect');
+    observed.reference=reference;assert.deepEqual(edge.points[index],expected,'upstream stores its exactly rounded native docking');
+   }else near(edge.points[index],expected,'local endpoint equals pinned projection of its delivered fractional input',.0001);
+   assert.equal(edge[target?'target':'source'],'ReviewFlow');
+   assert.equal(edge[target?'source':'target'],before.edges.PolicyAssociation[target?'source':'target']);assert.deepEqual(edge.points.filter((_,i)=>i!==index),before.edges.PolicyAssociation.points.filter((_,i)=>i!==index));
+   for(const owner of ['ApproveFlow','ReviewFlow'])assert.deepEqual(after.edges[owner],before.edges[owner]);
+   await unchangedExceptGeometry(before,after,['PolicyAssociation'],{PolicyAssociation:[target?'targetRef':'sourceRef']});
+   await history(page,before,after,2);await reopen(page,after);
+   const entry={engine,requestedGraph:position,requestedClient:to,observed,endpoint:edge.points[index]};entries.push(entry);await evidence(page,`paired-${target?'target':'source'}-${fractional?'fractional':'integral'}-redock-${engine}`,entry);
+  }
+  near(entries[0].observed.graph,entries[1].observed.graph,'same native input reaches the same graph pointer in both engines',.0001);
+  if(fractional){assert.notDeepEqual(entries[0].endpoint,entries[1].endpoint,'this fixture must expose the approved integer-versus-fractional docking difference');return{status:'intentional-difference',policy:'Upstream rounds native graph input and processed docking; local preserves the projection of delivered fractional input.',entries};}
+  near(entries[0].endpoint,entries[1].endpoint,'paired integral native endpoint projection',.0001);return{entries};
+ });
  for(const target of [false,true])await run(`dependent-${target?'target':'source'}-follows-segment`,async create=>ownerEdit(await create(await fixture(target?'approval-target':'approval-source')),'segment',{target}));
  await run('dependent-follows-owner-bendpoint',async create=>ownerEdit(await create(await fixture('approval-source')),'bend'));
  await run('dependent-follows-owner-target-reconnect',async create=>ownerEdit(await create(await fixture('approval-source')),'reconnect'));
@@ -265,5 +334,5 @@ try{
  });
  for(const [owner,name]of [['ReviewFlow','review-source'],['OrderMessage','message-source']])await run(`${owner}-source-shape-move-propagates`,async create=>shapeEdit(await create(await fixture(name)),owner));
  await run('ReviewFlow-source-shape-resize-propagates',async create=>shapeEdit(await create(await fixture('review-source')),'ReviewFlow',true));
- const failures=results.filter(r=>r.status==='failed');assert.equal(results.length,19);assert.equal(failures.length,0,failures.map(r=>`${r.name}: ${r.error}`).join('\n'));console.log(`PASS ${results.length} native flow annotation groups`);
+ const failures=results.filter(r=>r.status==='failed');assert.equal(results.length,23);assert.equal(failures.length,0,failures.map(r=>`${r.name}: ${r.error}`).join('\n'));console.log(`PASS ${results.length} native flow annotation groups (${results.filter(r=>r.status==='intentional-difference').length} documented input-policy differences)`);
 }finally{await browser?.close();server?.kill('SIGTERM');}

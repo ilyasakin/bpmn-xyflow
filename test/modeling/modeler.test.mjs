@@ -3,6 +3,7 @@ import { test, before, after } from 'node:test';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { setupDOM } from '../helpers/dom.mjs';
+import { connectAuthoredIO } from '../helpers/authored-io.mjs';
 import { assertScenario } from '../helpers/assert-scenarios.mjs';
 import { BpmnModdle as Oracle } from 'bpmn-moddle';
 let dom, Modeler;
@@ -90,8 +91,11 @@ test('pools, lanes, data associations, deletion and undo maintain semantic owner
   assert.ok(lane.businessObject.flowNodeRef.includes(task.businessObject));
   const input=m.connect(data,task), output=m.connect(task,data);
   assert.equal(input.businessObject.$parent,task.businessObject);
-  assert.equal(input.businessObject.targetRef.$type,'bpmn:DataInput');
-  assert.equal(output.businessObject.sourceRef[0].$type,'bpmn:DataOutput');
+  assert.equal(input.businessObject.targetRef.$type,'bpmn:Property');
+  assert.equal(input.businessObject.targetRef.name,'__targetRef_placeholder');
+  assert.ok(task.businessObject.properties.includes(input.businessObject.targetRef));
+  assert.equal(output.businessObject.sourceRef,undefined);
+  assert.equal(task.businessObject.ioSpecification,undefined);
   await oracle(m);
   m.delete(pool); assert.equal(m.getElement(task.id),null); assert.equal(pool.businessObject.$parent.participants.includes(pool.businessObject),false);
   m.undo(); assert.equal(m.getElement(task.id),task); assert.ok(lane.businessObject.flowNodeRef.includes(task.businessObject));
@@ -494,7 +498,7 @@ test('transaction cancel boundaries and attrs-incompatible boundaries are remove
 
 test('replacing a populated activity preserves owned data associations and IO item identities without duplicate IDs',async()=>{
  const m=await model('test/fixtures/scenarios/order-payment-delivery.bpmn'),sub=m.getElement('Payment');
- const data=m.addShape('bpmn:DataObjectReference',{x:900,y:350},{parent:sub.parent}),other=m.addShape('bpmn:DataStoreReference',{x:1050,y:350},{parent:sub.parent}),input=m.connect(data,sub),output=m.connect(sub,data);
+ const data=m.addShape('bpmn:DataObjectReference',{x:900,y:350},{parent:sub.parent}),other=m.addShape('bpmn:DataStoreReference',{x:1050,y:350},{parent:sub.parent}),input=connectAuthoredIO(m,data,sub),output=connectAuthoredIO(m,sub,data,false);
  const io=sub.businessObject.ioSpecification,oldBo=sub.businessObject,before=await m.getXML(),size=m.commandStack.size();
  const check=()=>{assert.equal(sub.businessObject.ioSpecification,io);assert.equal(input.businessObject.$parent,sub.businessObject);assert.equal(output.businessObject.$parent,sub.businessObject);assert.deepEqual(sub.businessObject.dataInputAssociations,[input.businessObject]);assert.deepEqual(sub.businessObject.dataOutputAssociations,[output.businessObject]);assert.ok(io.dataInputs.includes(input.businessObject.targetRef));assert.ok(io.dataOutputs.includes(output.businessObject.sourceRef[0]));};
  m.replace(sub,'bpmn:Task',{}, {removeContents:true});assert.equal(m.commandStack.size(),size+1);check();await oracle(m);
@@ -610,7 +614,7 @@ test('collaboration-level data stores retain a process owner across create/move/
 
 test('same IO event-family replacement and attachment preserve data item and association identities',async()=>{
  const m=await model(),host=m.addShape('bpmn:Task',{x:500,y:300}),event=m.addShape('bpmn:IntermediateCatchEvent',{x:800,y:300},{eventDefinitionType:'bpmn:MessageEventDefinition'}),data=m.addShape('bpmn:DataObjectReference',{x:1000,y:300});
- const edge=m.connect(event,data),item=edge.businessObject.sourceRef[0],before=await m.getXML();assert.equal(m.attachBoundary(event,host),event);assert.ok(event.businessObject.dataOutputs.includes(item));assert.deepEqual(event.businessObject.dataOutputAssociations,[edge.businessObject]);assert.equal(edge.businessObject.$parent,event.businessObject);await oracle(m);m.undo();assert.equal(await m.getXML(),before);
+ const edge=connectAuthoredIO(m,event,data,false),item=edge.businessObject.sourceRef[0],before=await m.getXML();assert.equal(m.attachBoundary(event,host),event);assert.ok(event.businessObject.dataOutputs.includes(item));assert.deepEqual(event.businessObject.dataOutputAssociations,[edge.businessObject]);assert.equal(edge.businessObject.$parent,event.businessObject);await oracle(m);m.undo();assert.equal(await m.getXML(),before);
  const unchanged=await m.getXML(),count=m.commandStack.size();assert.equal(m.replace(event,{type:'bpmn:IntermediateThrowEvent',eventDefinitionType:'bpmn:MessageEventDefinition'}),null);assert.equal(await m.getXML(),unchanged);assert.equal(m.commandStack.size(),count);m.destroy();
 });
 

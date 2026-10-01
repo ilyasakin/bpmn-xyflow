@@ -47,7 +47,7 @@ suite, 11 focused tests passed on the new helper.
 
 ## Prepared native coverage
 
-`test/modeling/browser-flow-annotations.mjs` has 19 independently aggregated groups:
+`test/modeling/browser-flow-annotations.mjs` has 23 independently aggregated groups:
 
 - Four native upstream/local click and press-drag append pairs for sequence and message flows
 - Two asymmetric route midpoint/placement cases
@@ -72,3 +72,20 @@ valid foreign metadata attributes and asymmetric owner routes. They were copied
 from retained test inputs, not reconstructed from a summary. All four validate
 against the official BPMN20 XSD. Their source scenarios retain repository
 provenance; they do not import third-party business process content.
+
+## Reconnect precision and IO preservation
+
+Native redocking is checked against the delivered MouseEvent and live viewport
+matrix, not an ideal requested coordinate. Local explicit docking retains the
+fractional projected position. The pinned reference rounds input, projects, then
+rounds its committed waypoint; the fractional paired cases assert that exact
+measured difference separately. Static hit regions are not widened.
+
+Fresh input associations use a reusable Property placeholder; fresh outputs do
+not allocate IO declarations. Reconnecting an external endpoint must not grow
+input/output items or sets. Imported authored IO and metadata remain in their
+original containers. For a same-owner input reconnect, local preserves the
+authored input binding; upstream may replace it with its placeholder. Owner
+changes use the new owner's binding, while authored output source references
+remain preserved. Repeated edits, cleanup, exact history and reopen have separate
+reference tests; no execution-engine behavior is claimed.

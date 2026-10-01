@@ -36,7 +36,7 @@ its hosted results are pending.
 The separate local flow follow-up now implements connection-owned annotations,
 dependent routes, ownership/deletion/clipboard handling and minimal append pan.
 It has independent source review and fresh structural evidence, described in
-[flow annotations](FLOW-ANNOTATIONS.md); its native 19-case acceptance is pending.
+[flow annotations](FLOW-ANNOTATIONS.md); its native 23-case acceptance is pending.
 Group category/lifecycle and foreground ordering remain a separate recovery stage.
 
 Published site `65bf8846d1e8f32c3ec09e22706ea939bcac870d` pins `7bc8a3a` and passed
@@ -79,7 +79,7 @@ passed evidence.
 | Export/frameworks/package | Reopen, SVG, framework lifecycle and packed Bundler/NodeNext/runtime gates remain required on new source |
 | Attribution | Retained upstream license and visible bpmn.io attribution must remain unchanged and tested |
 | Site | Current site pins the older baseline; update only after reviewed library publication and rerun served-production/native preview checks |
-| Flow annotations | Reconstructed local source is independently reviewed; fresh aggregate and native19 acceptance remain required |
+| Flow annotations | Reconstructed local source is independently reviewed; fresh aggregate and native23 acceptance remain required |
 | Group lifecycle | Separate later recovery stage; overall core parity remains open |
 
 ## Remaining acceptance gates
