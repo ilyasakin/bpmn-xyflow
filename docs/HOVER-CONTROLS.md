@@ -91,3 +91,24 @@ The original 27 native arrow groups remain required. Selected-waypoint guards
 now accept only the exact matching visible marker or its promoted hit circle,
 checking owner, index, shared selected group, center, radii and visibility;
 the source/drop geometry and history assertions are unchanged.
+
+The next hosted run passed the retained connection, flow, Group and advanced
+suites but exposed a background-collector API mistake in this new harness.
+The collector now uses the actual local `Graph.roots` array and is executed in
+its serialized browser form against both real editor implementations before
+CI. Tests reject absent/malformed roots, element hits, controls, minimaps and
+points outside the visible canvas.
+
+The pinned dragging listener installs a one-shot ghost-click trap. The harness
+observes the actual priority-5000 trap consuming a background click, then uses
+one additional native click and requires deselection. It never removes that
+listener or replaces selection through an API. Each ordinary/promoted
+selected-control zoom subcase starts from its own setup viewport, preventing a
+second cumulative zoom from moving the tested endpoint off canvas.
+
+One reference-only Delete/Undo difference is measured explicitly: restoring
+FlowA reinserts it after FlowB in `HoverProcess.flowElements`. A fixture-scoped
+oracle permits only that exact sibling-order change; DI order, metadata,
+references, every other field and raw Redo remain checked. Local Undo retains
+its complete raw-XML requirement. All 32 native engine cases remain required;
+verification of these final harness corrections is pending the hosted rerun.

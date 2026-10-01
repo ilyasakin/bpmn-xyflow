@@ -9,6 +9,8 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
 import { BpmnModdle } from 'bpmn-moddle';
+import { collectHoverBackground } from '../helpers/hover-background.mjs';
+import { assertUpstreamHoverDeleteUndo } from '../helpers/hover-delete-order-oracle.mjs';
 
 const require = createRequire(import.meta.url), oracle = new BpmnModdle();
 assert.equal(require('bpmn-js/package.json').version, '18.30.1');
@@ -30,18 +32,20 @@ async function setup(engine, name = 'orthogonal', zoom = 1) {
       for (const file of ['diagram-js.css', 'bpmn-js.css']) await page.addStyleTag({ path: require.resolve('bpmn-js/dist/assets/' + file) });
     }
     const xml = await readFile('test/fixtures/hover-native/' + name + '.bpmn', 'utf8');
-    const warnings = await page.evaluate(async ({ engine, xml, zoom, modelerUrl }) => {
+    const warnings = await page.evaluate(async ({ engine, xml, zoom, modelerUrl, backgroundUrl }) => {
+      const { observeReferenceBackgroundClicks } = await import(backgroundUrl);
       const container = document.querySelector('#viewer');
       let m = window.modeler;
       if (engine === 'upstream') { m.destroy(); container.replaceChildren(); m = new window.BpmnJS({ container }); }
       const imported = await m.importXML(xml);
       window.makeHoverAdapter = (model, element, scale) => {
-        const t = { engine, m: model, container: element, starts: [], events: [], focusEvents: [], xmlInput: xml, modelerUrl };
+        const t = { engine, m: model, container: element, starts: [], events: [], focusEvents: [], clickTrace: [], xmlInput: xml, modelerUrl };
         if (engine === 'local') {
           Object.assign(t, { node: id => model.getElement(id), xml: () => model.getXML(), selection: () => model.getSelection(), history: () => ({ undo: model.canUndo(), redo: model.canRedo(), size: model.commandStack.size() }), matrix: () => model.viewer._internals.viewport.getScreenCTM() });
           model.setViewport({ x: 140, y: 100, zoom: scale }, { duration: 0 });
         } else {
           const canvas = model.get('canvas');
+          t.clickTrace = observeReferenceBackgroundClicks(model.get('eventBus'));
           Object.assign(t, { node: id => model.get('elementRegistry').get(id), xml: async () => (await model.saveXML({ format: true })).xml, selection: () => model.get('selection').get().map(e => e.id), history: () => ({ undo: model.get('commandStack').canUndo(), redo: model.get('commandStack').canRedo(), index: model.get('commandStack')._stackIdx }), matrix: () => canvas._viewport.getScreenCTM() });
           canvas.viewbox({ x: -140 / scale, y: -100 / scale, width: element.clientWidth / scale, height: element.clientHeight / scale });
           for (const kind of ['bendpoint.move', 'connectionSegment.move']) for (const phase of ['start', 'move', 'end', 'cancel']) model.get('eventBus').on(kind + '.' + phase, 20000, event => {
@@ -59,7 +63,7 @@ async function setup(engine, name = 'orthogonal', zoom = 1) {
         t.lastInput = { type, trusted: event.isTrusted, client: { x: event.clientX, y: event.clientY }, graph: { x: point.x, y: point.y }, matrix: Object.fromEntries(['a','b','c','d','e','f'].map(k => [k, matrix[k]])) };
       }, true);
       return imported.warnings.map(w => w.message);
-    }, { engine, xml, zoom, modelerUrl: '/@fs/' + path.resolve('lib/Modeler.js') });
+    }, { engine, xml, zoom, modelerUrl: '/@fs/' + path.resolve('lib/Modeler.js'), backgroundUrl: '/@fs/' + path.resolve('test/helpers/hover-background.mjs') });
     assert.deepEqual(warnings, [], engine + ' fixture warnings');
     return { page, errors, engine };
   } catch (error) { await page.close().catch(() => {}); throw error; }
@@ -73,7 +77,7 @@ async function hit(page, point) {
   }, point);
 }
 async function state(page) {
-  const raw = await page.evaluate(async () => { const t = window.hoverTest; return { xml: await t.xml(), preserveRawMarkers: t.engine === 'local' && t.xmlInput.includes('hover-owner-marker'), selection: t.selection(), history: t.history(), starts: t.starts, events: t.events, focusEvents: t.focusEvents, input: t.lastInput }; });
+  const raw = await page.evaluate(async () => { const t = window.hoverTest; return { xml: await t.xml(), preserveRawMarkers: t.engine === 'local' && t.xmlInput.includes('hover-owner-marker'), selection: t.selection(), history: t.history(), starts: t.starts, events: t.events, focusEvents: t.focusEvents, clickTrace: t.clickTrace, matrix: Object.fromEntries(['a','b','c','d','e','f'].map(k => [k,t.matrix()[k]])), input: t.lastInput }; });
   if (raw.preserveRawMarkers) {
     const processXML = raw.xml.match(/<(?:\w+:)?process\b[^>]*\bid="HoverProcess"[^>]*>([\s\S]*?)<\/(?:\w+:)?process>/)?.[1];
     const record = processXML?.match(/<(?:\w+:)?extensionElements\b[^>]*>\s*<v:record\b[^>]*>([\s\S]*?)<\/v:record>\s*<\/(?:\w+:)?extensionElements>/)?.[1];
@@ -100,19 +104,22 @@ async function controls(page, id) {
   }, id);
 }
 async function blank(page, click = false) {
-  const p = await page.evaluate(() => {
-    const t = window.hoverTest, r = t.container.getBoundingClientRect(), rootId = t.engine === 'upstream' ? t.m.get('canvas').getRootElement().id : t.m.getGraph().root.id;
-    for (const [fx, fy] of [[.75,.75],[.6,.8],[.85,.65],[.5,.9],[.3,.85]]) {
-      const p = { x: r.left + r.width * fx, y: r.top + r.height * fy }, hit = document.elementFromPoint(p.x, p.y), owner = hit?.closest('[data-element-id]')?.getAttribute('data-element-id');
-      if (p.x >= innerWidth || p.y >= innerHeight || !hit || !t.container.contains(hit)) continue;
-      if (hit.closest('button,input,select,[contenteditable],.bpmn-xyflow-minimap,.bpmn-xyflow-palette,.bpmn-xyflow-editor-actions,.bpmn-xyflow-context-pad,.djs-palette,.djs-context-pad,.bjs-powered-by')) continue;
-      if ((owner && owner !== rootId) || !hit.closest('svg')) continue;
-      return p;
-    }
-    throw Error('No unobstructed visible canvas background point found');
-  });
+  const background = await page.evaluate(collectHoverBackground), p = background.point;
+  const before = click ? await page.evaluate(() => ({ selection: window.hoverTest.selection(), clicks: window.hoverTest.clickTrace.length })) : null;
   if (click) await page.mouse.click(p.x, p.y); else await page.mouse.move(p.x, p.y);
-  await settle(page); if (click) assert.deepEqual(await page.evaluate(() => window.hoverTest.selection()), [], 'native background click actually deselects'); return p;
+  await settle(page);
+  if (click) {
+    const outcome = await page.evaluate(() => { const t = window.hoverTest; return { engine: t.engine, selection: t.selection(), trace: t.clickTrace }; });
+    if (outcome.selection.length) {
+      const observed = outcome.trace.slice(before.clicks); assert.equal(outcome.engine, 'upstream'); assert.equal(observed.length, 1);
+      assert.ok(background.rootIds.includes(observed[0].id)); assert.equal(observed[0].trusted, true); assert.equal(observed[0].trap, true, 'only the actual pinned one-shot ghost-click trap permits a second background click'); assert.equal(observed[0].afterTrap, false);
+      assert.deepEqual(outcome.selection, before.selection, 'the trapped click cannot change selection');
+      await page.mouse.click(p.x, p.y); await settle(page);
+      const retried = await page.evaluate(() => window.hoverTest.clickTrace.at(-1)); assert.equal(retried.trusted, true); assert.equal(retried.trap, false); assert.equal(retried.afterTrap, true); assert.ok(background.rootIds.includes(retried.id));
+    }
+    assert.deepEqual(await page.evaluate(() => window.hoverTest.selection()), [], 'native background click actually deselects');
+  }
+  return p;
 }
 async function hover(page, id, position) {
   const prior = await page.evaluate(() => window.hoverTest.selection());
@@ -133,9 +140,9 @@ async function pointer(page, graphPoint, id) {
   // Approach on the adjacent outer route span first. Jumping directly from a
   // hovered segment overlay to a hidden endpoint is a different native path.
   const lead = await screen(page, approach); await page.mouse.move(lead.x, lead.y); await settle(page);
-  assert.equal((await hit(page, lead)).id, id, 'native control approach stays on its owner route');
+  const leadHit = await hit(page, lead); assert.ok(leadHit.inside, 'control approach stays inside the visible canvas'); assert.equal(leadHit.id, id, 'native control approach stays on its owner route');
   const p = await screen(page, graphPoint); await page.mouse.move(p.x, p.y, { steps: 4 }); await settle(page);
-  const target = await hit(page, p); assert.equal(target.id, id, 'chosen native control owner: ' + JSON.stringify(target)); assert.ok(target.control, 'native approach reaches an actual endpoint/bendpoint control'); return p;
+  const target = await hit(page, p); assert.ok(target.inside, 'chosen control is inside the visible canvas'); assert.equal(target.id, id, 'chosen native control owner: ' + JSON.stringify(target)); assert.ok(target.control, 'native approach reaches an actual endpoint/bendpoint control'); return p;
 }
 async function resetEvents(page) { await page.evaluate(() => { window.hoverTest.starts = []; window.hoverTest.events = []; }); }
 async function drag(page, from, to, { cancel = false, outback = false, inspect } = {}) {
@@ -168,12 +175,14 @@ async function unchangedExcept(before, after, id, side) {
   }
   assert.equal((await oracle.toXML(next.rootElement, { format: true })).xml, before.canonical, 'unrelated semantics, metadata, containment and DI remain unchanged');
 }
-async function history(page, before, after) {
+async function history(page, before, after, { upstreamDelete = false } = {}) {
   const engine = await page.evaluate(() => window.hoverTest.engine);
   if (engine === 'local') assert.equal(after.history.size, before.history.size + 1, 'one native gesture creates one command');
   for (let i = 0; i < 2; i++) {
     if (engine === 'local') await page.click('#undo-btn'); else { await blank(page, true); await page.keyboard.down('Control'); await page.keyboard.press('z'); await page.keyboard.up('Control'); }
-    await settle(page); assert.equal((await state(page)).xml, before.xml, 'native Undo restores complete XML');
+    await settle(page); const undone = await state(page);
+    if (engine === 'upstream' && upstreamDelete) await assertUpstreamHoverDeleteUndo(before.xml, undone.xml);
+    else assert.equal(undone.xml, before.xml, 'native Undo restores complete XML');
     if (engine === 'local') await page.click('#redo-btn'); else { await page.keyboard.down('Control'); await page.keyboard.down('Shift'); await page.keyboard.press('z'); await page.keyboard.up('Shift'); await page.keyboard.up('Control'); }
     await settle(page); assert.equal((await state(page)).xml, after.xml, 'native Redo restores complete XML');
   }
@@ -210,7 +219,11 @@ async function previewChanged(page, id, prior, kind) {
 }
 async function selectedZoomChecks(page) {
   const checks = [], original = await state(page);
+  const initialViewport = await page.evaluate(() => { const t = window.hoverTest; if (t.engine === 'local') return t.m.getViewport(); const v = t.m.get('canvas').viewbox(); return { x: v.x, y: v.y, width: v.width, height: v.height }; });
   for (const mode of ['ordinary', 'promoted']) {
+    // Independent constructor setup: cumulative wheel zoom about a remote
+    // blank point can otherwise move the next tested endpoint off canvas.
+    await page.evaluate(async viewport => { const t = window.hoverTest; if (t.engine === 'local') await t.m.setViewport(viewport, { duration: 0 }); else t.m.get('canvas').viewbox(viewport); }, initialViewport);
     await blank(page, true);
     if (mode === 'ordinary') {
       // Fixture setup isolates the ordinary selected-control constructor from
@@ -239,7 +252,7 @@ async function selectedZoomChecks(page) {
     assert.ok(Math.abs(geometry.radius - expectedRadius) < 1e-8); assert.ok(Math.abs(geometry.width - expectedRadius * geometry.zoom * 2) < .01);
     const endpoint = await pointer(page, { x: 280, y: 240 }, 'FlowA'); assert.ok((await hit(page, endpoint)).control);
     const midpoint = await screen(page, { x: 525, y: 380 }); await page.mouse.move(midpoint.x, midpoint.y); await settle(page);
-    const segment = await hit(page, midpoint); assert.equal(segment.id, 'FlowA'); assert.ok(segment.control, 'selected segment hit remains reachable after zoom');
+    const segment = await hit(page, midpoint); assert.ok(segment.inside, 'selected segment remains visible after native zoom'); assert.equal(segment.id, 'FlowA'); assert.ok(segment.control, 'selected segment hit remains reachable after zoom');
     const before = await state(page), destination = await screen(page, { x: 525, y: 450 });
     await drag(page, midpoint, destination, { cancel: true, inspect: () => previewChanged(page, 'FlowA', before.edges.FlowA.points, 'connectionSegment.move') });
     const cancelled = await state(page); assert.equal(cancelled.xml, original.xml); assert.deepEqual(cancelled.history, original.history);
@@ -402,15 +415,17 @@ try {
   await paired('delete-undo-import-control-lifecycle', async (page, engine) => {
     const before = await state(page), p = await hover(page, 'FlowA', { x: 520, y: 380 }); await page.mouse.click(p.x, p.y); await page.keyboard.press('Delete'); await settle(page);
     const deleted = await state(page); assert.equal(deleted.edges.FlowA, undefined); assert.equal((await controls(page, 'FlowA')).visible, false); await onlyFlowDeleted(before, deleted, 'FlowA');
-    await history(page, before, deleted);
+    await history(page, before, deleted, { upstreamDelete: true });
     if (engine === 'local') await page.click('#undo-btn'); else { await blank(page, true); await page.keyboard.down('Control'); await page.keyboard.press('z'); await page.keyboard.up('Control'); }
-    await settle(page); assert.equal((await state(page)).xml, before.xml);
+    await settle(page); const restored = await state(page);
+    if (engine === 'upstream') await assertUpstreamHoverDeleteUndo(before.xml, restored.xml); else assert.equal(restored.xml, before.xml);
     await blank(page, true); await hover(page, 'FlowA', { x: 520, y: 380 });
-    await reopen(page, before); await blank(page); assert.equal((await controls(page, 'FlowA')).visible, false, 'import clears previous hover controls');
+    await reopen(page, restored); await blank(page); assert.equal((await controls(page, 'FlowA')).visible, false, 'import clears previous hover controls');
     // Re-establish the view after import, then prove fresh controls act on the
     // new graph object instead of the removed prior instance.
     await page.evaluate(() => { const t = window.hoverTest; window.hoverTest = window.makeHoverAdapter(t.m, t.container, 1); });
     await hover(page, 'FlowA', { x: 520, y: 380 }); assert.deepEqual((await state(page)).selection, []);
+    return engine === 'upstream' ? { status: 'intentional-difference', policy: 'Pinned Delete Undo reinserts FlowA after FlowB in semantic containment; every other field and DI order remain exact.' } : { exactHistory: true };
   });
 
   await paired('pending-and-active-blur', async (page, engine) => {

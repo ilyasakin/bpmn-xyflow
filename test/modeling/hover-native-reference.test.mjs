@@ -7,6 +7,7 @@ import { before, after, test } from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { BpmnModdle } from 'bpmn-moddle';
 import { setupDOM } from '../helpers/dom.mjs';
+import { observeReferenceBackgroundClicks } from '../helpers/hover-background.mjs';
 let dom, Upstream, xml, originalMouseEvent;
 before(async () => {
   dom = await setupDOM(); originalMouseEvent = Object.getOwnPropertyDescriptor(globalThis, 'MouseEvent');
@@ -98,4 +99,24 @@ test('pinned route previews differ outside marker definitions for insertion, exi
       dragging.cancel(); assert.equal(await save(m), before); assert.equal(m.get('commandStack')._stackIdx, beforeHistory);
     } finally { m.destroy(); }
   }
+});
+
+
+test('pinned completed native-handler drag traps exactly one background click before normal deselection', async () => {
+  const m = await editor(), originalAdd = document.addEventListener; let endHandler;
+  try {
+    const registry = m.get('elementRegistry'), edge = registry.get('FlowB'), canvas = m.get('canvas'), dragging = m.get('dragging'), selection = m.get('selection'), bus = m.get('eventBus');
+    const trace = observeReferenceBackgroundClicks(bus); selection.select(registry.get('FlowA'));
+    document.addEventListener = function(type, callback, options) { if (type === 'mouseup' && callback.name === 'trapClickAndEnd') endHandler = callback; return originalAdd.call(this, type, callback, options); };
+    bus.fire('element.mousedown', { element: edge, gfx: registry.getGraphics(edge), originalEvent: input(m, 280, 560, 'FlowB') });
+    document.addEventListener = originalAdd; assert.equal(typeof endHandler, 'function', 'actual Dragging registers its ghost-click-aware mouseup handler');
+    dragging.move(input(m, 300, 500, 'FlowB')); dragging.hover({ element: registry.get('SpareSource'), gfx: registry.getGraphics('SpareSource') });
+    dragging.move(input(m, 280, 80, 'SpareSource')); endHandler(input(m, 280, 80, 'SpareSource'));
+    assert.equal(edge.source.id, 'SpareSource'); assert.deepEqual(selection.get().map(e => e.id), ['FlowA']);
+    const before = await save(m), history = m.get('commandStack')._stackIdx, root = canvas.getRootElement();
+    const click = () => bus.fire('element.click', { element: root, gfx: registry.getGraphics(root), originalEvent: input(m, 1000, 700, root.id) });
+    assert.equal(click(), false); assert.deepEqual(trace[0], { id: root.id, trusted: false, trap: true, afterTrap: false }); assert.deepEqual(selection.get().map(e => e.id), ['FlowA']);
+    click(); assert.deepEqual(trace[1], { id: root.id, trusted: false, trap: false, afterTrap: true }); assert.deepEqual(selection.get(), []);
+    assert.equal(await save(m), before); assert.equal(m.get('commandStack')._stackIdx, history);
+  } finally { document.addEventListener = originalAdd; m.destroy(); }
 });

@@ -40,18 +40,21 @@ cases pass: eight matching cases and eight explicitly asserted reference
 behavior differences. Local shared-title preservation and exact history remain
 required. See [Group labels](GROUP-LABELS.md).
 
-The same hosted revision is not accepted: global Window mousemove events exposed
-a hover lookup exception in smoke, and 18 earlier native cases stopped at
-control-target guards that rejected promoted hit circles before exercising their
-gestures. Several of the 32 new hover cases exposed incorrect harness assumptions
-about segment visibility, preview marker paths and minimap background clicks.
-The scoped follow-up fixes the event-target guard and promoted style/zoom
-lifecycle; the three earlier native suites now verify exact selected owner,
-waypoint index, visible marker, geometry and viewport bounds. Their original drag,
-anchor, semantic and history assertions remain unchanged. Corrected hover cases
-retain actual native input and all 32 engine cases. Independent review and focused
-checks are recorded in [hover controls](HOVER-CONTROLS.md); the exact combined
-follow-up still requires its full local gate and hosted native rerun.
+Hosted follow-up `e209c17` restores every established native suite, including
+smoke, 27 connection groups, all advanced cases, 27 flow groups and all 16 Group
+cases. Build, packed consumers and CodeQL pass. Its local checkpoint `2f207d2e`
+passed 453 units and 247 XSD exports plus ten native fixtures.
+
+Only the new 32-case hover gate remains open. Its local cases stopped in test
+setup because the background collector assumed a nonexistent Graph.root field;
+the actual API exposes roots. Three reference assertions exposed cumulative zoom
+moving the tested control off canvas, the pinned one-shot post-drag click trap,
+and one exact semantic sibling reorder after Delete/Undo. The test-only follow-up
+executes the serialized collector against both actual editors, retains strict
+visible-hit and delivered-input checks, permits a second native background click
+only when the real trap is observed, and limits the Delete/Undo allowance to the
+proven fixture/order. Production source is unchanged. Native32 rerun remains
+required; see [hover controls](HOVER-CONTROLS.md).
 
 The previously reported quadratic Text.js expression is replaced by equivalent
 linear trailing-whitespace handling. Published security revision `2eb1f7c` and
@@ -98,14 +101,14 @@ evidence.
 | Export/frameworks/package | Reopen, SVG, framework lifecycle and packed Bundler/NodeNext/runtime gates remain required on new source |
 | Attribution | Retained upstream license and visible bpmn.io attribution must remain unchanged and tested |
 | Site | Current site pins the older baseline; update only after reviewed library publication and rerun served-production/native preview checks |
-| Flow annotations | Hosted `20fb` passes 23 existing groups; combined `fae65847` reaches corrected Ctrl activation but ten cases stop at promoted-control guards. All 27 groups must pass the follow-up |
+| Flow annotations | Hosted `e209c17` passes all 27 groups, including separately asserted reference input-policy differences |
 | Group lifecycle | Hosted `fae65847` passes all 16 cases: eight matching and eight precisely asserted reference differences; retain this gate after later edits |
-| Hover-only connection controls | Hosted `fae65847` exposed event-target/control-lifecycle and harness failures; scoped fixes are reviewed, and native32 rerun remains required |
+| Hover-only connection controls | Hosted `e209c17` leaves only test-setup/reference failures in native32; reviewed test-only fixes retain all gesture, geometry and history requirements |
 
 ## Remaining acceptance gates
 
-1. Verify the exact scoped hover follow-up with independent review, semantic/XSD
-   tests, build, packed consumers and hosted CodeQL; retain the cleared security fix
+1. Verify the exact test-only hover follow-up with actual-editor reference tests
+   and XSD exports; retain the unchanged, already verified source/build/security tree
 2. Publish only the exact approved tree to the existing draft PR and run every
    native suite, retaining the green hit/label/IO baseline assertions
 3. Diagnose failures without weakening meaningful gesture or semantic assertions;
