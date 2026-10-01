@@ -15,29 +15,33 @@ viewer/business suites passed at that revision.
 
 This is a **new reconstruction** of the bounded IO conversion, label snapping and
 hit-policy correction. The previous unpublished local snapshot is unavailable;
-its commit, test counts and review do not certify these new bytes. Fresh source and semantic review of IO/label/hit checkpoint `2832d9f9` is complete. That snapshot passes
-297 unit tests, 135 official XSD exports, XML/security checks, lint, build, workflow
-validation and 73-file packed-consumer checks. Native verification remains
-required before acceptance.
+its commit, test counts and review do not certify these new bytes. Fresh source
+and semantic review of IO/label/hit checkpoint `2832d9f9` is complete. That
+snapshot passes 297 unit tests, 135 official XSD exports, XML/security checks,
+lint, build, workflow validation and 73-file packed-consumer checks.
 
-The current scope is:
-- Default external-label snapping, modifier bypass and accurate native expectations
-- Generic shape/label hit regions, with the existing explicit imported-label
-  layering difference documented separately from equivalence
-- Explicit undoable cleanup for IO-bearing catch/throw family conversion,
-  preserving compatible properties, references, extensions and exact history
+The IO/label/hit reconstruction was published as `e606d75`. The corrected native
+baseline `4515` is green, including 27 hit comparisons, 23 external-label cases
+and two IO conversion cases, together with the retained native suites. Those
+results establish that baseline only; later source needs its own native run.
 
-The IO/label/hit reconstruction was published as `e606d75`. Its native IO cases,
-original arrow groups and earlier core suites passed; one boundary-hover hit and
-upstream-only label reopen normalization remain under investigation. Test-only
-follow-up `a7d407c` records exact reference normalization and hover diagnostics;
-its hosted results are pending.
-
-The separate local flow follow-up now implements connection-owned annotations,
+The reconstructed flow follow-up implements connection-owned annotations,
 dependent routes, ownership/deletion/clipboard handling and minimal append pan.
-It has independent source review and fresh structural evidence, described in
-[flow annotations](FLOW-ANNOTATIONS.md); its native 23-case acceptance is pending.
-Group category/lifecycle and foreground ordering remain a separate recovery stage.
+Hosted flow revision `3fe41f8` is red. Reviewed repair commits `f8fa4ab9` and
+`b4a991c9` correct compatible target hit selection, semantic containment order and
+data-association IO allocation, and refine the reference-only native oracles.
+The exact isolated repair passes 365 unit tests, 193 official XSD mutation exports
+plus four native fixtures, lint, build, package78 and workflow validation. The
+repair is published as `063bac7647eca8335364d35c9828f66574b3d7a7`
+(tree `6988dcfc`), and its hosted native CI is running. The 23-case native flow
+rerun remains pending; see [flow annotations](FLOW-ANNOTATIONS.md).
+
+The Group checkpoint `96fa1cbf` has reviewed category/lifecycle, frame layering,
+owner-label geometry and pinned text-fit corrections. Its exact source passes
+383 unit tests, 194 official XSD mutation exports plus seven native fixtures,
+and 85-file packed-consumer checks. Its 16 native cases have not run; see
+[Group labels](GROUP-LABELS.md). Integrating the flow repair with Group requires
+fresh verification of the combined source.
 
 Published site `65bf8846d1e8f32c3ec09e22706ea939bcac870d` pins `7bc8a3a` and passed
 its served-production gate. Manual preview QA previously verified the reported
@@ -60,38 +64,40 @@ on every new revision. No full-core completion claim follows from those cases.
 
 ## Acceptance ledger
 
-Historical hosted evidence is bound to `7bc8a3a`. Every row affected by this
-reconstruction requires fresh local and hosted results. Prepared tests are not
-passed evidence.
+Evidence is bound to the exact revisions above. Every area affected by later
+changes requires fresh local and hosted results. Prepared tests are not passed
+evidence.
 
 | Core area | Current evidence and remaining gate |
 | --- | --- |
 | XML/DI/extensions/security | Independent moddle oracle, corpus/business fixtures, hostile-input tests and official XSD remain mandatory; rerun against reconstructed edits |
-| Renderer/viewport/hit selection | Existing hosted theme/fit/export coverage passes; four native hit differences need corrected reference comparisons and rerun |
-| Creation/replacement | Existing catalog/context/core gates pass; explicit IO cleanup needs fresh API, native and packed-consumer verification |
+| Renderer/viewport/hit selection | Baseline `4515` passes all 27 hit comparisons; Group frames and later interaction changes require their own native acceptance |
+| Creation/replacement | Baseline `4515` passes both native IO cleanup cases; preserve API, semantic and packed-consumer checks on later source |
 | Move/resize/containment | Existing core/advanced and original connection gates pass at baseline; retain them on new source |
 | Connection gestures | Original 27 native groups and manual source/drop/route evidence are regression requirements, not a full interaction guarantee |
-| Undo/redo/delete/copy | Baseline exact-history and subtree/label/reference regressions remain; IO refusal/cleanup/history needs new semantic assertions |
-| External labels | Width resize exists; default grid/modifier behavior and 23-case native expectations require fresh execution |
+| Undo/redo/delete/copy | Baseline exact-history and IO refusal/cleanup cases pass; Group lifecycle and flow-repair history need combined-source verification |
+| External labels | Baseline `4515` passes all 23 native width/grid/modifier/reopen cases; Group text-fit and owner-label changes require fresh execution |
 | Pools/lanes/subprocesses | Existing core/advanced gates pass at baseline and remain required |
 | Keyboard/search/align/space | Existing native/core gates remain required; no new capability claim |
 | Touch | Ten baseline differential groups pass within measured reference behavior; retain exact streams |
 | Export/frameworks/package | Reopen, SVG, framework lifecycle and packed Bundler/NodeNext/runtime gates remain required on new source |
 | Attribution | Retained upstream license and visible bpmn.io attribution must remain unchanged and tested |
 | Site | Current site pins the older baseline; update only after reviewed library publication and rerun served-production/native preview checks |
-| Flow annotations | Reconstructed local source is independently reviewed; fresh aggregate and native23 acceptance remain required |
-| Group lifecycle | Separate later recovery stage; overall core parity remains open |
+| Flow annotations | Hosted `3fe41f8` failed; exact repair `b4a991c9` passes 365 units, 193 XSD exports plus four fixtures and package78; native23 rerun pending |
+| Group lifecycle | Exact `96fa1cbf` passes 383 units, 194 XSD mutation exports plus seven fixtures and package85; native16 unrun |
+| Hover-only connection controls | Numeric viewport precision is corrected; unselected hover-control activation remains an explicit remaining capability |
 
 ## Remaining acceptance gates
 
-1. Local implementation, independent review, semantic/XSD tests, build and packed
-   consumers pass for this bounded reconstruction; retain those gates on updates
-2. Publish its exact reviewed tree to the existing draft PR and run every native
-   suite, including corrected hit/label cases and the new IO cases
+1. Verify the combined Group and flow-repair source with independent review,
+   semantic/XSD tests, build and packed consumers
+2. Publish only the exact approved tree to the existing draft PR and run every
+   native suite, retaining the green hit/label/IO baseline assertions
 3. Diagnose failures without weakening meaningful gesture or semantic assertions;
    update the paired site only with a verified library revision
-4. Complete the separate reconstructed flow aggregate/native gates; recover and
-   review Group scope separately before any overall parity statement
+4. Complete the repaired flow native23 and Group native16 gates
+5. Implement and verify reference hover-only connection controls, preserving
+   selection, cancellation and exact model history without widening static hits
 
 Touch shape dragging/resizing did not activate in either pinned engine in the
 recorded baseline. The differential pass establishes the measured behavior only;

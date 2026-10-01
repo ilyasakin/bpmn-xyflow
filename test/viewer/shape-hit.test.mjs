@@ -43,9 +43,9 @@ test('fresh Group, history and reopen use the same border-only semantic frame po
   m.viewer._internals.redrawShape(m.getElement(id));assert.equal(assertHit(),width);
  }finally{m.destroy();}
 });
-test('current semantic type overrides stale or absent frame hints without changing frame paint rank',()=>{
+test('current semantic type overrides stale or absent frame hints with the normal-modeling foreground frame rank',()=>{
  const group={id:'g',type:'bpmn:Group'},task={id:'t',type:'bpmn:Task'},stale={id:'a',type:'bpmn:TextAnnotation',isFrame:true};
  assert.equal(isFrameElement(group),true);assert.equal(isFrameElement(stale),false);
  assert.equal(isFrameElement({type:'label',businessObject:{$type:'bpmn:Group'},isFrame:true}),false);
- assert.deepEqual(getShapePaintOrder([task,group,stale]).map(n=>n.id),['g','t','a']);
+ assert.deepEqual(getShapePaintOrder([task,group,stale]).map(n=>n.id),['t','a','g']);
 });

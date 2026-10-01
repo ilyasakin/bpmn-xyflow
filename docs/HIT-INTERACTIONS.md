@@ -11,7 +11,8 @@ Shapes and external labels have transparent rectangular hit surfaces with a
 outline, determines the padded hit area. Groups accept border hits only. A
 current semantic Group type determines this for imported, created and restored
 graphics; importer convenience flags cannot make a new Group consume its
-interior. This change preserves the existing shape/connection paint order.
+interior. Ordinary shapes keep the existing shape/connection paint order. Group frames
+now use a dedicated foreground layer, described below.
 
 Connections also use a 15 graph-unit corridor. It scales with the diagram and
 is not clipped against endpoint interiors, matching the reference. Fixed-screen
@@ -50,3 +51,17 @@ results are saved under `test-artifacts`.
 Prepared native tests are not a claim that this reconstructed revision has run in
 Chrome. Retain the full native connection suite as the independent regression
 gate for chosen docking points, live previews, exact history and reopen behavior.
+
+## Group frame ordering
+
+The Group follow-up puts frames above connections, matching pinned
+BpmnOrderingProvider normal-creation level10. Transparent Group interiors remain
+noninteractive; only the border accepts input. Imported/reopened Groups use the
+same consistent order locally. The pinned reference imports a Group before some
+connections, so its overlapping border can select the Flow after reopen even
+though normal creation selects the Group. Group16 asserts both exact lifecycle
+outcomes and reports the import difference explicitly; it is not counted as
+equal parity. The frame layer is retained in standalone SVG and kept below
+external labels and editor controls. This does not change ordinary leaf-shape
+paint order or the endpoint corridor. Native execution of the new Group cases
+remains required.

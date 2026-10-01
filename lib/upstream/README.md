@@ -19,3 +19,17 @@ of end-to-end parity.
 The four additional modeling/behavior/util files are unchanged pinned connection
 attachment geometry helpers. ConnectionDependents wraps their pure adjustment
 function; provenance records exact paths and hashes. No upstream engine is used.
+
+GroupCategory uses only the pinned UpdateCategoryValueRefsHandler pure planning
+method on shadow objects plus CategoryUtil. Both files are byte-identical and
+listed in provenance; the fork owns mutations and exact history.
+
+LineUtil.js is the unchanged bpmn-js 18.30.1 nearest-border geometry helper.
+ExternalLabelResize uses it for the LabelBehavior owner-resize delta; its exact
+source path and SHA-256 are recorded under additionalSources. The retained
+upstream LICENSE applies. No upstream engine or command stack is instantiated.
+
+The diagram-js subdirectory retains unchanged Text.js from diagram-js15.27.1,
+with its original MIT LICENSE and a separate provenance manifest. TextRenderer
+uses this helper to match the pinned exact-width line-fitting boundary. The
+root diagram-js dependency and XYFlow interaction engine remain unchanged.

@@ -30,7 +30,7 @@ test('stable paint order honors lane membership, nested containers, host and fra
   const peer={id:'peer',parent:pool};
   const input=[boundary,task,peer,lane,frame,pool], snapshot=[...input];
   const ordered=getShapePaintOrder(input).map(n=>n.id);
-  assert.deepEqual(ordered,['pool','frame','lane','task','boundary','peer']);
+  assert.deepEqual(ordered,['pool','lane','task','boundary','peer','frame']);
   assert.deepEqual(input,snapshot);
 });
 

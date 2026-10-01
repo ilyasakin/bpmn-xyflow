@@ -23,6 +23,18 @@
     "modeling/behavior/util/GeometricUtil.js": {
       "source": "lib/features/modeling/behavior/util/GeometricUtil.js",
       "sha256": "38738a254c403f642a8941ce3a361aaf35e0e44d25245690fd6052b5b4ab6528"
+    },
+    "modeling/cmd/UpdateCategoryValueRefsHandler.js": {
+      "source": "lib/features/modeling/cmd/UpdateCategoryValueRefsHandler.js",
+      "sha256": "c57b722b5f22dc9da3b07c5f32710f82dd2e5b2b50b4e906f75f241497672eb5"
+    },
+    "modeling/behavior/util/CategoryUtil.js": {
+      "source": "lib/features/modeling/behavior/util/CategoryUtil.js",
+      "sha256": "c6dcf9367a69623469348eccb49ae0ff0457b94df5c0c0234f7c291334a52200"
+    },
+    "LineUtil.js": {
+      "source": "lib/util/LineUtil.js",
+      "sha256": "ce5d1cb2d34d07378a975c4c9c4615f1eb75dd7c4c900a451eaef9004e06f145"
     }
   }
 }
