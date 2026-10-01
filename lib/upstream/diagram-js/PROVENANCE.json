@@ -1,11 +1,19 @@
 {
   "upstream": "bpmn-io/diagram-js",
   "version": "15.27.1",
-  "purpose": "Exact pinned text-fitting boundary behavior required by the bpmn-js18.30.1 reference; runtime diagram engine and root dependency unchanged.",
+  "purpose": "Pinned text-fitting boundary behavior required by bpmn-js 18.30.1, with a documented linear trailing-whitespace security fix; runtime diagram engine and root dependency unchanged.",
   "files": {
     "Text.js": {
       "source": "lib/util/Text.js",
-      "sha256": "20a1c19dca365f7b427d2b5b3a24a514ffd55a451a3d63b035094a53154e1d35"
+      "sha256": "2088ac5ba6ffc2324a6bf03d34446effbf4164abbd24dd0fcda1018699b8f737",
+      "upstreamSha256": "20a1c19dca365f7b427d2b5b3a24a514ffd55a451a3d63b035094a53154e1d35",
+      "localChanges": [
+        {
+          "reason": "Avoid polynomial regex backtracking on uncontrolled label text (CodeQL js/polynomial-redos, alert 3).",
+          "from": "text.replace(/\\s+$/, '')",
+          "to": "text.trimEnd()"
+        }
+      ]
     },
     "LICENSE": {
       "source": "LICENSE",

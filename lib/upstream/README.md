@@ -29,7 +29,13 @@ ExternalLabelResize uses it for the LabelBehavior owner-resize delta; its exact
 source path and SHA-256 are recorded under additionalSources. The retained
 upstream LICENSE applies. No upstream engine or command stack is instantiated.
 
-The diagram-js subdirectory retains unchanged Text.js from diagram-js15.27.1,
-with its original MIT LICENSE and a separate provenance manifest. TextRenderer
-uses this helper to match the pinned exact-width line-fitting boundary. The
+The diagram-js subdirectory retains Text.js from diagram-js15.27.1, with its
+original MIT LICENSE and a separate provenance manifest. One local security
+patch replaces trailing-whitespace regex removal in getTextBBox with trimEnd().
+The unanchored regex could retry a long whitespace run at each character when
+followed by non-whitespace; the native string operation preserves ECMAScript
+whitespace semantics without that polynomial backtracking. The empty-line dummy
+measurement and original rendered text remain unchanged. Provenance records both
+the upstream and patched hashes, and tests require this exact one-operation diff.
+TextRenderer still matches the pinned exact-width line-fitting boundary. The
 root diagram-js dependency and XYFlow interaction engine remain unchanged.
