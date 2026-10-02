@@ -38,17 +38,47 @@ A passive observer records trusted native input and focus/leave events, the
 public Viewer notifications, exact before/current viewport values, control DOM
 identity/geometry/removal, hit ownership and selection/history. A stack is
 recorded for public viewport/selection notifications to distinguish their
-origin. The test driver marks evaluation and screenshot boundaries; it never
-patches product methods, dispatches input, retries an action or adds settling
-waits. These extra observation round trips can affect timing, so passing
-repetitions alone cannot close the previously observed defect.
+origin. The observer is installed once before the workflow. The driver records
+evaluation and screenshot boundaries in Node only: it inserts no diagnostic
+browser evaluation, artifact dump or settling wait between the original calls.
+It never patches product methods, dispatches input or retries an action.
+
+One final browser read runs during owned cleanup, after the original workflow
+and its normal success/failure evidence. Its JSON includes Node phase timestamps,
+the browser time origin and installation timestamp, the checked-out Git head,
+committed `lib` tree, modified production paths and SHA256 hashes of Modeler,
+Viewer and the grab-placement helper. The Node installation envelope bounds
+clock alignment without an additional browser synchronization call. Cleanup
+still runs if that final read fails; a second cleanup does not repeat the dump.
+The passive snapshots themselves still consume execution time, so even this
+reduced capture cannot make passing repetitions prove the original race fixed.
 
 Evidence is under `test-artifacts/boundary-acquisition-diagnostics`, including
-per-repeat latest/final traces and the ordinary case screenshots/XML/results.
-The trace reports any record-limit truncation. The original failing assertion
+one per-repeat final trace and the ordinary case screenshots/XML/results. The
+trace reports any record-limit truncation. The original failing assertion
 remains the gate. No new browser pass is claimed by the structural checks.
+
+## First diagnostic run: six passes, cause unresolved
+
+At `a0108a7`, all six original workflows passed with the first diagnostic driver.
+Every acquired grab retained the same DOM identity until mousedown. There were
+five genuine wheel-driven viewport notifications per case, all before the
+critical acquisition interval; no unchanged-value notification was observed.
+No blur, pointerleave or selection change occurred between final arrival at
+`(1134,715)` and the subsequent press. Every source-control screenshot produced
+a native window resize event while leaving the handle intact.
+
+The arrival-to-press interval was 202–210 ms. The screenshot occupied 107–114 ms,
+and the old diagnostic dump added 35–43 ms before the next original evaluation.
+The old driver also inserted two awaited browser evaluations around each
+original evaluation. Those round trips could mask a timing race. The original
+failed input trace has no timestamps, so an exact timing comparison is not
+available. This evidence motivated the reduced capture above, not a production
+change or closure of F23-B.
 
 Focused checks: `selected-boundary-acquisition.test.mjs` verifies the actual
 registered geometry/history sequence; `boundary-acquisition-diagnostics.test.mjs`
 checks the serialized observer, unchanged-transform/removal detection,
-non-consuming input, lifecycle disposal and transparent driver error identity.
+non-consuming input, lifecycle disposal, absence of intermediate diagnostic
+browser calls, transparent operation values/errors, single final dump and owned
+cleanup on diagnostic failure.

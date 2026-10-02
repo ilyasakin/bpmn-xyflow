@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 import { Window } from 'happy-dom';
 import { installBoundaryAcquisitionDiagnostics, markBoundaryAcquisitionPhase, readBoundaryAcquisitionDiagnostics } from '../helpers/boundary-acquisition-diagnostics.mjs';
 
@@ -65,33 +69,74 @@ test('passive observer leaves input ownership intact and records focus/leave lif
   }finally{await h.close();}
 });
 
-test('diagnostic driver keeps six original cases, callback values and original rejection identities',async()=>{
+test('diagnostic driver records phases only in Node and dumps once after unchanged operations',async()=>{
   const {runBoundaryAcquisitionDiagnostics}=await import('./browser-boundary-acquisition.mjs');
-  const originalRun=async()=>({original:true}),markerCalls=[],operationCalls=[];
+  const output=await mkdtemp(join(tmpdir(),'boundary-diagnostic-contract-'));
+  const originalRun=async()=>({original:true}),browserCalls=[],screenshotCalls=[];
   const originalCase={id:'F23-B',name:'selected-boundary-lower-origin',engine:'local',batch:'b',sample:'Booking, timeout and compensation',run:originalRun};
   let closed=false,stops=0;
-  const expectedError=new Error('original evaluation failure');
+  const expectedError=new Error('original evaluation failure'),image=Buffer.from('unchanged screenshot');
+  const clock={timeOrigin:1234,installedAt:56};
   const page={isClosed:()=>closed,
     async evaluate(fn,...args){
-      if(fn===installBoundaryAcquisitionDiagnostics)return;
-      if(fn===markBoundaryAcquisitionPhase){markerCalls.push(args[0]);if(args[0].includes(':rejected:'))throw Error('secondary observer failure');return;}
-      if(fn===readBoundaryAcquisitionDiagnostics)return {records:[],dropped:0};
-      operationCalls.push({fn,args});return fn(...args);
-    },async screenshot(){throw expectedError;}};
-  await runBoundaryAcquisitionDiagnostics({
-    registerCases:async()=>[originalCase],
-    harnessFactory:()=>({open:async()=>({page,errors:[]}),stop:async()=>{closed=true;stops++;}}),
-    runner:async(options,configuration)=>{
-      assert.deepEqual(options,{batch:'b',engine:'local'});
-      const cases=await configuration.registerCases();assert.equal(cases.length,6);
-      for(const c of cases){assert.equal(c.run,originalRun);assert.equal(c.sample,originalCase.sample);assert.equal(c.id,originalCase.id);}
-      const h=configuration.harnessFactory({});await h.open('local',originalCase.sample);
-      const value=await page.evaluate((a,b)=>({sum:a+b}),2,3);assert.deepEqual(value,{sum:5});assert.equal(operationCalls.length,1);
-      await assert.rejects(page.evaluate(()=>{throw expectedError;}),error=>error===expectedError);
-      await assert.rejects(page.screenshot({path:'unchanged.png',fullPage:true}),error=>error===expectedError);
-      closed=true;await h.stop();assert.equal(stops,1);
+      assert.equal(this,page);browserCalls.push({fn,args});
+      if(fn===installBoundaryAcquisitionDiagnostics)return clock;
+      if(fn===markBoundaryAcquisitionPhase)throw Error('no browser phase evaluations permitted');
+      if(fn===readBoundaryAcquisitionDiagnostics)return {records:[{sequence:1}],dropped:0};
+      return fn(...args);
+    },async screenshot(...args){assert.equal(this,page);screenshotCalls.push(args);if(args[0].path==='rejected.png')throw expectedError;return image;}};
+  try{
+    await runBoundaryAcquisitionDiagnostics({output,
+      registerCases:async()=>[originalCase],
+      harnessFactory:()=>({open:async()=>({page,errors:[]}),stop:async()=>{closed=true;stops++;}}),
+      runner:async(options,configuration)=>{
+        assert.deepEqual(options,{batch:'b',engine:'local'});
+        const cases=await configuration.registerCases();assert.equal(cases.length,6);
+        for(const c of cases){assert.equal(c.run,originalRun);assert.equal(c.sample,originalCase.sample);assert.equal(c.id,originalCase.id);}
+        const h=configuration.harnessFactory({});await h.open('local',originalCase.sample);
+        const add=(a,b)=>({sum:a+b});
+        assert.deepEqual(await page.evaluate(add,2,3),{sum:5});
+        assert.deepEqual(browserCalls.map(c=>c.fn),[installBoundaryAcquisitionDiagnostics,add]);
+        assert.deepEqual(browserCalls[1].args,[2,3]);
+        const reject=()=>{throw expectedError;};
+        await assert.rejects(page.evaluate(reject),error=>error===expectedError);
+        await assert.rejects(page.screenshot({path:'rejected.png',fullPage:true}),error=>error===expectedError);
+        assert.equal(await page.screenshot({path:'unchanged.png',fullPage:true}),image);
+        assert.deepEqual(browserCalls.map(c=>c.fn),[installBoundaryAcquisitionDiagnostics,add,reject],
+          'no diagnostic evaluation or dump between original operations');
+        assert.deepEqual(screenshotCalls,[[{path:'rejected.png',fullPage:true}],[{path:'unchanged.png',fullPage:true}]]);
+        await h.stop();await h.stop();assert.equal(stops,2,'owned cleanup remains repeatable');
+        assert.equal(browserCalls.filter(c=>c.fn===readBoundaryAcquisitionDiagnostics).length,1,'one final dump only');
+      },
+    });
+    const evidence=JSON.parse(await readFile(join(output,'repeat-1-final.json'),'utf8'));
+    assert.deepEqual(evidence.browserClock,clock);assert.deepEqual(evidence.records,[{sequence:1}]);
+    assert.match(evidence.source.head,/^[0-9a-f]{40}$/);assert.match(evidence.source.committedLibTree,/^[0-9a-f]{40}$/);
+    for(const [path,hash] of Object.entries(evidence.source.sha256))assert.equal(hash,createHash('sha256').update(await readFile(new URL(`../../${path}`,import.meta.url))).digest('hex'));
+    const labels=evidence.driverPhases.map(p=>p.label);
+    assert.ok(labels.some(label=>label.startsWith('evaluate:')&&label.endsWith(':rejected')));
+    assert.ok(labels.includes('screenshot:rejected.png:rejected'));assert.ok(labels.includes('screenshot:unchanged.png:after'));
+    assert.deepEqual(labels.slice(-2),['final-dump:before','final-dump:after']);
+    for(const phase of evidence.driverPhases){assert.ok(Number.isFinite(phase.monotonicMs));assert.equal(phase.epochMs,evidence.nodeTimeOrigin+phase.monotonicMs);}
+  }finally{await rm(output,{recursive:true,force:true});}
+});
+
+test('final diagnostic read failure still runs owned cleanup without retrying or replacing original errors',async()=>{
+  const {runBoundaryAcquisitionDiagnostics}=await import('./browser-boundary-acquisition.mjs');
+  const originalError=new Error('original operation rejected'),dumpError=new Error('diagnostic read rejected');
+  let stopped=0,dumps=0,closed=false;
+  const page={isClosed:()=>closed,async evaluate(fn){
+    if(fn===installBoundaryAcquisitionDiagnostics)return {timeOrigin:1,installedAt:2};
+    if(fn===readBoundaryAcquisitionDiagnostics){dumps++;throw dumpError;}
+    throw originalError;
+  },async screenshot(){throw originalError;}};
+  await runBoundaryAcquisitionDiagnostics({readSourceIdentity:async()=>({head:'fixture'}),
+    harnessFactory:()=>({open:async()=>({page}),stop:async()=>{stopped++;closed=true;}}),
+    runner:async(_options,configuration)=>{
+      const h=configuration.harnessFactory({});await h.open();
+      await assert.rejects(page.evaluate(()=>{}),e=>e===originalError);
+      await assert.rejects(h.stop(),e=>e===dumpError);assert.equal(stopped,1);
+      await h.stop();assert.equal(dumps,1);assert.equal(stopped,2);
     },
   });
-  assert.ok(markerCalls.some(label=>label.startsWith('evaluate:')));
-  assert.ok(markerCalls.some(label=>label.startsWith('screenshot:unchanged.png')));
 });

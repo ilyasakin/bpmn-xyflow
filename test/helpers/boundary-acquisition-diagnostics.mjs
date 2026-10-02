@@ -89,6 +89,7 @@ export function installBoundaryAcquisitionDiagnostics() {
     stop:()=>{record('phase',{label:'stop'});disposed=true;observer.disconnect();disposers.forEach(dispose=>dispose());},
   };
   record('phase',{label:'installed'});
+  return { timeOrigin:performance.timeOrigin, installedAt:performance.now() };
 }
 
 export function markBoundaryAcquisitionPhase(label) {
