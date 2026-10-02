@@ -52,13 +52,14 @@ test('page collector is self-contained and records actual trusted target and SVG
   const listeners=new Map(),attrs={cx:'30',cy:'40',r:'5'},hitAttrs={...attrs,r:'5.75'};
   const handle={getAttribute:()=> 'Target',querySelector:selector=>selector.endsWith('connect-port')?port:hit};
   const target={closest:selector=>selector==='.bpmn-xyflow-connect-handle'?handle:null,getAttribute:()=> 'bpmn-xyflow-connect-hit'};
-  const port={closest:()=>handle,getAttribute:key=>attrs[key],style:{strokeWidth:'1.5'},getScreenCTM:()=>({inverse:()=>({})}),getBoundingClientRect:()=>({width:10,height:10}),isPointInFill:()=>true,isPointInStroke:()=>false};
+  const port={closest:()=>handle,getAttribute:key=>attrs[key],style:{strokeWidth:'1.5px'},getScreenCTM:()=>({inverse:()=>({})}),getBoundingClientRect:()=>({width:10,height:10}),isPointInFill:()=>true,isPointInStroke:()=>false};
   const hit={getAttribute:key=>hitAttrs[key]};
   const context={window:{hitEngine:{container:{contains:()=>true},viewport:()=>({zoom:1})}},document:{createElementNS:()=>({style:{}}),addEventListener:(name,fn)=>{listeners.set(name,fn);},elementFromPoint:()=>target},getComputedStyle:el=>el===hit?{pointerEvents:'all'}:{display:'inline',visibility:'visible',opacity:'1',fill:'blue',stroke:'white',fillOpacity:'1',strokeOpacity:'1'},DOMPoint:class{constructor(x,y){this.x=x;this.y=y;}matrixTransform(){return this;}}};
   vm.runInNewContext(`(${installNativeSourceHitCapture.toString()})()`,context);
   for(const type of ['mousemove','mousedown','mouseup'])assert.equal(listeners.get(type)({target,clientX:30,clientY:40,isTrusted:true}),undefined,'passive observer returns void');
   const events=JSON.parse(JSON.stringify(context.window.nativeHitCapture.events));assert.equal(events.length,3);
   assert.deepEqual(events[1].point,{x:30,y:40});assert.equal(events[1].trusted,true);assert.equal(events[1].target.owner,'Target');assert.deepEqual(events[1].target,events[1].queried);assert.equal(events[1].control.hitRadius,5.75);assert.equal(events[1].control.inFill,true);assert.equal(events[1].control.paintedAtPoint,true);
+  assert.equal(events[1].control.strokeWidthCSS,'1.5px');assert.equal(events[1].control.expectedStrokeWidthCSS,events[1].control.strokeWidthCSS,'detached style uses the same px length as tiny-svg, including its unit');
   context.getComputedStyle=el=>el===hit?{pointerEvents:'all'}:{display:'inline',visibility:'visible',opacity:'1',fill:'rgb(0 80 255 / 0%)',stroke:'rgba(255,255,255,0)',fillOpacity:'1',strokeOpacity:'1'};
   listeners.get('mousedown')({target,clientX:30,clientY:40,isTrusted:true});assert.equal(context.window.nativeHitCapture.events.at(-1).control.paintedAtPoint,false);
 });

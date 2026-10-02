@@ -41,8 +41,9 @@ export function installNativeSourceHitCapture() {
     const inFill = port.isPointInFill(local), inStroke = port.isPointInStroke(local);
     // CSSOM serializes lengths at browser precision; compare against its own
     // detached canonical representation of the exact prescribed stroke.
+    // tiny-svg writes numeric stroke widths as px lengths, not unitless values.
     const expectedStyle = document.createElementNS('http://www.w3.org/2000/svg', 'circle').style;
-    expectedStyle.strokeWidth = String(1.5 / engine.viewport().zoom);
+    expectedStyle.strokeWidth = `${1.5 / engine.viewport().zoom}px`;
     return {
       owner: handle.getAttribute('data-connect-source'), zoom: engine.viewport().zoom,
       center: { x: Number(port.getAttribute('cx')), y: Number(port.getAttribute('cy')) },
