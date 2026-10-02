@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import vm from 'node:vm';
-import { assertRenderedDI, collectRenderedDI, selectVisibleFollowupBody, prepareReferenceOutlineTarget, adjacentDropPixels, chooseAdjacentReferenceDrop, clickReferenceSubprocessReplacement, collectReferenceLaneTop } from '../helpers/anchor-followup-dom.mjs';
+import { assertRenderedDI, collectRenderedDI, selectVisibleFollowupBody, prepareReferenceOutlineTarget, collectReferenceOutlineChrome, assertReferenceOutlineRestingHit, adjacentDropPixels, chooseAdjacentReferenceDrop, clickReferenceSubprocessReplacement, collectReferenceLaneTop } from '../helpers/anchor-followup-dom.mjs';
 
 test('recorded Chrome paint matches full SVG CTM, while rounded Canvas.viewbox fails the unchanged bound',()=>{
   const cases=[
@@ -100,17 +100,44 @@ test('reference outline preflight follows the actual source click and preserves 
       raw: async () => ({ selection }), node: () => ({ x: 200, y: 390, width: 100, height: 80 }),
       screen: (_s, p) => p, settle: async () => {}, noChange: async () => {},
       hit: async (_page, p) => p === point
-        ? { inside: true, id: clicked ? 'Payment' : 'OrderCollaboration', class: clicked ? 'djs-hit-click-stroke' : 'djs-resizer-hit' }
+        ? { inside: true, owners: ['Payment', 'SellerPool', 'OrderCollaboration'], id: clicked ? undefined : 'OrderCollaboration', class: clicked ? 'entry bpmn-icon-screw-wrench' : 'djs-resizer-hit' }
         : { inside: true, id: 'ValidateOrder' } };
-    const page = { mouse: { move: async (x, y) => { pointer = { x, y }; }, click: async (x, y) => {
+    const page = { evaluate: async () => ({ point, action: 'replace', ownOpenPad: true, topClass: 'entry bpmn-icon-screw-wrench', entryBounds: {left:485,top:555,right:507,bottom:577}, padBounds:{left:485,top:508,right:557,bottom:606} }), mouse: { move: async (x, y) => { pointer = { x, y }; }, click: async (x, y) => {
       assert.deepEqual({ x, y }, pointer); clicked = true; selection = ['ValidateOrder'];
     } } };
     const result = await prepareReferenceOutlineTarget(h, page,
       { source: 'ValidateOrder', target: 'Payment', point }, e => { saved = e; });
     assert.equal(result, saved); assert.equal(result.point, point);
-    assert.equal(result.beforeHit.id, 'OrderCollaboration'); assert.equal(result.afterHit.id, 'Payment');
+    assert.equal(result.beforeHit.id, 'OrderCollaboration'); assert.equal(result.afterHit.id, undefined); assert.equal(result.chrome.action, 'replace');
   };
   await run();
   for (const corrupt of [s => { s.xml += 'changed'; }, s => { s.history.undo = false; },
     s => { s.viewport.x++; }, s => { s.selection = ['Payment']; }]) await assert.rejects(run(corrupt));
+});
+
+test('recorded resting source pad is admitted only as owned chrome above the unchanged outline', () => {
+  const hit={inside:true,owners:['Payment','SellerPool','OrderCollaboration'],class:'entry bpmn-icon-screw-wrench'},
+    chrome={source:'ValidateOrder',point:{x:496.966,y:562.028},ownOpenPad:true,action:'replace',topClass:hit.class,
+      entryBounds:{left:485,top:555,right:507,bottom:577},padBounds:{left:485,top:508,right:557,bottom:606}};
+  assertReferenceOutlineRestingHit(hit,chrome,'Payment');
+  assertReferenceOutlineRestingHit({...hit,id:'Payment'},chrome,'Payment');
+  for(const corrupt of [v=>{v.hit.owners=['SellerPool'];},v=>{v.hit.inside=false;},v=>{v.chrome.ownOpenPad=false;},
+    v=>{v.chrome.action='delete';},v=>{v.chrome.topClass='unknown';},v=>{v.chrome.entryBounds.left=500;},
+    v=>{v.chrome.padBounds.bottom=560;},v=>{v.chrome.entryBounds.right=NaN;}]){
+    const value=structuredClone({hit,chrome});corrupt(value);assert.throws(()=>assertReferenceOutlineRestingHit(value.hit,value.chrome,'Payment'));
+  }
+});
+
+test('serialized outline observer attributes the exact top entry to the sole current source pad', () => {
+  const source={id:'ValidateOrder'}, bounds={left:485,top:555,right:507,bottom:577},
+    pad={getBoundingClientRect:()=>bounds}, entry={getAttribute:k=>k==='data-action'?'replace':null,getBoundingClientRect:()=>bounds,closest:()=>pad},
+    top={getAttribute:()=> 'entry bpmn-icon-screw-wrench',closest:()=>entry};
+  let pads=[pad],current=source;
+  const context={args:{source:'ValidateOrder',point:{x:496.966,y:562.028}},
+    document:{elementFromPoint:()=>top,querySelector:()=>({querySelectorAll:()=>pads})},
+    window:{referenceModeler:{get:name=>name==='elementRegistry'?{get:()=>source}:{isOpen:value=>value===current}}}};
+  const collect=()=>JSON.parse(JSON.stringify(vm.runInNewContext(`(${collectReferenceOutlineChrome.toString()})(args)`,context)));
+  assert.equal(collect().ownOpenPad,true);assert.equal(collect().action,'replace');
+  current={id:'Other'};assert.equal(collect().ownOpenPad,false);current=source;
+  pads=[pad,{}];assert.equal(collect().ownOpenPad,false);pads=[{}];assert.equal(collect().ownOpenPad,false);
 });

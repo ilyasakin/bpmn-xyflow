@@ -158,3 +158,10 @@ test('viewport source lifecycle fits its bounded supervisor and CI job', () => {
   assert.equal(BROWSER_SUITE_TIMEOUTS['test:browser:viewport-source'], 12 * 215000 + 90000);
   assert.ok(BROWSER_SUITE_TIMEOUTS['test:browser:viewport-source'] < 45 * 60000);
 });
+
+
+test('six unchanged boundary diagnostics have a dedicated bounded supervisor', () => {
+  assert.equal(BROWSER_SUITES['test:browser:boundary-acquisition'], 'test/modeling/browser-boundary-acquisition.mjs');
+  assert.equal(BROWSER_SUITE_TIMEOUTS['test:browser:boundary-acquisition'], 6 * 215000 + 90000);
+  assert.ok(BROWSER_SUITE_TIMEOUTS['test:browser:boundary-acquisition'] < 30 * 60000);
+});

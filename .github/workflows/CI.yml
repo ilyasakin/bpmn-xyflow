@@ -255,3 +255,34 @@ jobs:
           path: test-artifacts/
           if-no-files-found: ignore
           retention-days: 14
+
+  boundary-acquisition:
+    name: Native boundary source lifecycle diagnostic
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Select installed sandbox-capable Chrome
+        run: |
+          CHROME_PATH="$(command -v google-chrome)"
+          test -x "$CHROME_PATH"
+          "$CHROME_PATH" --version
+          readlink -f "$CHROME_PATH"
+          echo "PUPPETEER_EXECUTABLE_PATH=$CHROME_PATH" >> "$GITHUB_ENV"
+      - name: Repeat the unchanged boundary workflow with passive diagnostics
+        run: node test/run-browser-suite.mjs test:browser:boundary-acquisition
+      - name: Upload boundary lifecycle evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bpmn-boundary-acquisition-evidence
+          path: test-artifacts/
+          if-no-files-found: ignore
+          retention-days: 14

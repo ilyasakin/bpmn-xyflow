@@ -55,6 +55,33 @@ export async function selectVisibleFollowupBody(h, page, id) {
   throw Error(`No unobstructed visible body point for ${id}: ${JSON.stringify(attempts)}`);
 }
 
+// Serialized read only. The exact F11 resting overlay is the selected source's
+// Replace entry; actual Connect activation must remove it before the drop.
+export function collectReferenceOutlineChrome({ source, point }) {
+  const container = document.querySelector('#viewer'), top = document.elementFromPoint(point.x, point.y),
+    entry = top?.closest('.entry[data-action]'), pad = entry?.closest('.djs-context-pad.open'),
+    pads = [...container.querySelectorAll('.djs-context-pad.open')],
+    modeler = window.referenceModeler, sourceElement = modeler.get('elementRegistry').get(source);
+  const rect = e => { const r = e?.getBoundingClientRect(); return r && { left:r.left, top:r.top, right:r.right, bottom:r.bottom }; };
+  return { source, point, action: entry?.getAttribute('data-action'), topClass: top?.getAttribute('class'),
+    ownOpenPad: !!sourceElement && !!pad && pads.length === 1 && pads[0] === pad && modeler.get('contextPad').isOpen(sourceElement),
+    entryBounds: rect(entry), padBounds: rect(pad) };
+}
+
+export function assertReferenceOutlineRestingHit(hit, chrome, target) {
+  assert.equal(hit.inside, true);
+  assert.ok(hit.owners.includes(target), 'the unchanged target outline remains underneath any resting chrome');
+  if (hit.id === target) return;
+  assert.equal(chrome.ownOpenPad, true, 'only the actual selected source context pad may cover this resting point');
+  assert.equal(chrome.action, 'replace', 'exact measured F11 overlay');
+  assert.equal(chrome.topClass, 'entry bpmn-icon-screw-wrench');
+  for (const rect of [chrome.entryBounds, chrome.padBounds]) {
+    assert.ok(rect && Object.values(rect).every(Number.isFinite));
+    assert.ok(rect.right > rect.left && rect.bottom > rect.top);
+    assert.ok(chrome.point.x >= rect.left && chrome.point.x < rect.right && chrome.point.y >= rect.top && chrome.point.y < rect.bottom);
+  }
+}
+
 // A selected target's resize controls may cover its intended outline. Prepare
 // the actual source by visible input first; keep the requested drop unchanged.
 export async function prepareReferenceOutlineTarget(h, page, { source, target, point }, onEvidence = async () => {}) {
@@ -63,14 +90,14 @@ export async function prepareReferenceOutlineTarget(h, page, { source, target, p
   assert.deepEqual(before.selection, [target]);
   await selectVisibleFollowupBody(h, page, source);
   const after = await h.state(page), afterHit = await h.hit(page, point);
-  const evidence = { source, target, point, beforeHit, afterHit, beforeSelection: before.selection, afterSelection: after.selection };
+  const chrome = await page.evaluate(collectReferenceOutlineChrome, { source, point });
+  const evidence = { source, target, point, beforeHit, afterHit, chrome, beforeSelection: before.selection, afterSelection: after.selection };
   await onEvidence(evidence);
   assert.deepEqual(after.selection, [source]);
   assert.equal(after.xml, before.xml, 'source selection preserves the complete document');
   assert.deepEqual(after.history, before.history, 'source selection adds no history');
   assert.deepEqual(after.viewport, before.viewport, 'source selection preserves the requested screen point');
-  assert.equal(afterHit.inside, true);
-  assert.equal(afterHit.id, target, 'the same outline point belongs to the target after source preparation');
+  assertReferenceOutlineRestingHit(afterHit, chrome, target);
   return evidence;
 }
 

@@ -158,9 +158,18 @@ test('selected expanded subprocess border is covered by its resizer until the ac
     assert.equal(await save(), before); assert.equal(m.get('commandStack')._stackIdx, index);
     const event = (type, p) => new MouseEvent(type, { clientX: p.x, clientY: p.y, button: 0,
       buttons: type === 'mouseup' ? 0 : 1, bubbles: true, cancelable: true, view: window });
-    const dragging = m.get('dragging'), ids = new Set(registry.getAll().map(e => e.id));
-    m.get('connect').start(event('mousedown', { x: 250, y: 430 }), source);
+    const dragging = m.get('dragging'), ids = new Set(registry.getAll().map(e => e.id)), pad = m.get('contextPad');
+    assert.equal(pad.isOpen(source), true); assert.equal(pad.isShown(), true);
+    const replace = container.querySelector('.djs-context-pad.open [data-action="replace"]');
+    assert.equal(replace.getAttribute('class'), 'entry bpmn-icon-screw-wrench', 'the exact hosted resting obstruction exists');
+    const connect = container.querySelector('.djs-context-pad.open [data-action="connect"]');
+    connect.dispatchEvent(event('dragstart', { x: 250, y: 430 }));
+    assert.equal(!!dragging.context().active, false); assert.equal(pad.isShown(), true, 'initialization alone leaves the pad visible');
     dragging.move(event('mousemove', { x: 290, y: 445 }));
+    assert.equal(dragging.context().active, true); assert.deepEqual(m.get('selection').get(), []);
+    assert.equal(pad.isOpen(), false); assert.equal(pad.isShown(), false, 'installed Dragging activation clears selection and closes the source pad');
+    assert.equal(container.querySelector('.djs-context-pad.open'), null);
+    assert.equal(await save(), before); assert.equal(m.get('commandStack')._stackIdx, index);
     dragging.hover({ element: payment, gfx }); dragging.move(event('mousemove', point));
     const context = dragging.context().data.context;
     assert.equal(dragging.context().active, true); assert.equal(context.start.id, source.id);

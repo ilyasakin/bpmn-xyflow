@@ -175,6 +175,7 @@ async function connect(h, page, key, source, target, from, to, options = {}) {
             const d = window.referenceModeler.get("dragging").context(), c = d?.data?.context;
             return { active: !!d?.active, prefix: d?.prefix, start: c?.start?.id,
               source: c?.source?.id, target: c?.target?.id, hover: c?.hover?.id,
+              contextPadShown: window.referenceModeler.get("contextPad").isShown(),
               canExecute: c?.canExecute && typeof c.canExecute === "object" ? { type: c.canExecute.type } : c?.canExecute };
           });
           previewContext.input = input;
@@ -189,6 +190,8 @@ async function connect(h, page, key, source, target, from, to, options = {}) {
             assert.equal(previewContext.target, target);
             assert.deepEqual(previewContext.canExecute, { type: options.expectedType || "bpmn:SequenceFlow" });
             assert.equal(previewContext.hit.id, target);
+            if (options.exactReferenceTarget) assert.equal(previewContext.contextPadShown, false,
+              "active Connect removes the resting source context-pad obstruction");
           }
           await h.save(page, key + "-reference-preview-state", { live, previewContext });
         },
@@ -686,7 +689,7 @@ for (const engine of engines)
             { source: "ValidateOrder", target: "Payment", point: intended },
             evidence => h.save(page, key + "-target-ownership", { evidence }));
         }
-        assert.equal(
+        if (engine === "local") assert.equal(
           (await h.hit(page, intended)).id,
           "Payment",
           "subprocess outline near its child is the actual target",
