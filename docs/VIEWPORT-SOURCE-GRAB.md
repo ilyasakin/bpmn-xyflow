@@ -66,3 +66,39 @@ tangential departures at four zooms, inside-paint motion, duplicate arrival
 and departure events, ordinary edge selection, and unchanged XML/history,
 selection and viewport before the click. The retained hosted negative is
 unchanged and remains the native acceptance gate.
+
+## Traversing editor chrome (D19) and native pan observations
+
+The `947a360` southeast case initially displayed its chosen marker at
+(1796.254,1196.252) and its reachable grab near (1722,1166). Small native
+steps along that inward tether crossed the HTML attribution box at
+x1732–1785/y1164–1185. SVG pointer leave destroyed the acquired control,
+so re-entering the task recreated an unrelated, offscreen outline origin.
+This was an approach-lifecycle defect, despite valid final grab placement.
+
+An already acquired source corridor now survives pointer leave and mouse move
+across attribution, palette, toolbar and minimap surfaces. This new retention
+requires the measured tether corridor and ends on departure, unrelated HTML,
+or editor exit. The prior context-pad exception remains: its existing early
+return retains the source while the pointer is over that pad. Chrome retains
+its own mouse input and link/button hit ownership. The tether remains inert;
+no navigation is activated by the tests. This is corridor lifecycle preservation,
+not geometric path avoidance.
+
+The registered regression replays the retained native southeast positions,
+checks the exact original marker throughout, commits before any pan recovery,
+and verifies exact Undo/Redo. Further controls cover ordinary HTML input,
+leaving the corridor/editor, F23 route crossing and D16 post-arrival release.
+The same12 native cases retain their strict selection, source, model and
+history checks. Their southeast path additionally observes attribution hit
+ownership without clicking its link.
+
+Five failures in the same hosted run were only a numeric observer error:
+d3-zoom computes each camera coordinate as `p1 - ((p0 - x) / zoom) * zoom`,
+which can differ from `x + (p1 - p0)` by one or two floating-point steps.
+The test now captures the unchanged root SVG matrix and actual delivered
+SVG-local down/final-move points, then checks the installed operation order
+exactly. It introduces no coordinate tolerance. Four retained numeric examples
+and a serialized inverse-transform observer are structural regressions.
+The six active-Escape selection failures are a separate D18 product issue.
+Hosted execution of all12 remains required after the repairs are combined.

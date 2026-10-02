@@ -116,22 +116,53 @@ its planned variants have an executed result or an explicit remaining blocker.
 Do not infer full anchor acceptance from either the green39 cases or one of
 these batches alone.
 
-## Confirmed findings awaiting repair
+## Current defect register and verification checkpoint
 
-- D14: resizing the Booking transaction from northwest translates its children
-  and internal routes locally. The complete pinned reference preserves those
-  absolute coordinates. F29 now requires the exact reference policy and will
-  remain a failure until the source repair is verified
-- D15: a selected node's chosen outline can remain visible while the displaced
-  Connect grab lies outside the canvas. Manual preview QA reproduced a resize
-  when trying to use that visible midpoint. F27 retains the reachability check;
-  viewport-aware placement is a separate source repair
-- The preliminary overlap inspection in F23-B records the actual trusted native
-  receiver as diagnostic evidence. Its exact paired ownership baseline remains
-  unresolved. Passing the subsequent strict boundary-source workflow does not
-  close that overlap-policy question
+This is an active investigation, not a completion statement. The first-run
+results above remain historical evidence; the latest native checkpoint is
+library `947a36071969f083953dd9e99d1fc85f6b6439b0`, paired with site
+`39c9fca12c773122da0a5b368624daff4ee1e4a6` (2026-10-02).
 
-The integration preserves the stronger published `1d3fe967` ownership24 tangent
-checks byte-for-byte. These follow-ups do not replace the existing 39 anchor,
-24 ownership, 29 hit or other regression gates. The first expanded hosted outcomes are recorded in the linked report; all
-failed or diagnostic-only acceptance points remain open until reverified.
+| Defect | User-visible failure and repair | Current evidence / remaining gate |
+| --- | --- | --- |
+| D14 | Northwest container resize moved children and internal routes. Ordinary resize now preserves absolute child positions, uses sticky attachment behavior and balances lane bounds; explicit Ctrl/Meta space movement remains separate | Original local F29 and local Ctrl-lane native cases pass on `947a3607`. Two older smoke/advanced assertions still expect the former child translation and require independent reconciliation. The reference Ctrl-lane setup clicked the palette instead of the lane; its narrow setup correction still needs a native rerun |
+| D15 | A visible source outline could have its displaced Connect grab outside the canvas. Viewport-aware placement keeps the marker fixed and provides a visible tethered grab | Original F27 and independent right-edge manual replay pass. The separate twelve-case viewport matrix is not yet green; D18 and D19 below were discovered by that matrix |
+| D16 | Approaching the source grab across an existing route lost source ownership, while an early repair kept stale source controls after leaving the grab | Acquisition and departure are now distinct. Original overlap workflow, ownership24 and hit29 pass on `947a3607`, including the negative edge pass-through check |
+| D17 | A legal explicit gateway self-loop was rejected because the same curved shape was treated as two bounding-box obstacles | Same-owner routing uses the actual stock shape outline. Native gateway-loop workflow passes, while no-motion and invalid self-target cases remain checked |
+| D18 | Escape during an activated connection preview clears the prior selection before cancelling the gesture | Six viewport cases expose this real event-propagation defect. Repair and independent review are in progress; ordinary idle Escape must continue to deselect |
+| D19 | A corner source grab is visible, but its native approach crosses the attribution overlay and recreates the control with a different, offscreen origin | Southeast viewport evidence records the visible initial marker, overlay crossing and changed origin. Placement/approach repair and independent review are in progress; moving the requested anchor is not an acceptable workaround |
+
+On `947a3607`, all forty local variants in the original expanded matrix pass;
+twenty-one of twenty-two reference variants pass. The remaining expanded
+reference failure is a popup search setup that inserts text without the keyup
+that the installed reference uses to filter. The correction must prove the
+filtered exact action before the native click. This is separate from any
+product capability claim.
+
+The twelve viewport cases currently fail: five compare camera translation using
+addition rather than the installed D3 inverse/translate calculation (one or two
+floating-point ULPs), six expose D18, and one exposes D19. The arithmetic
+correction will assert the exact installed operation using actual delivered
+SVG-local points; it does not increase a geometry tolerance. No viewport case
+is counted as passed on the basis of that diagnosis.
+
+The original 39 anchor cases, 24 ownership cases and 29 hit cases pass on this
+checkpoint. Remaining retained suites pass except the two child-translation
+assertions described under D14. CodeQL has no new alerts. The paired site passes
+its production interaction/import gates, but that does not close the open
+library cases. All fixes must be independently reviewed and rerun against their
+exact published head before this register is closed.
+
+### Reviewed correction prepared after this checkpoint
+
+The next candidate contains the scoped D18 cancellation handler and D19
+acquired-tether retention across editor chrome, both independently reviewed.
+D19 leaves the attribution link and other chrome input ownership unchanged and
+releases the source control on corridor departure or editor exit. It preserves
+the chosen outline location. The reference popup/lane setup corrections and the
+two retained D14 assertions are also independently reviewed; their native input,
+full-model guards and exact history checks remain in place.
+
+These source and test corrections still require a combined exact-head native
+rerun. The twelve-case viewport result above remains failed until that rerun
+establishes the actual outcome.

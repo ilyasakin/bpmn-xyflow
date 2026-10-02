@@ -606,7 +606,7 @@ for (const engine of engines)
       return { edge: r.edge };
     });
 
-async function toggleSubprocess(h, page, id, expanded) {
+async function toggleSubprocess(h, page, id, expanded, key) {
   await selectOutline(h, page, id, "top", 0.35);
   const before = await h.state(page);
   if (before.engine === "local") {
@@ -637,7 +637,8 @@ async function toggleSubprocess(h, page, id, expanded) {
   } else {
     await h.clickButton(page, '.djs-context-pad [data-action="replace"]');
     await clickReferenceSubprocessReplacement(h, page,
-      `replace-with-${expanded ? "expanded" : "collapsed"}-subprocess`);
+      `replace-with-${expanded ? "expanded" : "collapsed"}-subprocess`,
+      evidence => h.save(page, `${key}-popup-${expanded ? "expand" : "collapse"}`, { evidence }));
   }
   await h.settle(page);
   const after = await h.state(page);
@@ -659,7 +660,7 @@ for (const engine of engines)
   for (const variant of ["collapsed-left-source", "expanded-outline-target"])
     register("F11", variant, engine, ORDER, async (h, page, key) => {
       await h.zoom(page, 0.8);
-      await toggleSubprocess(h, page, "Payment", false);
+      await toggleSubprocess(h, page, "Payment", false, key);
       let r;
       if (variant === "collapsed-left-source")
         r = await connect(h, page, key, "Payment", "ShipOrder", "left", "top", {
@@ -667,7 +668,7 @@ for (const engine of engines)
           fraction: 0.3,
         });
       else {
-        const expanded = await toggleSubprocess(h, page, "Payment", true),
+        const expanded = await toggleSubprocess(h, page, "Payment", true, key),
           sub = h.node(expanded, "Payment"),
           child = h.node(expanded, "CapturePayment");
         assert.equal(child.hidden, false);

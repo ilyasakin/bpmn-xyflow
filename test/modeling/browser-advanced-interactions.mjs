@@ -10,6 +10,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import puppeteer from 'puppeteer';
 import { BpmnModdle } from 'bpmn-moddle';
 import { selectedBendpoint } from '../helpers/native-bendpoint-control.mjs';
+import { assertOnlyAnchorGeometry } from '../helpers/anchor-model-guard.mjs';
 
 const port=Number(process.env.BPMN_ADVANCED_PORT||5239),base=`http://localhost:${port}`;
 const server=spawn(process.execPath,['lib/demo/serve.mjs'],{env:{...process.env,PORT:String(port)},stdio:['ignore','pipe','inherit']});
@@ -180,10 +181,26 @@ try {
   await run('populated-payment-nw-resize',cases['order-payment-delivery'],async page=>{
     const before=await state(page);
     await resize(page,'Payment','nw',{x:-55,y:-45},{x:20,y:25},true);await unchanged(page,before,'cancel restores subprocess and all child DI');
-    await resize(page,'Payment','nw',{x:-55,y:-45});const after=await state(page),old=bounds(before.di('Payment').bounds),current=bounds(after.di('Payment').bounds),dx=current.x-old.x,dy=current.y-old.y;
-    assert.ok(dx<0&&dy<0);near({x:current.x+current.width,y:current.y+current.height},{x:old.x+old.width,y:old.y+old.height},1e-8);
-    for(const id of ['PaymentStart','CapturePayment','PaymentEnd']) {near(after.di(id).bounds,{x:before.di(id).bounds.x+dx,y:before.di(id).bounds.y+dy},1e-8);assert.equal(after.byId[id].$parent.id,'Payment');}
-    for(const id of ['PaymentFlow1','PaymentFlow2']) assert.deepEqual(after.di(id).waypoint.map(coords),before.di(id).waypoint.map(p=>({x:p.x+dx,y:p.y+dy})),'internal child route translates exactly once');
+    await resize(page,'Payment','nw',{x:-55,y:-45});const after=await state(page),old=bounds(before.di('Payment').bounds),current=bounds(after.di('Payment').bounds);
+    assert.deepEqual(old,{x:350,y:320,width:340,height:250},'the exact authored native fixture is unchanged');
+    assert.deepEqual(current,{x:300,y:275,width:390,height:295},'the delivered NW gesture resizes the intended frame');
+    assert.deepEqual({x:current.x+current.width,y:current.y+current.height},{x:old.x+old.width,y:old.y+old.height},'opposite frame corner remains fixed');
+    for(const id of ['PaymentStart','CapturePayment','PaymentEnd']) {
+      assert.deepEqual(bounds(after.di(id).bounds),bounds(before.di(id).bounds),'normal container resize preserves absolute child bounds');
+      assert.equal(after.byId[id].$parent.id,'Payment');
+    }
+    for(const id of ['PaymentFlow1','PaymentFlow2']) assert.deepEqual(after.di(id).waypoint.map(coords),before.di(id).waypoint.map(coords),'internal child route remains exactly unchanged');
+    // Actual pinned resize at these host bounds has the same incident topology.
+    // Its cropper rounds SellerFlow3 to y423/x747; local docking deliberately
+    // retains the exact half-unit outline intersections.
+    assert.deepEqual(after.di('SellerFlow2').waypoint.map(coords),[{x:300,y:415},{x:300,y:415}]);
+    assert.deepEqual(after.di('SellerFlow3').waypoint.map(coords),[{x:690,y:422.5},{x:747.5,y:422.5}]);
+    for(const [id,source,target] of [['SellerFlow2','ValidateOrder','Payment'],['SellerFlow3','Payment','FulfillmentFork']]) {
+      assert.equal(after.byId[id].sourceRef.id,source);assert.equal(after.byId[id].targetRef.id,target);
+      assert.equal(after.byId[id].$parent.id,'SellerProcess');
+    }
+    await assertOnlyAnchorGeometry(before.xml,after.xml,{shapeIds:['Payment'],edgeIds:['SellerFlow2','SellerFlow3']});
+    assert.equal(after.history.size,before.history.size+1,'one native resize produces one history entry');
     await historyCycle(page,before,after);await reopen(page,after);
   });
 

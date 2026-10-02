@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import vm from 'node:vm';
-import { assertRenderedDI, collectRenderedDI, selectVisibleFollowupBody, adjacentDropPixels, chooseAdjacentReferenceDrop, clickReferenceSubprocessReplacement } from '../helpers/anchor-followup-dom.mjs';
+import { assertRenderedDI, collectRenderedDI, selectVisibleFollowupBody, adjacentDropPixels, chooseAdjacentReferenceDrop, clickReferenceSubprocessReplacement, collectReferenceLaneTop } from '../helpers/anchor-followup-dom.mjs';
 
 test('recorded Chrome paint matches full SVG CTM, while rounded Canvas.viewbox fails the unchanged bound',()=>{
   const cases=[
@@ -54,11 +54,38 @@ test('reference drop normalization considers only adjacent integer pixels with t
   await assert.rejects(chooseAdjacentReferenceDrop({hit:async()=>({inside:false,id:'ApprovalDecision'})},{},'ApprovalDecision',requested),/No adjacent/);
 });
 
-test('short popup uses its exact visible action and long popup uses native search first',async()=>{
-  for(const searchable of[false,true]){
-    const calls=[],h={clickButton:async(_page,selector)=>{calls.push(['click',selector]);},settle:async()=>{}};
-    const page={$:async()=>searchable?{}:null,keyboard:{sendCharacter:async text=>{calls.push(['text',text]);}},$eval:async()=> 'Sub-process'};
-    await clickReferenceSubprocessReplacement(h,page,'replace-with-expanded-subprocess');
-    assert.deepEqual(calls,[...(searchable?[['click','.djs-popup-search input'],['text','Sub-process']]:[]),['click','.djs-popup [data-id="replace-with-expanded-subprocess"]']]);
+test('short popup uses its exact action; long popup requires native keyup and real filtering', async () => {
+  for (const searchable of [false, true]) {
+    const calls = [], listeners = new Map(), input = { value: '', addEventListener: (name, fn) => listeners.set(name, fn), removeEventListener: name => listeners.delete(name) };
+    const h = { clickButton: async (_page, selector) => { calls.push(['click', selector]); }, settle: async () => {} };
+    const page = { $: async () => searchable ? {} : null,
+      keyboard: { type: async text => { calls.push(['type', text]); input.value = text; listeners.get('keyup')?.({ isTrusted: true, target: input, key: 's' }); } },
+      $eval: async (_selector, fn) => fn(input),
+      $$eval: async () => ['replace-with-expanded-subprocess'],
+    };
+    const evidence = await clickReferenceSubprocessReplacement(h, page, 'replace-with-expanded-subprocess');
+    assert.deepEqual(calls, [...(searchable ? [['click', '.djs-popup-search input'], ['type', 'Sub-process']] : []), ['click', '.djs-popup [data-id="replace-with-expanded-subprocess"]']]);
+    assert.equal(evidence.searchable, searchable); assert.equal(listeners.size, 0);
+    if (searchable) {
+      page.keyboard.type = async text => { input.value = text; };
+      await assert.rejects(clickReferenceSubprocessReplacement(h, page, 'replace-with-expanded-subprocess'), /trusted keyup/);
+      assert.equal(listeners.size, 0, 'failed input-only attempt still cleans its observer');
+      page.keyboard.type = async text => { input.value = text; listeners.get('keyup')({ isTrusted: true, target: input, key: 's' }); };
+      page.$$eval = async () => ['replace-with-task', 'replace-with-expanded-subprocess'];
+      await assert.rejects(clickReferenceSubprocessReplacement(h, page, 'replace-with-expanded-subprocess'), /actually filtered/);
+    }
   }
+});
+
+test('serialized lane selector uses the exact top stroke CTM and refuses missing or mismatched graphics', () => {
+  const attributes = { x: '0', y: '0', width: '1250', height: '220' }, matrix = { a: 1, b: 0, c: 0, d: 1, e: 20, f: 62 };
+  const hit = { getAttribute: k => attributes[k] }, gfx = { getAttribute: () => 'RequesterLane', querySelector: () => hit, getScreenCTM: () => matrix };
+  const context = { document: { querySelectorAll: () => [gfx] }, args: { id: 'RequesterLane', width: 1250, height: 220 } };
+  const collect = () => JSON.parse(JSON.stringify(vm.runInNewContext(`(${collectReferenceLaneTop.toString()})(args)`, context)));
+  assert.deepEqual(collect().point, { x: 645, y: 62 }, 'avoids the recorded palette at client34,172');
+  matrix.a = .8608916997909546; matrix.e = 212.83578491210938;
+  assert.deepEqual(collect().point, { x: Math.round(625 * matrix.a + matrix.e), y: 62 });
+  attributes.width = '1249'; assert.throws(collect, /current bounds/); attributes.width = '1250';
+  matrix.a = NaN; assert.throws(collect, /matrix/); matrix.a = 1;
+  gfx.querySelector = () => null; assert.throws(collect, /Missing reference lane/);
 });

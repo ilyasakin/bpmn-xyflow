@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 import { createAnchorHarness } from "../helpers/anchor-ux-browser.mjs";
 import { withAnchorDeadline } from "../helpers/anchor-case-deadline.mjs";
 import { assertLaneSpaceResult } from "../helpers/container-resize-oracle.mjs";
+import { collectReferenceLaneTop } from "../helpers/anchor-followup-dom.mjs";
 const sample = "Approval, rejection and rework";
 export const containerResizeCases = ["local", "upstream"].map((engine) => ({
   id: "D14",
@@ -23,19 +24,30 @@ export async function runContainerResize() {
         withAnchorDeadline(
           page,
           async () => {
-            let initial = await h.state(page);
-            const lane = h.node(initial, "RequesterLane"),
-              point = h.screen(initial, { x: lane.x + 14, y: lane.y + lane.height / 2 });
+            const initial = await h.state(page), lane = h.node(initial, "RequesterLane");
+            const selectionGeometry = c.engine === "upstream"
+              ? await page.evaluate(collectReferenceLaneTop, { id: lane.id, width: lane.width, height: lane.height }) : null;
+            const point = selectionGeometry?.point || h.screen(initial, { x: lane.x + 14, y: lane.y + lane.height / 2 });
+            await page.evaluate(() => { window.anchorInput.length = 0; });
             await page.mouse.move(point.x, point.y);
             await h.settle(page);
-            assert.equal(
-              (await h.hit(page, point)).id,
-              "RequesterLane",
-              "native selection hits the lane title band",
-            );
+            const selectionHit = await h.hit(page, point);
+            assert.equal(selectionHit.inside, true);
+            assert.equal(selectionHit.id, "RequesterLane", "native selection hits the visible lane itself");
             await page.mouse.click(point.x, point.y);
             await h.settle(page);
-            assert.deepEqual((await h.state(page)).selection, ["RequesterLane"]);
+            const selected = await h.noChange(page, initial, "visible lane selection preserves exact XML/history");
+            assert.deepEqual(selected.selection, ["RequesterLane"]);
+            const selectionInput = (await h.raw(page)).input;
+            const delivered = selectionInput.findLast(e => e.type === "mousemove");
+            assert.equal(delivered?.trusted, true, "lane selection uses the observed native approach");
+            if (c.engine === "upstream") assert.deepEqual({ x: delivered.x, y: delivered.y }, point);
+            for (const type of ["mousedown", "mouseup"]) {
+              const event = selectionInput.findLast(e => e.type === type);
+              assert.equal(event?.trusted, true, `lane selection has trusted ${type}`);
+              assert.deepEqual({ x: event.x, y: event.y }, { x: delivered.x, y: delivered.y });
+            }
+            await h.save(page, key + "-selection", { selectionGeometry, selectionHit, selectionInput });
             const selector =
               c.engine === "local"
                 ? '.bpmn-xyflow-resize-handle[data-resize-dir="s"]'

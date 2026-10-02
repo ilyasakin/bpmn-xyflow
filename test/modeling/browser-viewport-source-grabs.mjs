@@ -25,10 +25,28 @@ export function panSteps(delta) {
   return Array.from({ length: count }, (_, i) => Math.sign(total) * (base + (i < Math.abs(total) % count ? 1 : 0)));
 }
 
+// Installed d3-zoom mousedowned/translate use inverse-then-forward arithmetic,
+// not priorTranslation + delta. Keep its exact operation order (no epsilon).
+export function nativePanViewport(before, down, moved) {
+  assert.ok([before.x,before.y,before.zoom,down.x,down.y,moved.x,moved.y].every(Number.isFinite));
+  assert.ok(before.zoom > 0);
+  return { x: moved.x - ((down.x - before.x) / before.zoom) * before.zoom,
+    y: moved.y - ((down.y - before.y) / before.zoom) * before.zoom, zoom: before.zoom };
+}
+
+export function collectPanGeometry(points = []) {
+  const svg = document.querySelector('#viewer .bpmn-xyflow-canvas');
+  const matrix = svg.getScreenCTM(), inverse = matrix.inverse();
+  return { matrix: Object.fromEntries(['a','b','c','d','e','f'].map(key => [key,matrix[key]])),
+    points: points.map(({x,y}) => { const point=svg.createSVGPoint();point.x=x;point.y=y;
+      const local=point.matrixTransform(inverse);return {x:local.x,y:local.y}; }) };
+}
+
 async function panBy(h, page, dx, dy) {
   const before = await h.state(page), events = [];
   for (const [axis, delta] of [['x', dx], ['y', dy]]) for (const amount of panSteps(delta)) {
     const current = await h.raw(page), candidate = await h.blank(page);
+    const geometry = await page.evaluate(collectPanGeometry);
     const from = { x: Math.round(candidate.x), y: Math.round(candidate.y) }, to = { ...from, [axis]: from[axis] + amount };
     assert.ok(to.x > 0 && to.x < 1800 && to.y > current.container.y && to.y < 1200, 'pan remains in visible canvas');
     await page.mouse.move(from.x, from.y);
@@ -47,10 +65,14 @@ async function panBy(h, page, dx, dy) {
     assert.equal(down?.trusted, true); assert.equal(up?.trusted, true);
     assert.deepEqual([down.button, up.button], [1, 1]);
     assert.deepEqual({ x: down.x, y: down.y }, from); assert.deepEqual({ x: up.x, y: up.y }, to);
-    const after = await h.raw(page), expected = { ...current.viewport, [axis]: current.viewport[axis] + amount };
-    assert.deepEqual(after.viewport, expected, 'camera follows exact delivered pan');
+    const moved = delivered.findLast(e => e.type === 'mousemove');assert.equal(moved?.trusted,true);
+    assert.deepEqual({x:moved.x,y:moved.y},to,'last delivered move reaches the requested pan destination');
+    const observed = await page.evaluate(collectPanGeometry,[{x:down.x,y:down.y},{x:moved.x,y:moved.y}]);
+    assert.deepEqual(observed.matrix,geometry.matrix,'root SVG frame stays fixed while its graph viewport pans');
+    const after = await h.raw(page), expected = nativePanViewport(current.viewport,...observed.points);
+    assert.deepEqual(after.viewport, expected, 'camera follows exact delivered D3 inverse/translate arithmetic');
     assert.equal(after.xml, before.xml); assert.deepEqual(after.history, before.history); assert.deepEqual(after.selection, before.selection);
-    events.push({ down, up, viewport: after.viewport });
+    events.push({ down, moved, up, before:current.viewport, svg:observed, expected, viewport: after.viewport });
   }
   return events;
 }
@@ -137,7 +159,7 @@ export function assertAffordance(e, layout, owner) {
   assert.deepEqual({ x: e.tether.x1, y: e.tether.y1 }, e.anchor); assert.deepEqual({ x: e.tether.x2, y: e.tether.y2 }, e.grabGraph);
 }
 
-async function approach(h, page, source, desired, key, phase) {
+async function approach(h, page, source, desired, key, phase, requireAttributionCrossing = false) {
   const before = await h.state(page), start = h.screen(before, desired);
   await page.evaluate(() => { window.viewportSourceAcquireMarker = window.anchorInput.at(-1); });
   await page.mouse.move(start.x, start.y, { steps: 12 }); await h.settle(page);
@@ -155,6 +177,20 @@ async function approach(h, page, source, desired, key, phase) {
   assert.ok(initial.taskRadius > 0, 'actual painted Task corner radius is available');
   const expectedOrigin = projectRoundedTask(h.node(before, source), initial.taskRadius, h.graph(before, acquired));
   h.near(initial.anchor, expectedOrigin, 1e-7, 'origin equals independent outline projection of the fresh delivered acquiring event');
+  const attributionHits = await page.evaluate(({from,to}) => {
+    const attribution=document.querySelector('#viewer .bjs-powered-by'),rect=attribution?.getBoundingClientRect(),hits=[];
+    if(!rect)return hits;
+    const steps=Math.ceil(Math.hypot(to.x-from.x,to.y-from.y));
+    for(let i=1;i<steps;i++){
+      const point={x:from.x+(to.x-from.x)*i/steps,y:from.y+(to.y-from.y)*i/steps};
+      if(point.x>rect.left+1&&point.x<rect.right-1&&point.y>rect.top+1&&point.y<rect.bottom-1){
+        const target=document.elementFromPoint(point.x,point.y);hits.push({point,tag:target?.tagName,attributionOwns:!!target&&attribution.contains(target)});
+      }
+    }
+    return hits;
+  },{from:initial.markerScreen,to:initial.grab});
+  if(requireAttributionCrossing)assert.ok(attributionHits.length>0,'the southeast fixture exercises its actual attribution crossing');
+  assert.ok(attributionHits.every(hit=>hit.attributionOwns),'the HTML attribution retains hit ownership along the inert tether');
   await page.mouse.move(initial.press.x, initial.press.y, { steps: Math.max(1, Math.ceil(Math.hypot(initial.press.x - start.x, initial.press.y - start.y))) });
   await h.settle(page);
   const reached = await readAffordance(page, source);
@@ -164,6 +200,7 @@ async function approach(h, page, source, desired, key, phase) {
   assert.equal(reached.delivered?.trusted, true);
   assert.deepEqual({ x: reached.delivered.x, y: reached.delivered.y }, initial.press);
   await h.noChange(page, before, 'approach changes no document or history');
+  await h.save(page, `${key}-${phase}-reached`, { initial, reached, attributionHits });
   return reached;
 }
 
@@ -180,7 +217,7 @@ async function workflow(h, page, key, { name, direction, zoom, offset }) {
   const current = h.screen(state, desired), pan = await panBy(h, page, client.x - current.x, client.y - current.y);
   state = await h.state(page); const positioned = h.screen(state, desired);
   assert.ok(Math.abs(positioned.x - client.x) <= .51 && Math.abs(positioned.y - client.y) <= .51, 'native integer pan reaches the intended boundary within pixel quantization');
-  const before = await h.state(page), port = await approach(h, page, source, desired, key, 'initial');
+  const before = await h.state(page), port = await approach(h, page, source, desired, key, 'initial', name === 'south-east');
   assert.deepEqual(before.selection, [source], 'the selected source owns its resize controls');
   await page.mouse.click(port.press.x, port.press.y); await h.settle(page);
   const clicked = await h.noChange(page, before, 'stationary edge grab creates no model/history command');
@@ -196,7 +233,7 @@ async function workflow(h, page, key, { name, direction, zoom, offset }) {
   } });
   const cancelled = await h.noChange(page, before, 'Escape returns the complete document/history exactly');
   assert.deepEqual(cancelled.viewport, before.viewport); assert.deepEqual(cancelled.selection, before.selection); assert.equal(await h.preview(page), null);
-  const again = await approach(h, page, source, desired, key, 'retry');
+  const again = await approach(h, page, source, desired, key, 'retry', name === 'south-east');
   let committedPreview;
   await h.drag(page, again.press, to, { capture: async () => {
     committedPreview = await h.preview(page); assert.ok(committedPreview?.length > 5);

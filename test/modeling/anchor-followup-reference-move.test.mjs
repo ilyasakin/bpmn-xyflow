@@ -65,7 +65,22 @@ test('installed ContextPad replacement action exposes search only in the long co
       await new Promise(resolve=>setTimeout(resolve,0));
       const menu=m.get('canvas').getContainer().querySelector('.djs-popup');assert.ok(menu);
       assert.equal(!!menu.querySelector('.djs-popup-search input'),!expanded);
-      assert.ok(menu.querySelector(`[data-id="replace-with-${expanded?'collapsed':'expanded'}-subprocess"]`));m.get('popupMenu').close();
+      assert.ok(menu.querySelector(`[data-id="replace-with-${expanded?'collapsed':'expanded'}-subprocess"]`));
+      if (!expanded) {
+        const input = menu.querySelector('.djs-popup-search input'), ids = () => [...menu.querySelectorAll('.djs-popup-body .entry')].map(e => e.getAttribute('data-id'));
+        assert.ok(ids().includes('replace-with-task'));
+        const save = async () => (await m.saveXML({ format: true })).xml, before = await save(), index = m.get('commandStack')._stackIdx;
+        input.value = 'Sub-process'; input.dispatchEvent(new window.Event('input', { bubbles: true }));
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.ok(ids().includes('replace-with-task'), 'input-only reproduces the unfiltered hosted failure');
+        // Happy DOM cannot certify trust; the hosted helper requires trusted real keyup.
+        input.dispatchEvent(new window.KeyboardEvent('keyup', { bubbles: true, key: 's' }));
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.ok(!ids().includes('replace-with-task'));
+        assert.ok(ids().includes('replace-with-expanded-subprocess'));
+        assert.equal(await save(), before); assert.equal(m.get('commandStack')._stackIdx, index);
+      }
+      m.get('popupMenu').close();
     }
   }finally{m.destroy();}
 });
@@ -88,4 +103,20 @@ test('reference Connect rejects a label hover and accepts its actual gateway wit
     assert.equal(added.length,1);assert.equal(added[0].sourceRef.id,'SubmitRequest');assert.equal(added[0].targetRef.id,'ApprovalDecision');
     const after=await save();m.get('commandStack').undo();assert.equal(await save(),before);m.get('commandStack').redo();assert.equal(await save(),after);
   }finally{m.destroy();}
+});
+
+test('installed lane top-outline click selects the intended lane and exposes south resize without model/history changes', async () => {
+  const m = new Modeler({ container: dom.createContainer() });
+  try {
+    await m.importXML(await readFile('test/fixtures/scenarios/approval-rejection-rework.bpmn', 'utf8'));
+    const lane = m.get('elementRegistry').get('RequesterLane'), gfx = m.get('elementRegistry').getGraphics(lane), hit = gfx.querySelector(':scope > .djs-hit-click-stroke');
+    assert.ok(hit); assert.equal(Number(hit.getAttribute('width')), lane.width); assert.equal(Number(hit.getAttribute('height')), lane.height);
+    assert.deepEqual({ x: lane.x + lane.width / 2, y: lane.y }, { x: 645, y: 20 });
+    const before = (await m.saveXML({ format: true })).xml;
+    // Registered DOM handler proof; hosted input separately certifies trust and actual hit.
+    hit.dispatchEvent(new window.MouseEvent('click', { clientX: 645, clientY: 62, button: 0, bubbles: true, cancelable: true }));
+    assert.deepEqual(m.get('selection').get().map(e => e.id), ['RequesterLane']);
+    assert.ok(m.get('canvas').getContainer().querySelector('.djs-resizer-RequesterLane.djs-resizer-s'));
+    assert.equal((await m.saveXML({ format: true })).xml, before); assert.equal(m.get('commandStack').canUndo(), false);
+  } finally { m.destroy(); }
 });

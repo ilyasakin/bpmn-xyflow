@@ -71,14 +71,49 @@ export async function chooseAdjacentReferenceDrop(h, page, id, point) {
   return {original:point,originalHit,candidates,point:chosen.point};
 }
 
-export async function clickReferenceSubprocessReplacement(h, page, action) {
-  // The installed popup shows search only for more than five actionable entries.
-  const search = await page.$('.djs-popup-search input');
+export async function clickReferenceSubprocessReplacement(h, page, action, onEvidence = async () => {}) {
+  // The installed popup filters on keyup, not on the input event alone.
+  const selector = '.djs-popup-search input', search = await page.$(selector);
+  let evidence = { searchable: !!search, action };
   if (search) {
-    await h.clickButton(page,'.djs-popup-search input');
-    await page.keyboard.sendCharacter('Sub-process');
-    assert.equal(await page.$eval('.djs-popup-search input',e=>e.value),'Sub-process');
-    await h.settle(page);
+    await h.clickButton(page, selector);
+    await page.$eval(selector, e => {
+      e.__anchorPopupKeys = [];
+      e.__anchorPopupKeyup = event => { e.__anchorPopupKeys.push({ trusted: event.isTrusted, target: event.target === e, key: event.key, value: e.value }); };
+      e.addEventListener('keyup', e.__anchorPopupKeyup);
+    });
+    try {
+      await page.keyboard.type('Sub-process');
+      assert.equal(await page.$eval(selector, e => e.value), 'Sub-process');
+      await h.settle(page);
+      const keys = await page.$eval(selector, e => e.__anchorPopupKeys);
+      assert.ok(keys.length > 0 && keys.every(e => e.trusted && e.target), 'search receives actual trusted keyup events');
+      assert.equal(keys.at(-1).value, 'Sub-process');
+      const entries = await page.$$eval('.djs-popup-body .entry', rows => rows.map(e => e.getAttribute('data-id')));
+      assert.ok(entries.includes(action), 'filtered popup exposes the exact desired action');
+      assert.ok(!entries.includes('replace-with-task'), 'search has actually filtered the former Task list');
+      evidence = { ...evidence, keys, entries };
+    } finally {
+      await page.$eval(selector, e => {
+        e.removeEventListener('keyup', e.__anchorPopupKeyup);
+        delete e.__anchorPopupKeyup; delete e.__anchorPopupKeys;
+      });
+    }
   }
-  await h.clickButton(page,`.djs-popup [data-id="${action}"]`);
+  await onEvidence(evidence);
+  await h.clickButton(page, `.djs-popup [data-id="${action}"]`);
+  return evidence;
+}
+
+/** Serialized DOM read: choose the actual visible lane outline above palette chrome. */
+export function collectReferenceLaneTop({ id, width, height }) {
+  const gfx = [...document.querySelectorAll('#viewer .djs-element[data-element-id]')].find(e => e.getAttribute('data-element-id') === id);
+  const hit = gfx?.querySelector(':scope > .djs-hit-click-stroke');
+  if (!gfx || !hit) throw Error(`Missing reference lane stroke ${id}`);
+  const rect = Object.fromEntries(['x','y','width','height'].map(k => [k, Number(hit.getAttribute(k) || 0)]));
+  if (rect.x !== 0 || rect.y !== 0 || rect.width !== width || rect.height !== height) throw Error('Reference lane hit must match its current bounds');
+  const m = gfx.getScreenCTM(), matrix = Object.fromEntries(['a','b','c','d','e','f'].map(k => [k,m[k]]));
+  if (!Object.values(matrix).every(Number.isFinite) || !Number.isFinite(width) || width <= 0 || !Number.isFinite(height) || height <= 0 || m.a*m.d-m.b*m.c === 0) throw Error('Invalid reference lane matrix/bounds');
+  const requested = { x: m.a * width / 2 + m.e, y: m.b * width / 2 + m.f };
+  return { id, rect, matrix, requested, point: { x: Math.round(requested.x), y: Math.round(requested.y) } };
 }

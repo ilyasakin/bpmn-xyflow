@@ -47,6 +47,7 @@ async function fixture() {
     up(point, node, extra={}) { hit = node ? gfx(node) : null; const target=hit||m.getSvg(); call(window,'pointerup',input(point,target,{pointerId:1,type:'pointerup',...extra}),'pointerEnd'); call(window, 'mouseup', input(point,target,extra), 'onMouseUp'); },
     blur() { call(window, 'blur', {}, 'onWindowBlur'); },
     key(key) { call(window, 'keydown', { key, preventDefault() {}, defaultPrevented: false }, 'onWindowKeyDown'); },
+    leave(point,relatedTarget) { call(m.getSvg(),'pointerleave',input(point,m.getSvg(),{relatedTarget,pointerType:'mouse'})); },
     close() { m.destroy(); restores.reverse().forEach(restore => restore()); document.elementsFromPoint = originalHit; }
   };
 }
@@ -55,6 +56,64 @@ const portPoint = h => { const circle = h.port()?.querySelector('.bpmn-xyflow-co
 const markerPoint = h => { const circle = h.m.getContainer().querySelector('.bpmn-xyflow-connect-docking-point'); assert.ok(circle); return { x: Number(circle.getAttribute('cx')), y: Number(circle.getAttribute('cy')) }; };
 async function unchanged(m, before, count) { assert.equal(await m.getXML(), before); assert.equal(m.commandStack.size(), count); }
 async function history(m, before, after) { for (let i = 0; i < 3; i++) { assert.equal(m.undo(), true); assert.equal(await m.getXML(), before); assert.equal(m.redo(), true); assert.equal(await m.getXML(), after); } }
+
+test('viewport native southeast: actual small-step approach survives attribution HTML without changing origin', async () => {
+  const h=await fixture(),{m}=h;
+  try {
+    window.innerWidth=1800;window.innerHeight=1200;
+    m.getContainer().getBoundingClientRect=()=>({left:0,top:0,right:1800,bottom:1200,width:1800,height:1200});
+    const source=m.getElement('Task_1');m.moveShape(source,{x:2-source.x,y:31-source.y});
+    const target=m.addShape('bpmn:Task',{x:-151,y:-68});m.select(source.id);
+    const viewport={x:1574.8131229346604,y:954.8194608634067,zoom:2.2345742761444396};await m.setViewport(viewport);
+    const setBox=(element,left,top,right,bottom)=>element.getBoundingClientRect=()=>({left,top,right,bottom,width:right-left,height:bottom-top});
+    const attribution=m.getContainer().querySelector('.bjs-powered-by');assert.ok(attribution);setBox(attribution,1732,1164,1785,1185);
+    const child=document.createElement('span');attribution.appendChild(child);
+    const minimap=document.createElement('div');minimap.className='bpmn-xyflow-minimap';m.getContainer().appendChild(minimap);setBox(minimap,1588,1002,1790,1154);
+    setBox(m.getContainer().querySelector('.bpmn-xyflow-context-pad'),1511.28125,1018.078125,1573.28125,1164.078125);
+    const graph=([x,y])=>({x:(x-viewport.x)/viewport.zoom,y:(y-viewport.y)/viewport.zoom});
+    const resize=m.getContainer().querySelector('[data-resize-dir="se"]');h.hover(graph([1796,1196]),resize);h.move(graph([1796,1196]),resize);
+    const handle=h.port(),anchor=markerPoint(h),grab=portPoint(h),before=await m.getXML(),count=m.commandStack.size();
+    assert.ok(Math.abs(anchor.x-99.09773869483796)<1e-9&&Math.abs(anchor.y-108.04429594919179)<1e-9,'exact hosted initial outline');
+    assert.deepEqual({x:Math.round(grab.x*viewport.zoom+viewport.x),y:Math.round(grab.y*viewport.zoom+viewport.y)},{x:1722,y:1166},'same hosted integer grab destination');
+    // Delivered positions retained in the hosted947 southeast failure artifact.
+    const delivered=[[1794,1195,false],[1793,1195,false],[1792,1194,false],[1791,1194,false],[1790,1194,false],[1789,1193,false],[1788,1193,false],[1787,1192,false],[1787,1192,false],[1786,1192,false],[1785,1191,false],[1784,1191,false],[1783,1191,false],[1782,1190,false],[1781,1190,false],[1780,1189,false],[1779,1189,false],[1778,1189,false],[1777,1188,false],[1776,1188,false],[1776,1188,false],[1775,1187,false],[1774,1187,false],[1773,1186,false],[1772,1186,false],[1771,1186,false],[1770,1185,false],[1769,1185,false],[1768,1185,false],[1767,1184,true],[1766,1184,true],[1765,1183,true],[1765,1183,true],[1764,1183,true],[1763,1182,true],[1762,1182,true],[1761,1182,true],[1760,1181,true],[1759,1181,true],[1758,1180,true],[1757,1180,true],[1756,1180,true],[1755,1179,true],[1754,1179,true],[1754,1179,true],[1753,1178,true],[1752,1178,true],[1751,1177,true],[1750,1177,true],[1749,1177,true],[1748,1176,true],[1747,1176,true],[1746,1176,true],[1745,1175,true],[1744,1175,true],[1743,1174,true],[1743,1174,true],[1742,1174,true],[1741,1173,true],[1740,1173,true],[1739,1173,true],[1738,1172,true],[1737,1172,true],[1736,1171,true],[1735,1171,true],[1734,1171,true],[1733,1170,true],[1732,1170,true],[1732,1170,true],[1731,1169,true],[1730,1169,false],[1729,1168,false],[1728,1168,false],[1727,1168,false],[1726,1167,false],[1725,1167,false],[1724,1167,false],[1723,1166,false],[1722,1166,false],[1722,1166,false]];
+    let crossed=false;
+    for(const [x,y,overAttribution]of delivered){
+      const point=graph([x,y]);
+      if(overAttribution&&!crossed){h.leave(point,child);crossed=true;}
+      const receiver=overAttribution?child:Math.hypot(x-(grab.x*viewport.zoom+viewport.x),y-(grab.y*viewport.zoom+viewport.y))<=5.75?handle.querySelector('.bpmn-xyflow-connect-hit'):source;
+      if(!overAttribution)h.hover(point,receiver);h.move(point,receiver);
+      assert.ok(h.port()===handle,'same source control survives native approach at '+x+','+y);assert.deepEqual(markerPoint(h),anchor);assert.deepEqual(portPoint(h),grab);
+    }
+    assert.equal(crossed,true);assert.deepEqual(m.getSelection(),[source.id]);assert.deepEqual(m.getViewport(),viewport);await unchanged(m,before,count);
+    h.press(grab);const end={x:target.x+30,y:target.y};h.move(end,target);h.up(end,target);assert.deepEqual(xy(m.getGraph().edges.at(-1).waypoints[0]),anchor);await history(m,before,await m.getXML());
+  }finally{h.close();}
+});
+
+test('D19: retained chrome corridors preserve ordinary HTML input and release on departure or editor exit', async () => {
+  const h=await fixture(),{m}=h;
+  try {
+    const source=m.getElement('Task_1'),origin={x:source.x+50,y:source.y};
+    for(const className of ['bjs-powered-by','bpmn-xyflow-palette','bpmn-xyflow-editor-actions','bpmn-xyflow-minimap']){
+      m.select([]);m.select(source.id);h.move(origin,source);const handle=h.port(),grab=portPoint(h),anchor=markerPoint(h);
+      const middle={x:(anchor.x+grab.x)/2,y:(anchor.y+grab.y)/2};h.move(middle,source);
+      const overlay=document.createElement('div');overlay.className=className;m.getContainer().appendChild(overlay);
+      const control=document.createElement(className==='bjs-powered-by'?'a':'button');overlay.appendChild(control);
+      const before=await m.getXML(),count=m.commandStack.size();h.leave(middle,control);h.move(middle,control);
+      assert.ok(h.port()===handle);assert.deepEqual(markerPoint(h),anchor);
+      let presses=0;control.addEventListener('mousedown',()=>presses++);
+      const event=new window.MouseEvent('mousedown',{bubbles:true,cancelable:true,button:0});control.dispatchEvent(event);
+      assert.equal(presses,1);assert.equal(event.defaultPrevented,false,'HTML control still owns its ordinary input');
+      h.move({x:middle.x+20,y:middle.y},control);assert.ok(!h.port(),'departing the measured corridor releases source');await unchanged(m,before,count);overlay.remove();
+    }
+    for(const outsideEditor of [false,true]){
+      m.select([]);m.select(source.id);h.move(origin,source);const grab=portPoint(h),middle={x:(origin.x+grab.x)/2,y:(origin.y+grab.y)/2};h.move(middle,source);
+      const overlay=document.createElement('div');overlay.className=outsideEditor?'bjs-powered-by':'unrelated-overlay';(outsideEditor?document.body:m.getContainer()).appendChild(overlay);
+      const before=await m.getXML(),count=m.commandStack.size();h.leave(middle,overlay);h.move(middle,overlay);
+      assert.ok(!h.port(),'arbitrary HTML overlay or editor exit cannot retain source ownership');await unchanged(m,before,count);overlay.remove();
+    }
+  }finally{h.close();}
+});
 
 test('D15: clipped selected midpoint/corner grabs stay reachable through fine choice, click/retry, cancel and history', async () => {
   const h = await fixture(), { m } = h;

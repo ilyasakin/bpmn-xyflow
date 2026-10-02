@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { runInNewContext } from 'node:vm';
 import { Window } from 'happy-dom';
-import { assertAffordance, collectViewportAffordance, collectViewportSurfaces, panSteps, viewportSourceCases } from './browser-viewport-source-grabs.mjs';
+import { assertAffordance, collectViewportAffordance, collectViewportSurfaces, collectPanGeometry, nativePanViewport, panSteps, viewportSourceCases } from './browser-viewport-source-grabs.mjs';
 
 test('native viewport plan covers each boundary and chrome risk with independent case lifecycles', () => {
   assert.equal(viewportSourceCases.length, 12);
@@ -99,4 +99,30 @@ test('serialized viewport surfaces normalize actual HTML and SVG class values be
     assert.deepEqual(JSON.parse(JSON.stringify(observed.canvas)),box);
     assert.deepEqual([observed.width,observed.height],[800,600]);
   }finally{await window.happyDOM.close();}
+});
+
+
+test('native pan oracle retains exact D3 inversion arithmetic for the recorded947 failures', () => {
+  for(const [priorX,zoom,downX,moveX,actualX]of [
+    [565.7975743189218,.5433674312630289,1530,1444,479.7975743189219],
+    [681.7975743189218,.5433674312630289,1530,1447,598.7975743189216],
+    [565.7975743189218,.5433674312630289,1530,1443,478.7975743189219],
+    [451.8131229346603,2.2345742761444396,1530,1447,368.81312293466044]
+  ]){
+    const before={x:priorX,y:100,zoom},down={x:downX,y:300},moved={x:moveX,y:300};
+    const actual=nativePanViewport(before,down,moved);
+    assert.equal(actual.x,actualX);assert.notEqual(actual.x,priorX+(moveX-downX));
+    assert.equal(actual.zoom,zoom);assert.equal(actual.y,300-((300-100)/zoom)*zoom);
+    assert.notDeepEqual({...actual,x:actual.x+.000001},actual,'the exact oracle does not permit a geometry epsilon');
+  }
+  assert.throws(()=>nativePanViewport({x:0,y:0,zoom:0},{x:0,y:0},{x:10,y:0}));
+  assert.throws(()=>nativePanViewport({x:0,y:0,zoom:1},{x:NaN,y:0},{x:10,y:0}));
+});
+
+test('serialized native pan observer uses the actual root SVG inverse for both delivered points', () => {
+  const matrix={a:2,b:0,c:0,d:2,e:20,f:48,inverse(){return {a:.5,b:0,c:0,d:.5,e:-10,f:-24};}};
+  const svg={getScreenCTM:()=>matrix,createSVGPoint:()=>({x:0,y:0,matrixTransform(m){return {x:this.x*m.a+this.y*m.c+m.e,y:this.x*m.b+this.y*m.d+m.f};}})};
+  const context={document:{querySelector:s=>{assert.equal(s,'#viewer .bpmn-xyflow-canvas');return svg;}}};
+  const result=runInNewContext(`(${collectPanGeometry.toString()})([{x:100,y:248},{x:118,y:250}])`,context);
+  assert.deepEqual(JSON.parse(JSON.stringify(result)),{matrix:{a:2,b:0,c:0,d:2,e:20,f:48},points:[{x:40,y:100},{x:49,y:101}]});
 });
