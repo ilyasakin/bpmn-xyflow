@@ -152,3 +152,9 @@ test('follow-up supervisor budgets include every bounded case and cleanup', () =
     assert.ok(BROWSER_SUITE_TIMEOUTS[name] < 45 * 60000);
   }
 });
+
+test('viewport source lifecycle fits its bounded supervisor and CI job', () => {
+  assert.equal(BROWSER_SUITES['test:browser:viewport-source'], 'test/modeling/browser-viewport-source-grabs.mjs');
+  assert.equal(BROWSER_SUITE_TIMEOUTS['test:browser:viewport-source'], 12 * 215000 + 90000);
+  assert.ok(BROWSER_SUITE_TIMEOUTS['test:browser:viewport-source'] < 45 * 60000);
+});

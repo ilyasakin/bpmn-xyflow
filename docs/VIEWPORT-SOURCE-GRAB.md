@@ -36,3 +36,11 @@ browser/visual-viewport clipping; editor chrome; and full occlusion. These are
 pure geometry and registered-handler structural tests. The strict native F27
 reachability assertion and native F23-T approach remain required hosted gates.
 Local structural results do not certify native hit testing or overall parity.
+
+A separate native gate, `pnpm test:browser:viewport-source`, contains 12 visible-UI
+cases for four edges, four safe-area corners, and palette/minimap adjacency at
+low/high zoom. Each case approaches the actual grab in small pointer steps and
+cancels and commits a connection from the constrained source before any pan
+recovery. Exact source position, painted visibility, selection, full XML/DI and
+history are asserted. These cases are prepared and independently reviewed;
+hosted execution is pending at this checkpoint.

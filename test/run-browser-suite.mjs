@@ -24,6 +24,7 @@ export const BROWSER_SUITES = Object.freeze({
   'test:browser:groups': 'test/modeling/browser-group-labels.mjs',
   'test:browser:hover': 'test/modeling/browser-hover-connections.mjs',
   'test:browser:anchor-ux': 'test/modeling/browser-anchor-ux.mjs',
+  'test:browser:viewport-source': 'test/modeling/browser-viewport-source-grabs.mjs',
   'test:browser:anchor-ownership': 'test/modeling/browser-anchor-ownership.mjs',
   'test:browser:anchor-followup-a-local': 'test/modeling/browser-anchor-followup-a-local.mjs',
   'test:browser:anchor-followup-a-upstream': 'test/modeling/browser-anchor-followup-a-upstream.mjs',
@@ -39,6 +40,7 @@ export const BROWSER_SUITES = Object.freeze({
 // Whole-case setup, action, evidence and owned cleanup are bounded to215s.
 // The suite margin preserves reporting after every registered case is attempted.
 export const BROWSER_SUITE_TIMEOUTS = Object.freeze({
+  'test:browser:viewport-source': 2670000,
   'test:browser:anchor-followup-a-local': 2455000,
   'test:browser:anchor-followup-a-upstream': 305000,
   'test:browser:anchor-followup-b-local-1': 2025000,
