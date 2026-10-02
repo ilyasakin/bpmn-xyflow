@@ -39,7 +39,8 @@ async function fixture() {
     press(point, extra = {}) { const handle = port(); assert.ok(handle, 'visible connection port'); const target=handle.querySelector('.bpmn-xyflow-connect-hit'); call(window,'pointerdown',input(point,target,{pointerId:1,type:'pointerdown',...extra}),'pointerDown'); const event=input(point,target,extra); call(m.getSvg(),'mousedown',event,'onMouseDown'); call(handle, 'mousedown', event); },
     controlPress(point,target) { call(m.getSvg(),'mousedown',input(point,target),'onMouseDown'); },
     shiftPress(point,node) { const target=gfx(node),event=input(point,target,{shiftKey:true,pointerId:1,type:'pointerdown'}); call(window,'pointerdown',event,'pointerDown'); call(m.getSvg(),'mousedown',event,'onMouseDown'); },
-    up(point, node) { hit = node ? gfx(node) : null; const target=hit||m.getSvg(); call(window,'pointerup',input(point,target,{pointerId:1,type:'pointerup'}),'pointerEnd'); call(window, 'mouseup', input(point,target), 'onMouseUp'); },
+    bodyPress(point,node,extra={}) { const target=gfx(node),event=input(point,target,extra);call(window,'pointerdown',input(point,target,{pointerId:1,type:'pointerdown',...extra}),'pointerDown');call(m.getSvg(),'mousedown',event,'onMouseDown'); },
+    up(point, node, extra={}) { hit = node ? gfx(node) : null; const target=hit||m.getSvg(); call(window,'pointerup',input(point,target,{pointerId:1,type:'pointerup',...extra}),'pointerEnd'); call(window, 'mouseup', input(point,target,extra), 'onMouseUp'); },
     blur() { call(window, 'blur', {}, 'onWindowBlur'); },
     key(key) { call(window, 'keydown', { key, preventDefault() {}, defaultPrevented: false }, 'onWindowKeyDown'); },
     close() { m.destroy(); restores.reverse().forEach(restore => restore()); document.elementsFromPoint = originalHit; }
@@ -395,4 +396,107 @@ test('Shift on the visible port passes SVG capture to Connect and retains the pe
     h.up(end,target);const edge=m.getGraph().edges.at(-1);assert.ok(edge.source===source&&edge.target===target);assert.deepEqual(xy(edge.waypoints[0]),start);assert.deepEqual(xy(edge.waypoints.at(-1)),end);
     const after=await m.getXML();assert.equal(m.commandStack.size(),count+1);await history(m,before,after);
   }finally{h.close();}
+});
+
+
+test('displaced Event/Gateway and selected Task grabs leave a visible marker and tether without moving the origin', async () => {
+  const h=await fixture(),{m}=h;
+  try {
+    const event=m.getElement('StartEvent_1'),gateway=m.addShape('bpmn:ExclusiveGateway',{x:700,y:350}),task=m.getElement('Task_1'),target=m.addShape('bpmn:Task',{x:1050,y:500});
+    const cases=[[event,.5,false],[event,8/9.669211195928753,false],[gateway,.5,false],[task,.5,true],[task,1,true],[task,2,true]];
+    for(const [node,zoom,selected] of cases) {
+      await m.setViewport({x:37,y:53,zoom});m.select(selected?node.id:[]);
+      const before=await m.getXML(),count=m.commandStack.size(),requested={x:node.x,y:node.y+node.height/2};
+      h.move(requested,node);
+      const handle=h.port(),marker=m.getContainer().querySelector('.bpmn-xyflow-connect-docking-point'),port=handle.querySelector('.bpmn-xyflow-connect-port'),tether=m.getContainer().querySelector('.bpmn-xyflow-connect-tether'),grab=portPoint(h);
+      const point=c=>({x:Number(c.getAttribute('cx')),y:Number(c.getAttribute('cy'))});
+      const outer=c=>(Number(c.getAttribute('r'))+Number.parseFloat(c.style['stroke-width'])/2)*zoom;
+      assert.equal(marker.parentNode.getAttribute('visibility'),'visible');
+      const anchor=point(marker);assert.ok(Math.hypot(anchor.x-requested.x,anchor.y-requested.y)<1e-8,'the on-outline origin matches the requested point within arithmetic precision');
+      const separation=Math.hypot(grab.x-anchor.x,grab.y-anchor.y)*zoom;
+      assert.ok(separation>=12-1e-8,'displaced centers have a minimum screen-space separation');
+      assert.ok(separation-outer(port)-outer(marker)>=3.24,'painted marker and grab leave at least3.24CSSpx of visible tether');
+      assert.deepEqual({x:Number(tether.getAttribute('x1')),y:Number(tether.getAttribute('y1'))},anchor);
+      assert.deepEqual({x:Number(tether.getAttribute('x2')),y:Number(tether.getAttribute('y2'))},grab);
+      assert.equal(handle.querySelector('title').textContent,'Drag to connect from the marked outline point');
+      for(const fraction of [.25,.5,.75,1,.5,1]) {
+        const at={x:anchor.x+(grab.x-anchor.x)*fraction,y:anchor.y+(grab.y-anchor.y)*fraction};
+        h.hover(at,node);h.move(at,node);assert.ok(h.port()===handle);assert.deepEqual(portPoint(h),grab);assert.deepEqual(point(marker),anchor);
+      }
+      await unchanged(m,before,count);
+      h.press(grab);const end={x:target.x,y:target.y+20};h.move(end,target);
+      const preview=m.getContainer().querySelector('.bpmn-xyflow-connect-preview path');assert.ok(preview);
+      const previewPath=preview.getAttribute('d');h.up(end,target);
+      const edge=m.getGraph().edges.at(-1);assert.ok(edge.source===node&&edge.target===target);
+      assert.deepEqual(xy(edge.waypoints[0]),anchor,'committed source remains the marker, never the outward grab');
+      const painted=h.gfx(edge).querySelector(':scope > path:not(.bpmn-xyflow-connection-hit)');
+      assert.equal(painted.getAttribute('d').replaceAll(' ',''),previewPath.replaceAll(' ',''),'activated preview and committed paint agree');
+      const after=await m.getXML();assert.equal(m.commandStack.size(),count+1);await history(m,before,after);m.undo();assert.equal(await m.getXML(),before);
+    }
+    await m.setViewport({x:37,y:53,zoom:1});m.clearSelection();const point={x:task.x+task.width,y:task.y+20};
+    h.move(point,task);assert.deepEqual(portPoint(h),point,'ordinary coincident ports do not move outward');
+    assert.equal(h.port().querySelector('title').textContent,'Drag to connect from this point');
+    assert.equal(m.getContainer().querySelector('.bpmn-xyflow-connect-docking').getAttribute('visibility'),'hidden');
+  } finally { h.close(); }
+});
+
+for (const selected of [false,true]) test(`inactive source-port click retains Connect intent at every midpoint/corner, selected=${selected}`,async()=>{
+  const h=await fixture(),{m}=h;
+  try {
+    const source=m.getElement('Task_1'),target=m.addShape('bpmn:Task',{x:900,y:400});
+    const corners=10-10/Math.sqrt(2),x=source.x,y=source.y,w=source.width,height=source.height;
+    const points=[{x:x+w/2,y},{x:x+w,y:y+height/2},{x:x+w/2,y:y+height},{x,y:y+height/2},
+      {x:x+corners,y:y+corners},{x:x+w-corners,y:y+corners},{x:x+w-corners,y:y+height-corners},{x:x+corners,y:y+height-corners}];
+    for (const point of points) {
+      m.select(selected?source.id:[]);h.move(point,source);
+      const marker=m.getContainer().querySelector('.bpmn-xyflow-connect-docking-point'),anchor={x:Number(marker.getAttribute('cx')),y:Number(marker.getAttribute('cy'))},grab=portPoint(h),selection=m.getSelection();
+      const before=await m.getXML(),count=m.commandStack.size(),bounds={x:source.x,y:source.y,width:source.width,height:source.height};
+      h.press(grab);h.up(grab,selected?null:source);
+      assert.deepEqual(m.getSelection(),selection,'Connect owns its pointerup instead of selecting the shape beneath the removed handle');
+      assert.ok(h.port(),'inactive release restores the immediately reusable control');
+      assert.deepEqual(portPoint(h),grab,'same visible grab is restored without a leave/re-enter workaround');
+      const restored=m.getContainer().querySelector('.bpmn-xyflow-connect-docking-point');assert.deepEqual({x:Number(restored.getAttribute('cx')),y:Number(restored.getAttribute('cy'))},anchor);
+      await unchanged(m,before,count);
+      // A second down at the identical screen/graph point starts Connect, never
+      // the north/south/east/west or corner resize control under the old port.
+      h.press(grab);const end={x:target.x,y:target.y+25};h.move(end,target);
+      assert.ok(m.getContainer().querySelector('.bpmn-xyflow-connect-preview'));
+      assert.deepEqual({x:source.x,y:source.y,width:source.width,height:source.height},bounds);
+      h.up(end,target);const edge=m.getGraph().edges.at(-1);assert.ok(edge.source===source&&edge.target===target);assert.deepEqual(xy(edge.waypoints[0]),anchor);
+      assert.equal(m.commandStack.size(),count+1);const after=await m.getXML();await history(m,before,after);m.undo();assert.equal(await m.getXML(),before);
+    }
+  }finally{h.close();}
+});
+
+
+test('source-control ownership preserves ordinary modifier selection and suppresses activated Shift drag clicks',async()=>{
+  const h=await fixture(),{m}=h;
+  try {
+    const source=m.getElement('Task_1'),other=m.addShape('bpmn:Task',{x:850,y:400});
+    const body={x:source.x+50,y:source.y+40},before=await m.getXML(),count=m.commandStack.size();
+    for(const modifier of [null,'shiftKey','ctrlKey','metaKey']) {
+      m.select(other.id);const extra=modifier?{[modifier]:true}:{};
+      h.bodyPress(body,source,extra);h.up(body,source,extra);
+      assert.deepEqual(m.getSelection().sort(),(modifier?[other.id,source.id]:[source.id]).sort(),'body click retains its normal selection behavior');
+      await unchanged(m,before,count);
+    }
+    m.select(other.id);h.shiftPress(body,source);h.move({x:body.x+60,y:body.y-40},null);
+    assert.ok(m.getContainer().querySelector('.bpmn-xyflow-connect-preview'));
+    h.key('Escape');h.up(body,source,{shiftKey:true});
+    assert.deepEqual(m.getSelection(),[other.id],'activated Shift cancellation cannot toggle the underlying shape on pointerup');
+    await unchanged(m,before,count);
+    // The next ordinary click must work after the owned pointer is released.
+    h.bodyPress(body,source);h.up(body,source);assert.deepEqual(m.getSelection(),[source.id]);
+  }finally{h.close();}
+});
+
+test('a claimed source-port pointer remains scoped to its own Viewer',async()=>{
+  const a=await fixture(),b=await fixture();
+  try {
+    const na=a.m.getElement('Task_1'),nb=b.m.getElement('Task_1'),pa={x:na.x+50,y:na.y},pb={x:nb.x+50,y:nb.y+40};
+    const xa=await a.m.getXML(),xb=await b.m.getXML();a.move(pa,na);a.press(pa);a.up(pa,na);
+    assert.deepEqual(a.m.getSelection(),[]);assert.deepEqual(b.m.getSelection(),[]);assert.ok(a.port());
+    b.bodyPress(pb,nb);b.up(pb,nb);assert.deepEqual(b.m.getSelection(),[nb.id]);assert.deepEqual(a.m.getSelection(),[]);
+    assert.equal(await a.m.getXML(),xa);assert.equal(await b.m.getXML(),xb);
+  }finally{b.close();a.close();}
 });

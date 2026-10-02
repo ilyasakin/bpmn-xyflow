@@ -23,7 +23,8 @@ export const BROWSER_SUITES = Object.freeze({
   'test:browser:flow': 'test/modeling/browser-flow-annotations.mjs',
   'test:browser:groups': 'test/modeling/browser-group-labels.mjs',
   'test:browser:hover': 'test/modeling/browser-hover-connections.mjs',
-  'test:browser:anchor-ux': 'test/modeling/browser-anchor-ux.mjs'
+  'test:browser:anchor-ux': 'test/modeling/browser-anchor-ux.mjs',
+  'test:browser:anchor-ownership': 'test/modeling/browser-anchor-ownership.mjs'
 });
 
 const OWNER_KEY = 'BPMN_BROWSER_SUITE_OWNER';

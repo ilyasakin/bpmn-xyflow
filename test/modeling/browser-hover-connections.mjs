@@ -413,10 +413,19 @@ try {
 
   await paired('booking-fresh-versus-route-hover', async page => {
     const before = await state(page); await blank(page); const p = await screen(page, { x: 479, y: 260 });
-    await page.mouse.move(p.x, p.y); await settle(page); const fresh = await hit(page, p); assert.equal(fresh.id, 'FlightTimeout');
+    await page.mouse.move(p.x, p.y); await settle(page);
+    // Query the point Chromium actually delivered, not the adjacent fractional
+    // reprojection at the flow's round-cap boundary.
+    const freshInput = await page.evaluate(() => window.hoverTest.lastInput);
+    assert.equal(freshInput.type, 'mousemove'); assert.equal(freshInput.trusted, true);
+    const fresh = await hit(page, freshInput.client); assert.equal(fresh.id, 'FlightTimeout'); assert.equal(fresh.control, false);
+    assert.equal((await controls(page, 'ReservationFlow2')).visible, false);
     await hover(page, 'ReservationFlow2', { x: 490, y: 260 }); await page.mouse.move(p.x, p.y); await settle(page);
-    const inherited = await hit(page, p); assert.equal(inherited.id, 'ReservationFlow2'); assert.ok(inherited.control);
-    await page.mouse.click(p.x, p.y); await settle(page); const after = await state(page); assert.deepEqual(after.selection, ['ReservationFlow2']); assert.equal(after.xml, before.xml); assert.deepEqual(after.history, before.history); return { fresh, inherited, input: after.input };
+    const inheritedInput = await page.evaluate(() => window.hoverTest.lastInput);
+    assert.equal(inheritedInput.type, 'mousemove'); assert.equal(inheritedInput.trusted, true);
+    assert.deepEqual(inheritedInput.client, freshInput.client, 'both approach paths reach the same delivered client point');
+    const inherited = await hit(page, inheritedInput.client); assert.equal(inherited.id, 'ReservationFlow2'); assert.ok(inherited.control);
+    await page.mouse.click(inheritedInput.client.x, inheritedInput.client.y); await settle(page); const after = await state(page); assert.deepEqual(after.selection, ['ReservationFlow2']); assert.equal(after.xml, before.xml); assert.deepEqual(after.history, before.history); return { requested: p, freshInput, inheritedInput, fresh, inherited, input: after.input };
   }, { fixture: 'booking', zoom: .9 });
 
   await paired('selected-A-hovered-B', async page => {

@@ -105,6 +105,60 @@ case specification. Per-case execution evidence is in the run artifact
 `bpmn-anchor-ux-evidence`, including `anchor-ux/results.json`, screenshots and
 exported XML/DOM captures.
 
+## Additional manual findings and immediate-repeat cases
+
+The independent exploratory pass on site `da87e1ce` / runtime `edc9a168`
+identified two ordinary usability defects after the native39 corrections:
+
+- **D9, displaced-origin clarity:** the Booking timer boundary's docking marker
+  `(674.7910042188045, 287.77206352435707)` exactly matches its committed
+  waypoint. Its separate grab is only 2.563684 CSS px away, so the 5.75 px painted
+  grab radius covers the 3 px painted origin-marker radius and short tether.
+  This is an obscured indication, not a docking-coordinate error
+- **D10, source-click operation takeover:** a stationary click on ReserveFlight's
+  top-midpoint source port selects the underlying Task and replaces the same
+  pointer position with a resize square. Immediate drag from that position to
+  ReserveHotel resizes the Task from 120×80 at (620,220) to 120×22 at (620,278),
+  creates no connection, and adds resize history. Off-center immediate retry
+  passed, so checking only off-center positions would miss this defect
+
+The bounded ownership regression schedule is defined before its implementation:
+
+| Variant group | Actual input path | Required outcome | Reference/contract | Status |
+| --- | --- | --- | --- | --- |
+| AX-04-R, eight positions × two states | Build two Tasks through the palette. Start unselected or select the source through the UI. At each side midpoint and each painted rounded corner, approach the visible source grab, stationary-click it, then press again at the current pointer without an intervening move/helper re-entry and drag to the target | The visible source-control intent remains available; no unexpected shape selection, resize or movement takes over. Exact marked origin agrees with preview/DI, target/refs are correct, source bounds unchanged, one connection command, exact Undo/Redo | These perimeter controls are a fork UX extension; test their stated purpose and exclusive tool ownership, not a nonexistent identical upstream control | Prepared, unrun |
+| AX-04-R cancellation/selection | Cancel an activated source gesture and immediately retry; separately toggle ordinary body selection before choosing the source control | Cancellation leaves XML/history intact; the next source action remains usable. Ordinary body/Shift selection is preserved | Existing modeler selection and cancellation contract | Prepared, unrun |
+| AX-04-R explicit resize | Select the source and deliberately grab its visibly distinct resize control | Resize remains available and changes only intended bounds/routes, with exact Undo | Existing intentional Task-resize extension | Prepared, unrun |
+| AX-13-V displaced indication | Hover small events/gateways and source points near labels/selected controls; inspect the origin marker, tether and grab at native scale before connecting | Both origin and grab remain distinguishable; minimum painted separation, unchanged exact origin, stable approach and correct preview/commit | Fork affordance clarity; no change to BPMN docking semantics | Confirmed manual failure; correction in progress |
+
+### Current correction checkpoint
+
+The subsequent library revision `ba29db764a6601531eadb94012c4a01d893c8add`
+passes all 39 anchor cases and CodeQL. Its retained run still found two issues:
+
+- **D11, rapid navigation/zoom lifecycle:** child wheel → Back → immediate
+  parent wheel reaches the diagram, but the public camera stays at zoom 0.85
+  while d3's internal camera changes to 0.6622898927. Recreating the controller on
+  the same SVG leaves a live wheel gesture using its old dispatch. Independent
+  replay reproduces this within 22 ms. The reviewed correction keeps one
+  controller for the lifetime of that SVG; a 19 ms replay now updates the public
+  camera exactly around the delivered pointer, without sleeping or retrying
+- The retained Booking hover assertion queried a fractional reprojected point
+  at an edge's round-cap boundary, while Chromium delivered the neighboring
+  integer pixel over the event. Its reviewed correction queries the recorded
+  trusted input for both paths and retains exact event-versus-edge-control
+  ownership; no target, geometry or tolerance changes
+
+D9's reviewed fix separates an already-displaced grab by at least 12 CSS px,
+leaving 3.25 px between the painted circles while retaining collision avoidance
+and the exact origin. D10's reviewed fix gives actual source-control presses
+ownership of the pointer click and restores the same affordance after an
+inactive release. Ordinary Shift-body selection remains unchanged until a
+connection actually activates. The separate 24-case native ownership suite
+contains 16 current-pointer retry cases and 8 deliberately selected resize-control
+cases. They are prepared and independently reviewed, but still unrun at this
+checkpoint; the green 39 script is byte-identical.
+
 ## Decision and evidence rules
 
 - P0: ordinary creation, chosen endpoints, accidental mutation or unusable history
