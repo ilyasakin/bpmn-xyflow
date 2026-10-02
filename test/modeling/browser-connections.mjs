@@ -125,10 +125,12 @@ async function createByGesture(page,name,source,target,sourcePort,targetPort,mod
   let shiftHeld=false;
   try {
   const before=await state(page),end=await point(page,targetPort);await hit(page,end,target.id);
-  let start;
+  let start, sourceControl;
   if(mode==='hover') {
-    const center=await point(page,{x:source.x+source.width/2,y:source.y+source.height/2});await page.mouse.move(center.x,center.y);
-    const handle=await page.waitForSelector('.bpmn-xyflow-connect-handle'),box=await handle.boundingBox();start={x:box.x+box.width/2,y:box.y+box.height/2};await hit(page,start,null,'.bpmn-xyflow-connect-handle');
+    const chosen=await point(page,sourcePort);await page.mouse.move(chosen.x,chosen.y);
+    const handle=await page.waitForSelector(`.bpmn-xyflow-connect-handle[data-connect-source="${source.id}"]`),box=await handle.boundingBox();start={x:box.x+box.width/2,y:box.y+box.height/2};await hit(page,start,null,'.bpmn-xyflow-connect-handle');
+    sourceControl=await page.evaluate(id=>{const marker=document.querySelector(`.bpmn-xyflow-connect-docking[data-connect-source="${id}"] .bpmn-xyflow-connect-docking-point`),grab=document.querySelector(`.bpmn-xyflow-connect-handle[data-connect-source="${id}"] .bpmn-xyflow-connect-port`);return {owner:id,anchor:{x:Number(marker?.getAttribute('cx')),y:Number(marker?.getAttribute('cy'))},grab:{x:Number(grab?.getAttribute('cx')),y:Number(grab?.getAttribute('cy'))}};},source.id);
+    near(sourceControl.anchor,sourcePort,1.5/before.viewport.zoom,'visible perimeter marker is at the explicitly chosen source port');
   } else if(mode==='context-drag'||mode==='context-click') {
     await selectShape(page,source.id,{x:source.width/2,y:source.height/2});
     const button=await page.waitForSelector('.bpmn-xyflow-context-pad button[title="Connect — drag to a target shape"]'),box=await button.boundingBox();start={x:box.x+box.width/2,y:box.y+box.height/2};await hit(page,start,null,'.bpmn-xyflow-context-pad button');
@@ -143,7 +145,7 @@ async function createByGesture(page,name,source,target,sourcePort,targetPort,mod
   if(shiftHeld){await page.keyboard.up('Shift');shiftHeld=false;}
   const after=await state(page),edge=after.flows.find(edge=>edge.source===source.id&&edge.target===target.id);
   assert.ok(edge,`native ${mode} creates edge; preview=${JSON.stringify(live)}`);assert.ok(live,'live connection preview is present during native drag');
-  await writeFile(`test-artifacts/browser-connections-${name}-anchors.json`,JSON.stringify({nativeStart:start,chosenSource:sourcePort,chosenTarget:targetPort,preview:live,finalDI:edge.points,viewport:after.viewport},null,2));
+  await writeFile(`test-artifacts/browser-connections-${name}-anchors.json`,JSON.stringify({nativeStart:start,sourceControl,chosenSource:sourcePort,chosenTarget:targetPort,preview:live,finalDI:edge.points,viewport:after.viewport},null,2));
   const tolerance=1.5/after.viewport.zoom;
   if(mode.startsWith('context-')) {
     docked(live.start,after.shapes[source.id]);

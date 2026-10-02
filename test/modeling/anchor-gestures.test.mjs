@@ -35,7 +35,7 @@ async function fixture() {
   const port = () => m.getContainer().querySelector('.bpmn-xyflow-connect-handle');
   return { m, gfx, port,
     move(point, node) { hit = node?.nodeType ? node : node ? gfx(node) : null; call(window, 'mousemove', input(point, hit || m.getSvg()), 'onMouseMove'); },
-    press(point) { const handle = port(); assert.ok(handle, 'visible connection port'); const target=handle.querySelector('.bpmn-xyflow-connect-hit'); call(window,'pointerdown',input(point,target,{pointerId:1,type:'pointerdown'}),'pointerDown'); call(handle, 'mousedown', input(point,target)); },
+    press(point, extra = {}) { const handle = port(); assert.ok(handle, 'visible connection port'); const target=handle.querySelector('.bpmn-xyflow-connect-hit'); call(window,'pointerdown',input(point,target,{pointerId:1,type:'pointerdown',...extra}),'pointerDown'); const event=input(point,target,extra); call(m.getSvg(),'mousedown',event,'onMouseDown'); call(handle, 'mousedown', event); },
     controlPress(point,target) { call(m.getSvg(),'mousedown',input(point,target),'onMouseDown'); },
     shiftPress(point,node) { const target=gfx(node),event=input(point,target,{shiftKey:true,pointerId:1,type:'pointerdown'}); call(window,'pointerdown',event,'pointerDown'); call(m.getSvg(),'mousedown',event,'onMouseDown'); },
     up(point, node) { hit = node ? gfx(node) : null; const target=hit||m.getSvg(); call(window,'pointerup',input(point,target,{pointerId:1,type:'pointerup'}),'pointerEnd'); call(window, 'mouseup', input(point,target), 'onMouseUp'); },
@@ -144,12 +144,12 @@ test('AX-08/22: target remains usable without a forced hover leave/re-enter afte
 });
 
 
-test('AX-02/25: a grabbed port stays stable and remains absent from standalone SVG',async()=>{
+test('AX-02/25: unpressed tracking retains control identity and remains absent from standalone SVG',async()=>{
   const h=await fixture(),{m}=h;
   try{
     const source=m.getElement('Task_1'),point={x:source.x+25,y:source.y},before=await m.getXML(),count=m.commandStack.size();
     h.move(point,source);const handle=h.port(),hit=handle.querySelector('.bpmn-xyflow-connect-hit');
-    h.move({x:point.x+3,y:point.y+2},hit);assert.ok(h.port()===handle);assert.deepEqual(portPoint(h),point);await unchanged(m,before,count);
+    h.move({x:point.x+3,y:point.y+2},hit);assert.ok(h.port()===handle);assert.deepEqual(portPoint(h),{x:point.x+3,y:point.y});await unchanged(m,before,count);
     const exported=await m.saveSVG();assert.doesNotMatch(typeof exported==='string'?exported:exported.svg,/bpmn-xyflow-connect-(?:handle|outline)/);
     m.moveShape(source,{x:20,y:0});assert.ok(!h.port(),'model changes remove stale port geometry');m.undo();assert.equal(await m.getXML(),before);
   }finally{h.close();}
@@ -317,4 +317,70 @@ test('lane routing refusal rolls back earlier sibling changes and deleted semant
     assert.equal(m.redo(), true); assert.equal(label.businessObject.text, 'Retain pending redo');
     assert.equal(m.undo(), true); assert.equal(await m.getXML(), before);
   } finally { h.close(); }
+});
+
+test('coincident unpressed ports follow one-pixel perimeter motion while displaced grabs stay stable', async () => {
+  const h=await fixture(),{m}=h;
+  try {
+    const node=m.getElement('Task_1');await m.setViewport({x:23,y:17,zoom:1.4});
+    const start={x:node.x+node.width,y:node.y+20},before=await m.getXML(),count=m.commandStack.size();
+    h.move(start,node);
+    for(let pixel=1;pixel<=12;pixel++){
+      const point={x:start.x,y:start.y+pixel/1.4};
+      h.move(point,h.port().querySelector('.bpmn-xyflow-connect-hit'));
+      const actual=portPoint(h);assert.ok(Math.hypot(actual.x-point.x,actual.y-point.y)<1e-8,'the coincident hit circle does not quantize origin motion');
+    }
+    m.select(node.id);const middle={x:node.x+node.width,y:node.y+node.height/2};h.move(middle,node);
+    const grab=portPoint(h),marker=m.getContainer().querySelector('.bpmn-xyflow-connect-docking-point'),anchor={x:Number(marker.getAttribute('cx')),y:Number(marker.getAttribute('cy'))};
+    assert.ok(grab.x>middle.x);assert.ok(Math.hypot(anchor.x-middle.x,anchor.y-middle.y)<1e-8);
+    h.move({x:grab.x-1/1.4,y:grab.y},h.port().querySelector('.bpmn-xyflow-connect-hit'));
+    assert.deepEqual(portPoint(h),grab);assert.deepEqual({x:Number(marker.getAttribute('cx')),y:Number(marker.getAttribute('cy'))},anchor);
+    await unchanged(m,before,count);
+  }finally{h.close();}
+});
+
+test('boundary outline remains reachable through its own label padding without taking over label text or drag', async () => {
+  const h=await fixture(),{m}=h;
+  try {
+    await m.importXML(await readFile('test/fixtures/scenarios/booking-timeout-compensation.bpmn','utf8'));
+    const boundary=m.getElement('FlightTimeout'),label=boundary.label;
+    // Chrome's measured display rectangle from the failed AX-13 artifact;
+    // structural text metrics are deliberately replaced only for this replay.
+    Object.assign(label,{x:646,y:318,width:85,height:14});
+    const labelGfx=h.gfx(label),labelHit=labelGfx.querySelector('.bpmn-xyflow-shape-hit');
+    labelGfx.setAttribute('transform',`translate(${label.x},${label.y})`);labelHit.setAttribute('width',label.width);labelHit.setAttribute('height',label.height);
+    const point={x:678.5093429732333,y:314.91555399972754},before=await m.getXML(),count=m.commandStack.size();
+    const ownerBounds={x:boundary.x,y:boundary.y,width:boundary.width,height:boundary.height};
+    h.move(point,labelHit);assert.equal(h.port()?.getAttribute('data-connect-source'),boundary.id);
+    const marker=m.getContainer().querySelector('.bpmn-xyflow-connect-docking-point'),anchor={x:Number(marker.getAttribute('cx')),y:Number(marker.getAttribute('cy'))},grab=portPoint(h);
+    assert.ok(Math.abs(Math.hypot(anchor.x-688,anchor.y-300)-18)<1e-8,'marker lies on actual event circle');
+    const padding=Number(labelHit.getAttribute('stroke-width'))/2,hitRadius=Number(h.port().querySelector('.bpmn-xyflow-connect-hit').getAttribute('r'));
+    assert.ok(grab.x+hitRadius<label.x-padding||grab.x-hitRadius>label.x+label.width+padding||grab.y+hitRadius<label.y-padding||grab.y-hitRadius>label.y+label.height+padding,'grab hit disc clears the complete label hit rectangle');
+    const crossing={x:anchor.x+(grab.x-anchor.x)*.5,y:anchor.y+(grab.y-anchor.y)*.5};
+    h.move(crossing,labelHit);assert.deepEqual(portPoint(h),grab,'crossing the label along the tether retains the grab');
+    const text={x:label.x+label.width*.8,y:label.y+label.height/2};h.move(text,labelHit);assert.ok(!h.port(),'genuine label text keeps its own hover target');
+    await unchanged(m,before,count);
+    h.controlPress(text,labelHit);h.move({x:text.x+25,y:text.y+18},label);h.up({x:text.x+25,y:text.y+18},label);
+    assert.equal(label.x,671);assert.equal(label.y,336);assert.deepEqual({x:boundary.x,y:boundary.y,width:boundary.width,height:boundary.height},ownerBounds);
+    assert.equal(boundary.businessObject.attachedToRef.id,'ReserveFlight');assert.equal(boundary.businessObject.eventDefinitions[0].timeDuration.body,'PT1H');
+    const after=await m.getXML();assert.equal(m.commandStack.size(),count+1);await history(m,before,after);
+  }finally{h.close();}
+});
+
+test('Shift on the visible port passes SVG capture to Connect and retains the pending activation threshold', async () => {
+  const h=await fixture(),{m}=h;
+  try {
+    const source=m.getElement('StartEvent_1'),target=m.getElement('Task_1'),start={x:source.x+source.width/2,y:source.y+source.height};
+    const before=await m.getXML(),count=m.commandStack.size();
+    for(const delta of [0,1,5]){
+      h.move(start,source);const grab=portPoint(h);h.press(grab,{shiftKey:true});
+      assert.ok(!m.getContainer().querySelector('.bpmn-xyflow-lasso'),'SVG capture does not steal a source port for lasso');
+      h.move({x:grab.x+delta,y:grab.y},source);assert.ok(!m.getContainer().querySelector('.bpmn-xyflow-connect-preview'),'subthreshold Shift press stays pending');h.up(grab,source);await unchanged(m,before,count);
+    }
+    h.move(start,source);const grab=portPoint(h);h.press(grab,{shiftKey:true});
+    const end={x:target.x+target.width*.3,y:target.y};h.move(end,target);
+    assert.ok(m.getContainer().querySelector('.bpmn-xyflow-connect-preview'),'activated Shift port drag shows Connect preview');assert.ok(!m.getContainer().querySelector('.bpmn-xyflow-lasso'));
+    h.up(end,target);const edge=m.getGraph().edges.at(-1);assert.ok(edge.source===source&&edge.target===target);assert.deepEqual(xy(edge.waypoints[0]),start);assert.deepEqual(xy(edge.waypoints.at(-1)),end);
+    const after=await m.getXML();assert.equal(m.commandStack.size(),count+1);await history(m,before,after);
+  }finally{h.close();}
 });

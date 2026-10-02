@@ -10,6 +10,66 @@ exploration uses site `99e608a` with runtime library `5a994b6`. The comparison
 reference is pinned bpmn-js 18.30.1. A reference result must come from its actual
 interactive path; a rules return value alone does not establish what a user sees.
 
+## First hosted execution: 2026-10-02
+
+Revision `57fa5a80f70da7b621a0263a074a96afa6d9129c` executed the first 38
+native cases in [run 36956495907](https://github.com/ilyasakin/bpmn-xyflow/actions/runs/36956495907).
+Six cases passed and 32 failed. This is an incomplete, failing acceptance run;
+it does not establish that the reopened defects are fixed.
+
+- Passed: AX-11/12 business-shape cases, AX-14 fresh circle target resize,
+  AX-15/16 source/target redocking, and AX-24 at the higher zoom setting
+- Many cases stopped during native zoom setup, and the reference cases stopped
+  on the blank-diagram history premise. Their intended workflows were not reached
+- Separate failures require diagnosis: AX-04 chosen marker position, AX-09/10
+  target hit, AX-13 boundary source-control availability, AX-14 circle docking
+  after task movement, and AX-19 fractional segment editing
+- The recorded failure remains authoritative until its cause is demonstrated
+  from input traces, actual DOM/geometry and independent reference behavior.
+  A failed setup is not evidence that its intended product behavior passed
+- Follow-up workflow modules are prepared separately and have not run. The
+  shared site preview still uses the earlier runtime at this checkpoint
+
+Initial diagnosis (not a successful rerun): the 12-event setup limit cannot
+reach the requested zoom from the initial zoom 4; 21 cases stop there. Five
+reference cases encounter pending native click traps during blank-canvas
+selection clearing. AX-19 produced a valid three-point orthogonal route because
+the delivered drag row remains within the task's rounded lower corner; requiring
+four points was incorrect. The AX-14 movement reduces the facing gap from 23 to 9;
+a full-service reference probe yields the same top/top reroute with endpoints on
+the actual outlines. A separate wider-gap movement check must retain coverage of
+the previously observed off-circle docking defect. Two additional product defects are independently reproduced from the hosted
+input traces and registered-handler replay:
+
+| Defect | Visible failure | Cause and acceptance requirement | Status |
+| --- | --- | --- | --- |
+| D5 / AX-04 | After jitter, returning along the outline leaves the marker at the earlier point; fine movement advances in roughly 8 px jumps | Unpressed coincident ports are held by their own transparent hit disc. They must keep following the outline; displaced grabs and active drags must remain stable | Confirmed; correction pending native rerun |
+| D6 / AX-13 | A named timer boundary event loses its connection affordance along part of its ring | Its external label's invisible padded hit rectangle covers the ring and is treated as an ineligible source. Preserve actual label text editing and provide a reachable ring origin | Confirmed; correction pending native rerun |
+
+The retained browser suites also failed eight connection-creation variants and
+one hover-control case on this revision. The backward-source cases still
+approached the shape center while expecting a fixed right port; their setup must
+choose the now-visible intended perimeter point. The Shift-create failures identify an input arbitration regression: capture
+handling treats the new source hit circle as empty canvas and starts lasso
+before its connection handler receives the press. This requires a source fix
+and a native rerun; the separate hover case remains under diagnosis. Other retained suites, source/schema checks,
+build, packed consumers and the actual CodeQL alert check passed. These passes
+do not override the failing native acceptance.
+
+The follow-up correction is independently reviewed at source and handler level:
+fine unpressed coincident-port movement tracks each delivered point, the
+boundary owner's outline is accessible through invisible label padding while
+label dragging remains intact, and plain/Shift source-control presses both
+activate Connect without lasso. Exact Cancel XML is preserved. The corrected
+matrix contains 39 cases, retaining all 38 and adding the wider-gap movement
+regression. These corrections still require their own hosted native run and
+paired-preview exploratory review.
+
+The baseline observations and unexecuted scope below are retained as the original
+case specification. Per-case execution evidence is in the run artifact
+`bpmn-anchor-ux-evidence`, including `anchor-ux/results.json`, screenshots and
+exported XML/DOM captures.
+
 ## Decision and evidence rules
 
 - P0: ordinary creation, chosen endpoints, accidental mutation or unusable history

@@ -74,7 +74,7 @@ async function screen(page, point) { return page.evaluate(p => { const q = new D
 async function hit(page, point) {
   return page.evaluate(p => {
     const e = document.elementFromPoint(p.x, p.y), r = window.hoverTest.container.getBoundingClientRect();
-    return { id: e?.closest('[data-element-id]')?.getAttribute('data-element-id') || null, class: e?.getAttribute('class'), tag: e?.tagName, control: !!e?.closest('.djs-bendpoint,.djs-segment-dragger,.bpmn-xyflow-hover-bendpoint,.bpmn-xyflow-hover-segment,.bpmn-xyflow-bendpoint-hit,.bpmn-xyflow-bendpoint,.bpmn-xyflow-segment-handle'), inside: p.x >= r.left && p.x < Math.min(r.right, innerWidth) && p.y >= r.top && p.y < Math.min(r.bottom, innerHeight) };
+    return { id: e?.closest('[data-element-id]')?.getAttribute('data-element-id') || null, connectSource: e?.closest('.bpmn-xyflow-connect-handle')?.getAttribute('data-connect-source') || null, class: e?.getAttribute('class'), tag: e?.tagName, control: !!e?.closest('.djs-bendpoint,.djs-segment-dragger,.bpmn-xyflow-hover-bendpoint,.bpmn-xyflow-hover-segment,.bpmn-xyflow-bendpoint-hit,.bpmn-xyflow-bendpoint,.bpmn-xyflow-segment-handle'), inside: p.x >= r.left && p.x < Math.min(r.right, innerWidth) && p.y >= r.top && p.y < Math.min(r.bottom, innerHeight) };
   }, point);
 }
 async function state(page) {
@@ -316,9 +316,20 @@ try {
   }
   browser = await puppeteer.launch({ headless: 'shell', protocolTimeout: 30000 }); await mkdir('test-artifacts', { recursive: true });
 
-  for (const zoom of [.5, 1.5]) await paired('hover-approach-radius-leave-' + zoom, async page => {
+  for (const zoom of [.5, 1.5]) await paired('hover-approach-radius-leave-' + zoom, async (page, engine) => {
     const before = await state(page); await blank(page); const inside = await screen(page, { x: 274, y: 244 });
-    await page.mouse.move(inside.x, inside.y); await settle(page); assert.equal((await hit(page, inside)).id, 'SourceA', 'fresh shape-side approach has no hover endpoint');
+    await page.mouse.move(inside.x, inside.y); await settle(page);
+    const fresh = await hit(page, inside);
+    if (engine === 'local' && zoom === .5) {
+      assert.equal(fresh.id, null);
+      assert.equal(fresh.connectSource, 'SourceA', 'low-zoom fresh approach reaches the source shape’s visible origin control');
+      assert.equal(fresh.class, 'bpmn-xyflow-connect-hit');
+    } else {
+      assert.equal(fresh.id, 'SourceA', 'fresh shape-side approach reaches the source body');
+      assert.equal(fresh.connectSource, null);
+    }
+    assert.equal(fresh.control, false, 'fresh shape-side approach has no edge endpoint/segment control');
+    assert.equal((await controls(page, 'FlowA')).visible, false, 'fresh shape-side approach does not expose route controls');
     await hover(page, 'FlowA', { x: 295, y: 240 }); const first = await controls(page, 'FlowA');
     assert.equal(first.count, before.edges.FlowA.points.length); assert.ok(first.bendpointsVisible > 0, 'outer route approach exposes fixed endpoint controls'); assert.ok(first.radii.every(r => r === 10), 'hover radius uses graph units');
     await page.mouse.move(inside.x, inside.y); await settle(page); const inherited = await hit(page, inside);
@@ -326,7 +337,7 @@ try {
     await blank(page); assert.equal((await controls(page, 'FlowA')).visible, false, 'leaving hides unselected controls');
     const after = await state(page); assert.equal(after.xml, before.xml); assert.deepEqual(after.history, before.history); assert.deepEqual(after.selection, []);
     const selectedZoom = await selectedZoomChecks(page);
-    return { first, inherited, input: after.input, selectedZoom, status: 'intentional-difference', policy: 'Both hover radii use graph units; existing local selected hits retain 10 CSS-pixel radius while pinned selected hits retain 10 graph units.' };
+    return { fresh, first, inherited, input: after.input, selectedZoom, status: 'intentional-difference', policy: 'Both hover radii use graph units; existing local selected hits retain 10 CSS-pixel radius while pinned selected hits retain 10 graph units.' };
   }, { zoom });
 
   for (const side of ['source','target']) await paired('unselected-' + side + '-reconnect', async page => {

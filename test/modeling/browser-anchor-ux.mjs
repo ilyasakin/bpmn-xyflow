@@ -14,6 +14,11 @@ import puppeteer from "puppeteer";
 import { BpmnModdle } from "bpmn-moddle";
 import { selectedBendpoint } from "../helpers/native-bendpoint-control.mjs";
 import {
+  nativeWheelStepBudget,
+  collectReferenceClickTrapCount,
+  conditionalSegmentExpectation,
+} from "../helpers/anchor-setup-policy.mjs";
+import {
   assertOnlyAnchorGeometry,
   assertOnlyAnchorDeletion,
 } from "../helpers/anchor-model-guard.mjs";
@@ -171,6 +176,14 @@ async function hit(page, p) {
       r = document.querySelector("#viewer").getBoundingClientRect();
     return {
       id: e?.closest("[data-element-id]")?.getAttribute("data-element-id"),
+      owners: [
+        ...new Set(
+          document
+            .elementsFromPoint(p.x, p.y)
+            .map((element) => element.closest("[data-element-id]")?.getAttribute("data-element-id"))
+            .filter(Boolean),
+        ),
+      ],
       class: e?.getAttribute("class"),
       tag: e?.tagName,
       inside:
@@ -226,7 +239,7 @@ async function open(engine, sample = "Empty diagram") {
     await page.setViewport({ width: 1800, height: 1200 });
     await page.evaluateOnNewDocument(() => {
       window.anchorInput = [];
-      for (const type of ["mousedown", "mousemove", "mouseup", "keydown", "keyup"])
+      for (const type of ["mousedown", "mousemove", "mouseup", "keydown", "keyup", "wheel"])
         window.addEventListener(
           type,
           (event) => {
@@ -248,6 +261,8 @@ async function open(engine, sample = "Empty diagram") {
               button: event.button,
               control: event.ctrlKey,
               shift: event.shiftKey,
+              deltaY: event.deltaY,
+              deltaMode: event.deltaMode,
               graphPoint: delivered ? { x: delivered.x, y: delivered.y } : null,
               screenMatrix: matrix
                 ? { a: matrix.a, b: matrix.b, c: matrix.c, d: matrix.d, e: matrix.e, f: matrix.f }
@@ -304,15 +319,23 @@ async function blank(page, { click = false } = {}) {
     throw new Error("No visible unobstructed canvas background");
   });
   if (click) {
-    const before = await raw(page),
-      count = await page.evaluate(() => window.anchorReferenceClicks?.length || 0);
-    await page.mouse.click(p.x, p.y);
-    await settle(page);
-    if ((await raw(page)).selection.length) {
+    const before = await raw(page);
+    const budget =
+      before.engine === "upstream" ? (await page.evaluate(collectReferenceClickTrapCount)) + 1 : 1;
+    for (let attempt = 0; attempt < budget; attempt++) {
+      const count = await page.evaluate(() => window.anchorReferenceClicks?.length || 0);
+      const pending =
+        before.engine === "upstream" ? await page.evaluate(collectReferenceClickTrapCount) : 0;
+      await page.mouse.click(p.x, p.y);
+      await settle(page);
+      const current = await raw(page);
+      assert.equal(current.xml, before.xml, "background setup changes no model");
+      assert.deepEqual(current.history, before.history, "background setup changes no history");
+      if (!current.selection.length) break;
       assert.equal(
         before.engine,
         "upstream",
-        "only the measured pinned one-shot trap permits another blank click",
+        "only observed reference traps permit another blank click",
       );
       const trace = await page.evaluate(
         (count) => window.anchorReferenceClicks.slice(count),
@@ -322,17 +345,16 @@ async function blank(page, { click = false } = {}) {
       assert.equal(trace[0].trusted, true);
       assert.equal(trace[0].trap, true);
       assert.equal(trace[0].afterTrap, false);
+      assert.ok(pending > 0, "the exact named one-shot trap existed before this click");
+      assert.ok(
+        (await page.evaluate(collectReferenceClickTrapCount)) < pending,
+        "a trapped click consumes at least one pending trap",
+      );
       assert.deepEqual(
-        (await raw(page)).selection,
+        current.selection,
         before.selection,
         "trapped click leaves selection intact",
       );
-      await page.mouse.click(p.x, p.y);
-      await settle(page);
-      const second = await page.evaluate(() => window.anchorReferenceClicks.at(-1));
-      assert.equal(second.trusted, true);
-      assert.equal(second.trap, false);
-      assert.equal(second.afterTrap, true);
     }
     assert.deepEqual((await raw(page)).selection, [], "real background click deselects");
   } else await page.mouse.move(p.x, p.y);
@@ -351,8 +373,11 @@ async function selectNode(page, id) {
 }
 async function zoom(page, wanted) {
   const before = await state(page);
-  for (let n = 0; n < 12; n++) {
+  const steps = [],
+    budget = nativeWheelStepBudget(before.viewport.zoom, wanted);
+  for (let n = 0; n < budget; n++) {
     const s = await raw(page);
+    steps.push(s.viewport.zoom);
     if (Math.abs(Math.log(s.viewport.zoom / wanted)) < 0.12) break;
     const p = await blank(page);
     await page.mouse.move(p.x, p.y);
@@ -367,7 +392,7 @@ async function zoom(page, wanted) {
   const after = await state(page);
   assert.ok(
     Math.abs(Math.log(after.viewport.zoom / wanted)) < 0.12,
-    `native wheel reaches requested zoom range ${wanted}`,
+    `native wheel reaches requested zoom range: ${JSON.stringify({ wanted, actual: after.viewport.zoom, steps, budget })}`,
   );
   assert.equal(after.xml, before.xml);
   assert.deepEqual(after.history, before.history);
@@ -909,7 +934,12 @@ async function create(
     targetNode = node(before, target),
     chosen = side(targetNode, targetSide, fraction),
     to = screen(before, chosen);
-  assert.equal((await hit(page, to)).id, target, "chosen drop reaches intended target");
+  const staticDropHit = await hit(page, to);
+  assert.equal(staticDropHit.inside, true, "chosen drop is inside the visible canvas");
+  assert.ok(
+    staticDropHit.owners.includes(target),
+    `intended target is present in the actual hit stack: ${JSON.stringify(staticDropHit)}`,
+  );
   let live;
   await drag(page, start.point, to, {
     capture: async () => {
@@ -958,6 +988,7 @@ async function create(
       {
         sourceControl: start,
         chosenTarget: chosen,
+        staticDropHit,
         deliveredTarget: delivered,
         preview: live,
         edge,
@@ -1240,7 +1271,7 @@ try {
       });
       return { edge: r.edge };
     });
-  for (const operation of ["move", "resize"])
+  for (const operation of ["move", "move-away", "resize"])
     await run(
       "AX-14",
       `fresh-circle-target-${operation}`,
@@ -1253,9 +1284,9 @@ try {
         const before = await state(page),
           n = node(before, source),
           old = before.edges[made.edge.id];
-        if (operation === "move") {
+        if (operation === "move" || operation === "move-away") {
           const from = screen(before, { x: n.x + n.width / 2, y: n.y + n.height / 2 });
-          await drag(page, from, { x: from.x + 50, y: from.y + 25 });
+          await drag(page, from, { x: from.x + (operation === "move" ? 50 : -50), y: from.y + 25 });
         } else {
           const selector = '.bpmn-xyflow-resize-handle[data-resize-dir="e"]',
             h = await page.waitForSelector(selector, { visible: true }),
@@ -1288,19 +1319,64 @@ try {
             "narrow target gap crosses 23→19",
           );
         }
-        assert.deepEqual(
-          changed.points.at(-1),
-          old.points.at(-1),
-          "unmoved circle docking remains exact",
+        const circle = node(after, target),
+          center = { x: circle.x + circle.width / 2, y: circle.y + circle.height / 2 };
+        assert.ok(
+          Math.abs(
+            Math.hypot(changed.points.at(-1).x - center.x, changed.points.at(-1).y - center.y) -
+              circle.width / 2,
+          ) < 1e-7,
+          "target remains on the true circle outline",
         );
+        let referenceRoute;
+        if (operation === "move") {
+          assert.deepEqual(
+            { x: updated.x, y: updated.y, width: updated.width, height: updated.height },
+            { x: n.x + 14, y: n.y + 5, width: n.width, height: n.height },
+            "delivered native move crosses the measured orientation threshold",
+          );
+          assert.equal(circle.x - updated.x - updated.width, 9);
+          // Actual pinned full Modeler and local service agree for this 23→9
+          // gap: top-to-top with a 20-unit exterior detour. This is not the
+          // separate safe-gap unchanged-docking regression below.
+          const row = Math.min(updated.y, circle.y) - 20,
+            x = updated.x + updated.width / 2;
+          referenceRoute = [
+            { x, y: updated.y },
+            { x, y: row },
+            { x: center.x, y: row },
+            { x: center.x, y: circle.y },
+          ];
+          assert.equal(changed.points.length, referenceRoute.length);
+          changed.points.forEach((point, index) =>
+            near(point, referenceRoute[index], 1e-8, "measured narrow-gap reference route"),
+          );
+        } else {
+          assert.deepEqual(
+            changed.points.at(-1),
+            old.points.at(-1),
+            "safe move/resize keeps the unchanged logical circle docking exact",
+          );
+          if (operation === "move-away") {
+            assert.deepEqual(
+              { x: updated.x, y: updated.y, width: updated.width, height: updated.height },
+              { x: n.x - 11, y: n.y + 5, width: n.width, height: n.height },
+            );
+            assert.equal(
+              circle.x - updated.x - updated.width,
+              34,
+              "safe-gap movement is separate from the orientation-threshold case",
+            );
+          }
+          near(
+            changed.points[0],
+            { x: updated.x + updated.width, y: updated.y + updated.height / 2 },
+            1e-8,
+            "source retains its right-side midpoint for safe move/resize",
+          );
+        }
         assert.equal(changed.source, old.source);
         assert.equal(changed.target, old.target);
-        near(
-          changed.points[0],
-          { x: updated.x + updated.width, y: updated.y + updated.height / 2 },
-          1.5 / after.viewport.zoom,
-          "source remains on the selected right-midpoint side after geometry repair",
-        );
         assert.ok(
           changed.points.every(
             (p, i) =>
@@ -1315,7 +1391,14 @@ try {
           edgeIds: [made.edge.id],
         });
         await history(page, before, after);
-        return { before: old, after: changed };
+        return {
+          before: old,
+          after: changed,
+          sourceBefore: n,
+          sourceAfter: updated,
+          targetBounds: circle,
+          referenceRoute,
+        };
       },
     );
   for (const endpoint of ["source", "target"])
@@ -1413,7 +1496,25 @@ try {
     await drag(page, p, { x: p.x, y: p.y + 55 });
     const after = await state(page),
       points = after.edges[edge.id].points;
-    assert.ok(points.length >= 4);
+    const release = after.input.findLast((event) => event.type === "mouseup"),
+      press = after.input.findLast((event) => event.type === "mousedown");
+    assert.equal(press?.trusted, true);
+    assert.equal(release?.trusted, true);
+    const expected = conditionalSegmentExpectation({
+      source: node(before, edge.source),
+      target: node(before, edge.target),
+      originalStart: edge.points[0],
+      pressY: press.y,
+      releaseY: release.y,
+      zoom: before.viewport.zoom,
+    });
+    assert.equal(
+      points.length,
+      expected.length,
+      "the measured in-bounds corner redock has three orthogonal points",
+    );
+    for (let i = 0; i < points.length; i++)
+      near(points[i], expected[i], 1e-8, `measured moved row and outline endpoint ${i}`);
     assert.ok(
       points.every(
         (p, i) =>
@@ -1423,7 +1524,7 @@ try {
     );
     await assertOnlyAnchorGeometry(before.xml, after.xml, { edgeIds: [edge.id] });
     await history(page, before, after);
-    return { before: edge, after: after.edges[edge.id] };
+    return { before: edge, after: after.edges[edge.id], press, release, expected };
   });
   await run("AX-20", "activated-escape-then-valid", "local", "Empty diagram", async (page, key) => {
     const { source, target } = await tasks(page),
@@ -1578,8 +1679,8 @@ try {
       },
     );
   assert.ok(
-    results.length === 38,
-    "substantial side/shape/edit/native reference coverage is retained",
+    results.length === 39,
+    "all original 38 cases plus the safe-gap movement regression are retained",
   );
   const failed = results.filter((r) => r.status === "failed");
   console.log(`Anchor UX: ${results.length - failed.length}/${results.length} cases passed`);
