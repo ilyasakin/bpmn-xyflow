@@ -173,3 +173,10 @@ test('eight advertised corners have an independent whole-case budget', () => {
   assert.ok(BROWSER_SUITE_TIMEOUTS['test:browser:advertised-corner'] < 40 * 60000);
   assert.equal(BROWSER_SUITE_TIMEOUTS['test:browser:viewport-source'], 12 * 215000 + 90000);
 });
+
+
+test('three stationary exit controls have a dedicated whole-case budget', () => {
+  assert.equal(BROWSER_SUITES['test:browser:boundary-stationary-exit'], 'test/modeling/browser-boundary-stationary-exit.mjs');
+  assert.equal(BROWSER_SUITE_TIMEOUTS['test:browser:boundary-stationary-exit'], 3 * 215000 + 90000);
+  assert.ok(BROWSER_SUITE_TIMEOUTS['test:browser:boundary-stationary-exit'] < 20 * 60000);
+});

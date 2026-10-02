@@ -119,3 +119,73 @@ cohorts, final dump and failure visibility. `boundary-teardown-transform.test.mj
 checks the exact insertion boundary, original reset semantics despite callback
 failure, route/plugin parity, restricted server entry and unchanged acceptance
 workflow bytes.
+
+## Teardown-trace result and the final bounded experiment
+
+The `a4f27411` teardown checkpoint completed all six diagnostic cases with no
+cleanup remainder: three full-page source screenshots and three viewport-only
+controls. Its verified artifact archive SHA256 is
+`e2f01c20f7fe95d1ee75ac76ab5660a15947561b754c958d91e41c9f2cc29b80`.
+The caller/event evidence is in
+`boundary-acquisition-diagnostics/repeat-{1..6}-final.json`.
+
+All three full-page source captures emitted a window resize; none of the three
+viewport-only source captures did. Recorded dimensions were unchanged before,
+at and after the event: window inner1800×1200, outer780×580, document1800×1200,
+canvas1800×1152. Neither cohort lost its acquired handle. Each case recorded the
+same three kinds of teardown: an earlier selection mousedown, crossing the label
+during approach, and finally `startConnect` after the real port mousedown.
+The first two removed older handles, not the final acquired control. No final
+control disappeared before its press.
+
+The current Modeler source hash is `12c623f18a60d6a7d5e3ef4191a1f3ea44fd9b2d101ec0f45a7de0be85866da1`.
+The historical201214 source and unchanged-product70edde use
+`eb25d90839897339029fe4be9d44b0343d6bb2c67660d38fc261431afb293d64`.
+They are not byte-identical: D20 adds advertised-corner origin tracking. Its
+separate native8 and manual replay passed; that scoped validation does not
+explain F23. Unchanged-product70edde also passed its six diagnostic cases.
+The original201214 PR pass versus PUSH failure remains the historical result.
+
+A registered-event probe replayed the acquired Boundary control and delivered
+unchanged-size window/Viewer ResizeObserver notifications through three queued
+frame cycles. No later viewport notification appeared; the handle, marker,
+grab, XML, history, selection and camera stayed exact. The subsequent connection
+and three Undo/Redo cycles passed. This is a structural negative for the proposed
+resize-to-late-fit path after a touched viewport, not a native browser-capture
+reproduction.
+
+There is one narrower unresolved clue: during the earlier, pre-acquisition
+full-page `before.png`, unchanged-product70edde recorded a native SVG
+pointerleave with `relatedTarget:null` at stationary client(1530,1027.2), inside
+the viewport. It followed screenshot start by1.6–2.4ms, without a new pointer
+move or selection. However, the previous wheel event was only55.8–95.4ms earlier.
+That pending/recent-wheel lifecycle is a material confound. No live grab existed
+there, and this does not establish capture-only causality or explain the later
+source-control disappearance.
+
+The final separate entrypoint is
+`node test/modeling/browser-boundary-stationary-exit.mjs`. It has exactly three
+fresh Booking lifecycles, with no retry loop or repeated capture: one full-page
+capture, one viewport-only capture, and one real pointer move above the canvas
+as a genuine-exit control. Ordinary middle-button pan and the visible Boundary
+source control must acquire a live grab at integer client(1530,1027). This is a
+deliberately repositioned setup, not an exact replay of the original lifecycle.
+Its wheel-age interval is recorded and may differ substantially from55.8–95.4ms.
+No forced pointer event, model mutation or camera setter is used.
+
+If visible setup cannot reach that region, the case fails as an explicit evidence
+limit. Stationary captures must preserve the exact displayed marker/grab,
+selection/camera and complete XML/history, then connect from that same control
+and preserve full-model/history invariants. Genuine exit must clear the control
+without a model/history change. Caller traces use the existing diagnostic-only
+served transform; shipped product and original uninstrumented F23 acceptance
+remain unchanged. Evidence is saved under
+`test-artifacts/boundary-stationary-exit`, including `case-{1..3}-final.json`.
+
+Stopping rule: classify only an actually observed native exit/removal and its
+caller. If this bounded cohort does not reproduce the historical lifecycle,
+record the negative result and its wheel-age limit; do not launch undirected
+repeats or infer a product fix from passing cases. Preserve the original failure
+and the smallest diagnostic companion for any recurrence. The original
+screenshots/state did not record the event that removed the grab, so they cannot
+uniquely identify a destroy branch or stale notification.
