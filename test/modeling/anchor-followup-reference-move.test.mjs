@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { BpmnModdle } from 'bpmn-moddle';
 import { setupDOM } from '../helpers/dom.mjs';
 import { assertReferenceBodyMove } from '../helpers/anchor-followup-reference-move.mjs';
+import { createAnchorHarness } from '../helpers/anchor-ux-browser.mjs';
 
 let dom, Modeler; const oracle = new BpmnModdle(), h = { oracle };
 before(async()=>{dom=await setupDOM();globalThis.MouseEvent=dom.window.MouseEvent;({default:Modeler}=await dom.loadModule('/node_modules/bpmn-js/lib/Modeler.js'));});
@@ -118,5 +119,60 @@ test('installed lane top-outline click selects the intended lane and exposes sou
     assert.deepEqual(m.get('selection').get().map(e => e.id), ['RequesterLane']);
     assert.ok(m.get('canvas').getContainer().querySelector('.djs-resizer-RequesterLane.djs-resizer-s'));
     assert.equal((await m.saveXML({ format: true })).xml, before); assert.equal(m.get('commandStack').canUndo(), false);
+  } finally { m.destroy(); }
+});
+
+test('selected expanded subprocess border is covered by its resizer until the actual source body click', async () => {
+  const m = new Modeler({ container: dom.createContainer(), autoScroll: { scrollThresholdIn: [0,0,0,0], scrollThresholdOut: [0,0,0,0] } });
+  try {
+    await m.importXML(await readFile('test/fixtures/scenarios/order-payment-delivery.bpmn', 'utf8'));
+    const registry = m.get('elementRegistry'), save = async () => (await m.saveXML({ format: true })).xml;
+    let payment = registry.get('Payment');
+    registry.getGraphics(payment).querySelector('.djs-hit-all').dispatchEvent(new MouseEvent('click',
+      { clientX: 470, clientY: 330, button: 0, bubbles: true, cancelable: true }));
+    assert.deepEqual(m.get('selection').get().map(e => e.id), ['Payment']);
+    payment = m.get('bpmnReplace').replaceElement(payment, { type: 'bpmn:SubProcess', isExpanded: false });
+    payment = m.get('bpmnReplace').replaceElement(payment, { type: 'bpmn:SubProcess', isExpanded: true });
+    const child = registry.get('CapturePayment'), source = registry.get('ValidateOrder'), gfx = registry.getGraphics(payment),
+      point = { x: payment.x, y: child.y + child.height / 2 }, container = m.get('canvas').getContainer(),
+      resize = container.querySelector('.djs-resizer-Payment.djs-resizer-w'), hit = resize?.querySelector('.djs-resizer-hit');
+    assert.deepEqual(m.get('selection').get().map(e => e.id), ['Payment']);
+    // Structural text metrics can shift the child slightly from the exact hosted
+    // midpoint. Require actual containment in the installed 20px resize hit.
+    const relativeY = point.y - payment.y - payment.height / 2;
+    assert.ok(relativeY >= -10 && relativeY <= 10, 'child-aligned border lies within the west resize hit');
+    assert.deepEqual(Object.fromEntries(['x','y','width','height'].map(k => [k, Number(hit.getAttribute(k))])),
+      { x: -16, y: -10, width: 20, height: 20 });
+    assert.equal(hit.closest('[data-element-id]').getAttribute('data-element-id'), 'OrderCollaboration',
+      'the resize layer explains the recorded root hit; it is not the subprocess hit');
+    const before = await save(), index = m.get('commandStack')._stackIdx;
+    // Actual installed selection listener; native trust/hit testing remain hosted assertions.
+    registry.getGraphics(source).querySelector('.djs-hit-all').dispatchEvent(new MouseEvent('click',
+      { clientX: 250, clientY: 430, button: 0, bubbles: true, cancelable: true }));
+    assert.deepEqual(m.get('selection').get().map(e => e.id), ['ValidateOrder']);
+    assert.equal(container.querySelector('.djs-resizer-Payment'), null);
+    const outline = gfx.querySelector(':scope > .djs-hit-click-stroke');
+    assert.equal(outline.closest('[data-element-id]').getAttribute('data-element-id'), 'Payment');
+    assert.equal(Number(outline.getAttribute('width')), payment.width);
+    assert.equal(Number(outline.getAttribute('height')), payment.height);
+    assert.equal(await save(), before); assert.equal(m.get('commandStack')._stackIdx, index);
+    const event = (type, p) => new MouseEvent(type, { clientX: p.x, clientY: p.y, button: 0,
+      buttons: type === 'mouseup' ? 0 : 1, bubbles: true, cancelable: true, view: window });
+    const dragging = m.get('dragging'), ids = new Set(registry.getAll().map(e => e.id));
+    m.get('connect').start(event('mousedown', { x: 250, y: 430 }), source);
+    dragging.move(event('mousemove', { x: 290, y: 445 }));
+    dragging.hover({ element: payment, gfx }); dragging.move(event('mousemove', point));
+    const context = dragging.context().data.context;
+    assert.equal(dragging.context().active, true); assert.equal(context.start.id, source.id);
+    assert.equal(context.hover.id, payment.id); assert.equal(context.target.id, payment.id);
+    assert.deepEqual(context.canExecute, { type: 'bpmn:SequenceFlow' });
+    dragging.end(event('mouseup', point));
+    const added = registry.getAll().filter(e => !ids.has(e.id) && e.waypoints); assert.equal(added.length, 1);
+    const edge = added[0]; assert.equal(edge.source.id, 'ValidateOrder'); assert.equal(edge.target.id, 'Payment');
+    assert.equal(edge.businessObject.$type, 'bpmn:SequenceFlow'); assert.equal(edge.businessObject.$parent.id, 'SellerProcess');
+    assert.deepEqual(edge.waypoints.map(({x,y}) => ({x,y})), [{x:300,y:430},{x:payment.x,y:430}]);
+    const after = await save(), harness = createAnchorHarness({ port: 0, output: '/tmp/unused-reference-outline-test' });
+    await harness.creationOnly({ xml: before, canonical: (await oracle.toXML((await oracle.fromXML(before)).rootElement, {format:true})).xml }, {xml:after}, edge);
+    for (let i=0;i<3;i++) { m.get('commandStack').undo(); assert.equal(await save(), before); m.get('commandStack').redo(); assert.equal(await save(), after); }
   } finally { m.destroy(); }
 });

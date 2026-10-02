@@ -55,6 +55,25 @@ export async function selectVisibleFollowupBody(h, page, id) {
   throw Error(`No unobstructed visible body point for ${id}: ${JSON.stringify(attempts)}`);
 }
 
+// A selected target's resize controls may cover its intended outline. Prepare
+// the actual source by visible input first; keep the requested drop unchanged.
+export async function prepareReferenceOutlineTarget(h, page, { source, target, point }, onEvidence = async () => {}) {
+  const before = await h.state(page), beforeHit = await h.hit(page, point);
+  assert.equal(before.engine, 'upstream');
+  assert.deepEqual(before.selection, [target]);
+  await selectVisibleFollowupBody(h, page, source);
+  const after = await h.state(page), afterHit = await h.hit(page, point);
+  const evidence = { source, target, point, beforeHit, afterHit, beforeSelection: before.selection, afterSelection: after.selection };
+  await onEvidence(evidence);
+  assert.deepEqual(after.selection, [source]);
+  assert.equal(after.xml, before.xml, 'source selection preserves the complete document');
+  assert.deepEqual(after.history, before.history, 'source selection adds no history');
+  assert.deepEqual(after.viewport, before.viewport, 'source selection preserves the requested screen point');
+  assert.equal(afterHit.inside, true);
+  assert.equal(afterHit.id, target, 'the same outline point belongs to the target after source preparation');
+  return evidence;
+}
+
 /** Only adjacent, representable CSS pixels may replace the intended reference drop. */
 export function adjacentDropPixels(point) {
   assert.ok(Number.isFinite(point.x) && Number.isFinite(point.y));

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import vm from 'node:vm';
-import { assertRenderedDI, collectRenderedDI, selectVisibleFollowupBody, adjacentDropPixels, chooseAdjacentReferenceDrop, clickReferenceSubprocessReplacement, collectReferenceLaneTop } from '../helpers/anchor-followup-dom.mjs';
+import { assertRenderedDI, collectRenderedDI, selectVisibleFollowupBody, prepareReferenceOutlineTarget, adjacentDropPixels, chooseAdjacentReferenceDrop, clickReferenceSubprocessReplacement, collectReferenceLaneTop } from '../helpers/anchor-followup-dom.mjs';
 
 test('recorded Chrome paint matches full SVG CTM, while rounded Canvas.viewbox fails the unchanged bound',()=>{
   const cases=[
@@ -88,4 +88,29 @@ test('serialized lane selector uses the exact top stroke CTM and refuses missing
   attributes.width = '1249'; assert.throws(collect, /current bounds/); attributes.width = '1250';
   matrix.a = NaN; assert.throws(collect, /matrix/); matrix.a = 1;
   gfx.querySelector = () => null; assert.throws(collect, /Missing reference lane/);
+});
+
+test('reference outline preflight follows the actual source click and preserves the identical drop point', async () => {
+  const point = Object.freeze({ x: 496.966, y: 562.028 });
+  const run = async (mutate = () => {}) => {
+    let selection = ['Payment'], pointer, clicked = false, saved;
+    const state = () => ({ engine: 'upstream', selection: [...selection], xml: '<complete/>',
+      history: { undo: true, redo: false }, viewport: { x: 212.836, y: 136.883, zoom: .861 } });
+    const h = { state: async () => { const s = state(); if (clicked) mutate(s); return s; },
+      raw: async () => ({ selection }), node: () => ({ x: 200, y: 390, width: 100, height: 80 }),
+      screen: (_s, p) => p, settle: async () => {}, noChange: async () => {},
+      hit: async (_page, p) => p === point
+        ? { inside: true, id: clicked ? 'Payment' : 'OrderCollaboration', class: clicked ? 'djs-hit-click-stroke' : 'djs-resizer-hit' }
+        : { inside: true, id: 'ValidateOrder' } };
+    const page = { mouse: { move: async (x, y) => { pointer = { x, y }; }, click: async (x, y) => {
+      assert.deepEqual({ x, y }, pointer); clicked = true; selection = ['ValidateOrder'];
+    } } };
+    const result = await prepareReferenceOutlineTarget(h, page,
+      { source: 'ValidateOrder', target: 'Payment', point }, e => { saved = e; });
+    assert.equal(result, saved); assert.equal(result.point, point);
+    assert.equal(result.beforeHit.id, 'OrderCollaboration'); assert.equal(result.afterHit.id, 'Payment');
+  };
+  await run();
+  for (const corrupt of [s => { s.xml += 'changed'; }, s => { s.history.undo = false; },
+    s => { s.viewport.x++; }, s => { s.selection = ['Payment']; }]) await assert.rejects(run(corrupt));
 });

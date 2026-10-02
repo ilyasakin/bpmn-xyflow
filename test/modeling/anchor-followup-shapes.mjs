@@ -15,7 +15,7 @@ import {
   assertOnlyAnchorDeletion,
 } from "../helpers/anchor-model-guard.mjs";
 
-import { renderedDI, selectVisibleFollowupBody, chooseAdjacentReferenceDrop, clickReferenceSubprocessReplacement } from '../helpers/anchor-followup-dom.mjs';
+import { renderedDI, selectVisibleFollowupBody, chooseAdjacentReferenceDrop, clickReferenceSubprocessReplacement, prepareReferenceOutlineTarget } from '../helpers/anchor-followup-dom.mjs';
 import { assertReferenceBodyMove } from '../helpers/anchor-followup-reference-move.mjs';
 
 export const anchorShapeCases = [];
@@ -179,11 +179,12 @@ async function connect(h, page, key, source, target, from, to, options = {}) {
           });
           previewContext.input = input;
           previewContext.hit = input ? await h.hit(page, input) : null;
-          if (targetPreparation) {
+          if (targetPreparation || options.exactReferenceTarget) {
             assert.equal(input?.trusted, true);
-            assert.deepEqual({ x: input.x, y: input.y }, end);
+            if (targetPreparation) assert.deepEqual({ x: input.x, y: input.y }, end);
             assert.equal(previewContext.active, true);
             assert.equal(previewContext.prefix, "connect");
+            assert.equal(previewContext.start, source);
             assert.equal(previewContext.hover, target);
             assert.equal(previewContext.target, target);
             assert.deepEqual(previewContext.canExecute, { type: options.expectedType || "bpmn:SequenceFlow" });
@@ -207,6 +208,11 @@ async function connect(h, page, key, source, target, from, to, options = {}) {
       snapped = observation.findLast((event) => event.type === "connect.end");
     assert.equal(release?.trusted, true);
     assert.ok(release.graphPoint);
+    if (options.exactReferenceTarget) {
+      assert.deepEqual({ x: release.x, y: release.y },
+        { x: previewContext.input.x, y: previewContext.input.y },
+        "release uses the exact delivered point whose active hover belongs to the subprocess");
+    }
     referenceRoute(h, edge, snapped);
     circleContact(targetNode, edge.points.at(-1), 0.75);
     const rendered = await painted(h, page, after, edge);
@@ -673,6 +679,13 @@ for (const engine of engines)
           child = h.node(expanded, "CapturePayment");
         assert.equal(child.hidden, false);
         const intended = h.screen(expanded, { x: sub.x, y: child.y + child.height / 2 });
+        if (engine === "upstream") {
+          // Expanding leaves Payment selected. Its west resize hit covers this
+          // exact child-aligned midpoint until the real Connect source is selected.
+          await prepareReferenceOutlineTarget(h, page,
+            { source: "ValidateOrder", target: "Payment", point: intended },
+            evidence => h.save(page, key + "-target-ownership", { evidence }));
+        }
         assert.equal(
           (await h.hit(page, intended)).id,
           "Payment",
@@ -680,6 +693,7 @@ for (const engine of engines)
         );
         r = await connect(h, page, key, "ValidateOrder", "Payment", "top", "left", {
           fraction: (child.y + child.height / 2 - sub.y) / sub.height,
+          exactReferenceTarget: engine === "upstream",
         });
       }
       owner(r.after, r.edge.id, "SellerProcess");
