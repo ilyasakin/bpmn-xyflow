@@ -145,6 +145,32 @@ test("rounded Task requested points and projections contact all four painted cor
   assert.throws(() => roundedTaskPoint(bounds, r, "center"));
 });
 
+test("one CSS-pixel tangent movement updates all four midpoint origins at actual fractional zoom", () => {
+  const zoom = 1.05701804056138,
+    viewport = { x: 1177.5051283563844, y: 515.442453 },
+    shape = { x: -310, y: -155, width: 100, height: 80 };
+  for (const direction of ["n", "e", "s", "w"]) {
+    const start = roundedTaskPoint(shape, 10, direction),
+      delivered = {
+        x: Math.round(viewport.x + start.x * zoom),
+        y: Math.round(viewport.y + start.y * zoom),
+      },
+      next = {
+        x: delivered.x + (["n", "s"].includes(direction) ? 1 : 0),
+        y: delivered.y + (["e", "w"].includes(direction) ? 1 : 0),
+      },
+      graph = (point) => ({ x: (point.x - viewport.x) / zoom, y: (point.y - viewport.y) / zoom }),
+      initial = projectRoundedTask(shape, 10, graph(delivered)),
+      moved = projectRoundedTask(shape, 10, graph(next)),
+      axis = ["n", "s"].includes(direction) ? "x" : "y",
+      other = axis === "x" ? "y" : "x";
+    assert.equal(moved[other], initial[other]);
+    assert.ok(Math.abs(moved[axis] - initial[axis] - 1 / zoom) < 1e-12);
+    assert.notDeepEqual(moved, initial, "a frozen penultimate marker must fail this oracle");
+    assert.deepEqual(projectRoundedTask(shape, 10, graph(delivered)), initial);
+  }
+});
+
 test("the ownership runner and extracted helpers call only installed native Puppeteer methods", async () => {
   for (const name of [
     "./browser-anchor-ownership.mjs",

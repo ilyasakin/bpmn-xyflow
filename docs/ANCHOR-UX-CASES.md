@@ -108,7 +108,7 @@ exported XML/DOM captures.
 ## Additional manual findings and immediate-repeat cases
 
 The independent exploratory pass on site `da87e1ce` / runtime `edc9a168`
-identified two ordinary usability defects after the native39 corrections:
+identified two ordinary usability defects after the native 39 corrections:
 
 - **D9, displaced-origin clarity:** the Booking timer boundary's docking marker
   `(674.7910042188045, 287.77206352435707)` exactly matches its committed
@@ -158,6 +158,32 @@ connection actually activates. The separate 24-case native ownership suite
 contains 16 current-pointer retry cases and 8 deliberately selected resize-control
 cases. They are prepared and independently reviewed, but still unrun at this
 checkpoint; the green 39 script is byte-identical.
+
+### Origin-acquisition correction
+
+At `5c0c5e4f5a3ef2d00642c2c93ff349334d35c08a`, native 39 passes and
+ownership 24 reaches 23/24, including all 8 explicit resize directions. The
+selected southwest case exposes **D12, premature origin retention**: the marker
+matches the penultimate pointer while it is 7.4967 CSS px inside the shape, then
+fails to follow the final outline point. Independent replay also finds 1 px
+selected-midpoint tangent motion frozen by the same corridor guard. The exact
+projection oracle is correct.
+
+The reviewed correction requires acquiring the current outline origin before
+holding outward-dominant travel to its displaced grab. It preserves direct
+visible-grab acquisition, exact AX13 label/frame travel, duplicate pointer/mouse
+events and body-to-new-side selection. Existing 24 assertions remain strict;
+the four selected-midpoint cases now add native 1 px tangent/return checks before
+the unchanged immediate second press. The next native run is pending.
+
+Retained 5c checks fix the prior wheel/Booking-hover failures but expose four
+source-control hit outcomes. Two are confirmed invisible-halo interception:
+clicks 6.2/8 CSS px from a port are outside its 5.75 px painted radius yet inside its
+8px transparent hit circle, swallowing ordinary event selection. The other two
+are directly on the visible source tool, whose stationary-click no-op is
+intentional; those require explicit per-engine control/shape expectations.
+Neither category is silently accepted as a broad alternative outcome. The
+halo correction and remaining 22-workflow/62-variant execution remain open.
 
 ## Decision and evidence rules
 

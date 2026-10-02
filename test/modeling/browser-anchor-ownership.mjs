@@ -46,7 +46,7 @@ async function prepare(h, page, selected) {
   return { ...pair, state, radius: painted.rx };
 }
 
-async function approach(h, page, setup, direction) {
+async function approach(h, page, setup, direction, key) {
   const shape = h.node(setup.state, setup.source),
     requested = roundedTaskPoint(shape, setup.radius, direction),
     requestedScreen = h.screen(setup.state, requested);
@@ -64,7 +64,63 @@ async function approach(h, page, setup, direction) {
     1e-7,
     "the visible marker lies at the delivered point projected onto the painted Task outline",
   );
-  const pointer = { x: Math.round(initial.grabScreen.x), y: Math.round(initial.grabScreen.y) };
+  const refinement = [];
+  let prepared = initial;
+  if (setup.state.selection.includes(setup.source) && ["n", "e", "s", "w"].includes(direction)) {
+    const first = { x: initial.delivered.x, y: initial.delivered.y },
+      tangent = {
+        x: first.x + (["n", "s"].includes(direction) ? 1 : 0),
+        y: first.y + (["e", "w"].includes(direction) ? 1 : 0),
+      };
+    for (const [phase, next] of [
+      ["tangent", tangent],
+      ["return", first],
+    ]) {
+      await page.mouse.move(next.x, next.y);
+      await h.settle(page);
+      const current = await collectOwnershipControl(page, setup.source);
+      refinement.push({ phase, requestedClient: next, current });
+      await writeFile(
+        `${h.output}/${key}-refinement.json`,
+        JSON.stringify({ initial, refinement }, null, 2),
+      );
+      await page.screenshot({ path: `${h.output}/${key}-${phase}.png`, fullPage: true });
+      assert.equal(current.count, 1);
+      assert.equal(current.portVisible, true);
+      assert.equal(current.hitOwner, setup.source);
+      assert.equal(current.hitHandle, true);
+      assert.equal(current.delivered?.trusted, true);
+      assert.deepEqual({ x: current.delivered.x, y: current.delivered.y }, next);
+      h.near(
+        current.anchor,
+        projectRoundedTask(shape, setup.radius, h.graph(setup.state, next)),
+        1e-7,
+        "one CSS pixel along the outline updates the exact delivered source projection",
+      );
+      if (phase === "tangent") {
+        assert.notDeepEqual(
+          current.anchor,
+          initial.anchor,
+          "the midpoint origin must not freeze during tangential refinement",
+        );
+        const axis = ["n", "s"].includes(direction) ? "x" : "y";
+        assert.ok(
+          Math.abs(current.anchor[axis] - initial.anchor[axis] - 1 / setup.state.viewport.zoom) <=
+            1e-7,
+          "one delivered CSS pixel advances the marker by exactly one graph-pixel fraction",
+        );
+      } else
+        assert.deepEqual(
+          current.anchor,
+          initial.anchor,
+          "returning to the same outline point restores its exact origin",
+        );
+      await h.noChange(page, setup.state, "unpressed perimeter refinement changes no XML/history");
+      assert.deepEqual((await h.raw(page)).selection, setup.state.selection);
+      prepared = current;
+    }
+  }
+  const pointer = { x: Math.round(prepared.grabScreen.x), y: Math.round(prepared.grabScreen.y) };
   await page.mouse.move(pointer.x, pointer.y, { steps: 8 });
   await h.settle(page);
   const reached = await collectOwnershipControl(page, setup.source, pointer);
@@ -73,20 +129,20 @@ async function approach(h, page, setup, direction) {
   assert.equal(reached.hitOwner, setup.source);
   assert.equal(reached.hitHandle, true);
   assert.deepEqual({ x: reached.delivered.x, y: reached.delivered.y }, pointer);
-  if (initial.displaced) assert.deepEqual(reached.anchor, initial.anchor);
+  if (prepared.displaced) assert.deepEqual(reached.anchor, prepared.anchor);
   else
     h.near(
       reached.anchor,
       projectRoundedTask(shape, setup.radius, h.graph(setup.state, pointer)),
       1e-7,
     );
-  return { pointer, anchor: reached.anchor, requested, initial, reached };
+  return { pointer, anchor: reached.anchor, requested, initial, refinement, prepared, reached };
 }
 
 async function samePointerCase(h, page, key, direction, selected) {
   const setup = await prepare(h, page, selected),
     source = h.node(setup.state, setup.source),
-    control = await approach(h, page, setup, direction),
+    control = await approach(h, page, setup, direction, key),
     before = await h.state(page);
   await page.screenshot({ path: `${h.output}/${key}-source.png`, fullPage: true });
   await observeOwnershipInput(page);

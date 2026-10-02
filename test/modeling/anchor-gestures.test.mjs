@@ -6,6 +6,7 @@ import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { BpmnModdle } from 'bpmn-moddle';
 import { setupDOM } from '../helpers/dom.mjs';
+import { projectRoundedTask } from '../helpers/anchor-ownership-browser.mjs';
 let dom, Modeler, xml;
 before(async () => { dom = await setupDOM(); ({ default: Modeler } = await dom.loadModule('/lib/Modeler.js')); xml = await readFile('test/fixtures/bpmn/basic.bpmn', 'utf8'); });
 after(async () => dom.cleanup());
@@ -48,6 +49,7 @@ async function fixture() {
 }
 const xy = point => ({ x: point.x, y: point.y });
 const portPoint = h => { const circle = h.port()?.querySelector('.bpmn-xyflow-connect-port'); assert.ok(circle); return { x: Number(circle.getAttribute('cx')), y: Number(circle.getAttribute('cy')) }; };
+const markerPoint = h => { const circle = h.m.getContainer().querySelector('.bpmn-xyflow-connect-docking-point'); assert.ok(circle); return { x: Number(circle.getAttribute('cx')), y: Number(circle.getAttribute('cy')) }; };
 async function unchanged(m, before, count) { assert.equal(await m.getXML(), before); assert.equal(m.commandStack.size(), count); }
 async function history(m, before, after) { for (let i = 0; i < 3; i++) { assert.equal(m.undo(), true); assert.equal(await m.getXML(), before); assert.equal(m.redo(), true); assert.equal(await m.getXML(), after); } }
 
@@ -499,4 +501,61 @@ test('a claimed source-port pointer remains scoped to its own Viewer',async()=>{
     b.bodyPress(pb,nb);b.up(pb,nb);assert.deepEqual(b.m.getSelection(),[nb.id]);assert.deepEqual(a.m.getSelection(),[]);
     assert.equal(await a.m.getXML(),xa);assert.equal(await b.m.getXML(),xb);
   }finally{b.close();a.close();}
+});
+
+test('selected SW native approach acquires the actual outline before retaining its outward grab', async () => {
+  const h=await fixture(),{m}=h;
+  try {
+    const source=m.addShape('bpmn:Task',{x:-263,y:-117}), target=m.addShape('bpmn:Task',{x:59,y:-117});
+    const viewport={x:1177.5051283563844,y:725.8441792855494,zoom:1.05701804056138};
+    await m.setViewport(viewport);m.select(source.id);
+    const before=await m.getXML(),count=m.commandStack.size();
+    // The eight trusted positions from AO-repeat-local-selected-sw at5c0c5e4.
+    // Its last point hits Resize, after the previous point remains inside Task.
+    const positions=[[893,655],[887,659],[880,664],[874,669],[868,674],[862,679],[855,684],[849,689]];
+    const graph=([x,y])=>({x:(x-viewport.x)/viewport.zoom,y:(y-48-viewport.y)/viewport.zoom});
+    const shape=h.gfx(source).querySelector('.bpmn-xyflow-shape-hit'), resize=m.getContainer().querySelector('[data-resize-dir="sw"]');
+    for(let index=0;index<positions.length;index++){
+      const point=graph(positions[index]),hit=index===positions.length-1?resize:shape;
+      h.hover(point,hit);h.move(point,hit);
+    }
+    const expected=projectRoundedTask(source,10,graph(positions.at(-1))),anchor=markerPoint(h),grab=portPoint(h);
+    assert.ok(Math.hypot(anchor.x-expected.x,anchor.y-expected.y)<1e-8,'final marker follows final native outline choice, not the earlier body projection');
+    const earlier=projectRoundedTask(source,10,graph(positions.at(-2)));
+    assert.ok(Math.hypot(anchor.x-earlier.x,anchor.y-earlier.y)>.4,'the reproduced two outline choices are distinct');
+    for(const fraction of [.2,.5,.8,1]){
+      const at={x:anchor.x+(grab.x-anchor.x)*fraction,y:anchor.y+(grab.y-anchor.y)*fraction};
+      const hit=fraction===1?h.port().querySelector('.bpmn-xyflow-connect-hit'):resize;
+      h.hover(at,hit);h.move(at,hit);assert.deepEqual(markerPoint(h),anchor);assert.deepEqual(portPoint(h),grab);
+    }
+    await unchanged(m,before,count);
+    h.press(grab);h.up(grab,source);assert.deepEqual(markerPoint(h),anchor);assert.deepEqual(portPoint(h),grab);await unchanged(m,before,count);
+    h.press(grab);const end={x:target.x,y:target.y+25};h.move(end,target);assert.ok(m.getContainer().querySelector('.bpmn-xyflow-connect-preview'));h.up(end,target);
+    assert.deepEqual(xy(m.getGraph().edges.at(-1).waypoints[0]),anchor);assert.equal(m.commandStack.size(),count+1);await history(m,before,await m.getXML());
+  } finally {h.close();}
+});
+
+test('selected midpoint tangent tracking and direct body-to-grab acquisition retain distinct intent', async () => {
+  const h=await fixture(),{m}=h;
+  try {
+    const source=m.getElement('Task_1');
+    for(const dir of ['n','e','s','w']){
+      m.select([]);m.select(source.id);const before=await m.getXML(),count=m.commandStack.size();
+      const vertical=dir==='e'||dir==='w',mid={x:source.x+(dir==='w'?0:dir==='e'?source.width:source.width/2),y:source.y+(dir==='n'?0:dir==='s'?source.height:source.height/2)};
+      const resize=m.getContainer().querySelector(`[data-resize-dir="${dir}"]`);
+      h.move(mid,resize);assert.deepEqual(markerPoint(h),mid);
+      for(const distance of [1,2,4]){
+        const tangent={x:mid.x+(vertical?0:distance),y:mid.y+(vertical?distance:0)};
+        h.hover(tangent,resize);h.move(tangent,resize);assert.deepEqual(markerPoint(h),tangent,'fine along-border motion chooses a new origin');
+      }
+      const body={x:source.x+source.width/2,y:source.y+source.height/2},opposite={x:vertical?source.x+source.width/2:source.x,y:vertical?source.y:source.y+source.height/2};
+      h.hover(body,source);h.move(body,source);h.hover(opposite,source);h.move(opposite,source);assert.deepEqual(markerPoint(h),opposite,'body traversal releases the old acquired side');
+      m.select([]);m.select(source.id);
+      const center={x:source.x+source.width/2,y:source.y+source.height/2},inside={x:mid.x+(center.x-mid.x)*.25,y:mid.y+(center.y-mid.y)*.25};
+      h.move(inside,source);const anchor=markerPoint(h),grab=portPoint(h),hit=h.port().querySelector('.bpmn-xyflow-connect-hit');
+      assert.ok(Math.hypot(grab.x-anchor.x,grab.y-anchor.y)>0);
+      h.hover(grab,hit);h.move(grab,hit);assert.deepEqual(markerPoint(h),anchor,'hitting the displayed grab claims its displayed origin directly');assert.deepEqual(portPoint(h),grab);
+      h.press(grab);h.up(grab,source);assert.deepEqual(markerPoint(h),anchor);assert.deepEqual(portPoint(h),grab);await unchanged(m,before,count);
+    }
+  } finally {h.close();}
 });
