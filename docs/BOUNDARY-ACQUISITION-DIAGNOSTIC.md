@@ -85,7 +85,8 @@ the original race fixed.
 
 Evidence is under `test-artifacts/boundary-acquisition-diagnostics`, including
 one final trace per repeat and the ordinary screenshots/XML/results. Record-limit
-truncation is explicit. No hosted result is claimed for this new diagnostic.
+truncation is explicit. Hosted results for the reviewed diagnostic are recorded
+below; passing captures do not resolve the original failure.
 
 ## Earlier diagnostic evidence: cause still unresolved
 
@@ -189,3 +190,82 @@ repeats or infer a product fix from passing cases. Preserve the original failure
 and the smallest diagnostic companion for any recurrence. The original
 screenshots/state did not record the event that removed the grab, so they cannot
 uniquely identify a destroy branch or stale notification.
+
+
+## Final three-case outcome and retained risk
+
+At published `56538c92389df54f42f80eeead1e91613a34c2ae`, all three declared
+stationary/exit cases passed. Verified artifact 11230582076 has archive SHA256
+`ac42b3bb0c7e2263166939b6af9f3d531d2017cb9414258e095a1a6daca523cb`.
+The final traces are `boundary-stationary-exit/case-{1..3}-final.json`.
+No records were dropped and no diagnostic callback error was recorded. Their
+Modeler source hash matches the D20 source above; served diagnostic hash is
+`59f41af825323634024a6835113ed77062ea601e8b38ea459dc2ad0169817422`.
+The artifact records CI checkout head `21b60a604427025388eecf63477076db282f8db2`;
+that checkout identity is distinct from the published checkpoint SHA.
+
+All three setups delivered the actual native pan from `(270,221)` to `(666,533)`
+and reacquired the visible selected Boundary grab at `(1530,1027)`. The resulting
+viewport was `{x:953.6760518360127,y:670.229033698398,zoom:0.8788735989262744}`.
+The exact marker remained `(678.3370087109132,315.18639520580945)` and the exact
+painted grab remained `(655.6204680086178,350.88780013241137)`. The deliberately
+added pan changes the camera from the original failure; the native input and
+recorded camera match the declared diagnostic setup.
+
+- Full-page source capture emitted one trusted window resize at unchanged
+  inner 1800×1200, outer 780×580, document 1800×1200 and canvas 1800×1152. Handle 44
+  retained its identity, marker and grab until the actual source press. Its
+  removal caller was `startConnect`, after mousedown at `(1530,1027)`
+- Viewport-only source capture emitted no resize. It retained the same acquired
+  handle, marker and grab; `startConnect` removed it after the actual source press
+- Genuine exit delivered `(1530,24)` above the canvas. Native SVG pointerleave
+  named the toolbar as related target, then `onHoverLeave` removed handle 44.
+  Complete model/history, selection and camera stayed unchanged
+
+Neither critical source capture produced a pointerleave, blur, selection or
+viewport notification. Setup removals belonged to older handles 6, 18, 27 and 34;
+they occurred during selection, label crossing, moving to the pan start and
+reacquisition. They do not represent loss of the final acquired handle 44.
+
+The actual wheel ages at acquisition were 1163.55–1166.11ms for full-page,
+1176.62–1178.66ms for viewport-only and1141.27–1143.43ms for genuine exit.
+These bounds are materially later than the earlier 55.8–95.4ms pre-acquisition
+capture/leave clue. Thus this result does not test that recent-wheel lifecycle
+with a live handle, and it does not establish capture-only causality.
+
+Two later-phase limitations must remain explicit. First, final-evidence
+full-page screenshots in the two connection cases temporarily recorded window
+inner 1×1, then 1800×1200, after the successful source gesture and history checks.
+The acquired control was already absent. Browser captures can therefore perturb
+dimensions; the unchanged-dimensions finding above applies only to the critical
+source captures. The later resize is not evidence of the historical missing
+handle's cause.
+
+Second, the deliberate pan placed CancelBooking beneath the minimap. The later
+drag crossed onto its rectangle at approximately `(1588.99,1058.50)` and delivered
+mouseup on that rectangle at `(1647,1089)`. The intended FlightTimeout→CancelBooking
+flow, exact source anchor, full-model checks and Undo/Redo passed. This validates
+the diagnostic's source activation and semantic/history checks; it does not
+certify an unobstructed visible-target drop. That overlap happens after the
+critical source capture and press, so it does not invalidate their comparison.
+
+The historical 201214 pre-down disappearance was not reproduced. Its removal
+caller remains unknown, and the original evidence cannot distinguish a stale
+notification, capture-related lifecycle or another event. The practical residual
+risk is the observed loss of the source affordance followed by unintended
+transaction movement at the same pointer coordinate. Its frequency and current
+reproducibility are unknown. F23 remains an unresolved known finding, not a
+completed defect or an active speculative source repair.
+
+The agreed stopping rule now applies: stop isolated repetitions and speculative
+changes. Keep the original strict, uninstrumented F23 case in normal acceptance
+and preserve the optional test-only teardown companion for a future observed
+recurrence. The companion can identify a caller only if that recurrence happens
+inside its instrumented run; its timing cost cannot be ignored. No additional
+experiment or product patch is justified by these negative results.
+
+The current manually checked preview is site `ad787`, running library `def0baf`.
+The later `56538c9` changes are diagnostic tests and evidence documentation; they
+do not add a production fix for F23. Exact-head CI is tracked separately. Neither
+these diagnostic passes nor the preview's other checks imply general BPMN
+interaction completion or resolution of the historical finding.

@@ -1,5 +1,8 @@
 # Anchor interaction acceptance matrix
 
+**Current outcome:** see [verified results and unresolved F23 finding](ANCHOR-UX-RESULTS.md).
+The checkpoint statuses below are preserved historical evidence.
+
 Prepared 2026-10-02, before new implementation assertions. This review is reopened
 by user feedback about right-only origins and returning a connection to its own
 anchor. Earlier green suites establish only their recorded cases; they do not

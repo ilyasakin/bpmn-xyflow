@@ -1,5 +1,8 @@
 # Remaining anchor interaction execution plan
 
+**Current outcome:** see [verified results and unresolved F23 finding](ANCHOR-UX-RESULTS.md).
+The checkpoint statuses below are preserved historical evidence.
+
 Prepared 2026-10-02 in isolated `followup-current`. The reviewed cases will be
 integrated onto the latest source before hosted execution; this working tree
 was used to prepare the first native run. **All 62 variants across 22 workflow
