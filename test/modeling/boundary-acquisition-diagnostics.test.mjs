@@ -77,12 +77,14 @@ test('diagnostic driver records phases only in Node and dumps once after unchang
   let closed=false,stops=0;
   const expectedError=new Error('original evaluation failure'),image=Buffer.from('unchanged screenshot');
   const clock={timeOrigin:1234,installedAt:56};
+  const sourceSha256=createHash('sha256').update(await readFile(new URL('../../lib/Modeler.js',import.meta.url))).digest('hex');
+  const records=[{sequence:1,type:'modeler:destroyConnectHandle',details:{sourceSha256}}];
   const page={isClosed:()=>closed,
     async evaluate(fn,...args){
       assert.equal(this,page);browserCalls.push({fn,args});
       if(fn===installBoundaryAcquisitionDiagnostics)return clock;
       if(fn===markBoundaryAcquisitionPhase)throw Error('no browser phase evaluations permitted');
-      if(fn===readBoundaryAcquisitionDiagnostics)return {records:[{sequence:1}],dropped:0};
+      if(fn===readBoundaryAcquisitionDiagnostics)return {records,dropped:0,callbackErrors:[]};
       return fn(...args);
     },async screenshot(...args){assert.equal(this,page);screenshotCalls.push(args);if(args[0].path==='rejected.png')throw expectedError;return image;}};
   try{
@@ -110,7 +112,7 @@ test('diagnostic driver records phases only in Node and dumps once after unchang
       },
     });
     const evidence=JSON.parse(await readFile(join(output,'repeat-1-final.json'),'utf8'));
-    assert.deepEqual(evidence.browserClock,clock);assert.deepEqual(evidence.records,[{sequence:1}]);
+    assert.deepEqual(evidence.browserClock,clock);assert.deepEqual(evidence.records,records);
     assert.match(evidence.source.head,/^[0-9a-f]{40}$/);assert.match(evidence.source.committedLibTree,/^[0-9a-f]{40}$/);
     for(const [path,hash] of Object.entries(evidence.source.sha256))assert.equal(hash,createHash('sha256').update(await readFile(new URL(`../../${path}`,import.meta.url))).digest('hex'));
     const labels=evidence.driverPhases.map(p=>p.label);
@@ -139,4 +141,92 @@ test('final diagnostic read failure still runs owned cleanup without retrying or
       await h.stop();assert.equal(dumps,1);assert.equal(stopped,2);
     },
   });
+});
+
+
+test('critical observer uses cached native geometry and attribute state, reserving hit/layout reads for final dump',async()=>{
+  const h=fixture();try{
+    let reads=0;
+    const oldMatrix=h.view.getScreenCTM, root=h.document.querySelector('svg'),oldRoot=root.getScreenCTM,oldHit=h.document.elementFromPoint;
+    h.view.getScreenCTM=()=>{reads++;return oldMatrix();};root.getScreenCTM=()=>{reads++;return oldRoot();};
+    h.document.elementFromPoint=(...args)=>{reads++;return oldHit(...args);};
+    const cached={a:.8,b:0,c:0,d:.8,e:500,f:400};
+    h.window.anchorInput=[{type:'mousemove',x:1134,y:715,screenMatrix:cached}];
+    h.view.innerHTML='<g class="bpmn-xyflow-connect-handle" data-connect-source="FlightTimeout"><circle class="bpmn-xyflow-connect-port" cx="1" cy="2" r="5"/></g>';
+    h.view.dispatchEvent(new h.window.MouseEvent('mousemove',{bubbles:true,clientX:1134,clientY:715}));
+    h.emit('viewport.change',{viewport:h.window.modeler.getViewport()});
+    Object.defineProperty(h.window,'innerWidth',{value:1800,configurable:true});
+    Object.defineProperty(h.window,'innerHeight',{value:1200,configurable:true});
+    h.window.dispatchEvent(new h.window.Event('resize'));
+    const handle=h.view.querySelector('g');handle.remove();
+    h.window.__bpmnBoundaryTeardownRecord({handle,owner:'FlightTimeout',stack:'actual caller',sourceSha256:'fixture',anchor:{x:1,y:2}});
+    await h.window.happyDOM.whenAsyncComplete();await Promise.resolve();
+    assert.equal(reads,0,'events, notifications, teardown and mutation perform no extra layout/hit reads');
+    h.window.__bpmnBoundaryTeardownErrors.push({message:'recorded callback failure'});
+    const result=readBoundaryAcquisitionDiagnostics();assert.equal(reads,3,'fresh CTMs and hit read occur only at dump');
+    assert.deepEqual(result.current.matrix,cached);assert.deepEqual(result.callbackErrors,[{message:'recorded callback failure'}]);
+    const resize=result.records.find(r=>r.type==='native:resize');
+    assert.equal(resize.state.dimensions.window.innerWidth,1800);assert.equal(resize.state.dimensions.window.innerHeight,1200);
+    assert.ok(resize.details.previousDimensions.window);assert.ok(result.records.some(r=>r.type==='modeler:destroyConnectHandle'&&r.details.handle.connected===false));
+  }finally{await h.close();}
+});
+
+test('six screenshot cohorts change only the three declared source-control captures',async()=>{
+  const {runBoundaryAcquisitionDiagnostics}=await import('./browser-boundary-acquisition.mjs');
+  const output=await mkdtemp(join(tmpdir(),'boundary-cohort-contract-')),requests=[];
+  const original={id:'F23-B',name:'selected-boundary-lower-origin',engine:'local',batch:'b',sample:'Booking',run:async()=>{}};
+  try{
+    await runBoundaryAcquisitionDiagnostics({output,readSourceIdentity:async()=>({sha256:{'lib/Modeler.js':'fixture'}}),registerCases:async()=>[original],
+      harnessFactory:options=>{
+        assert.equal(options.serverEntry,'test/helpers/boundary-diagnostic-server.mjs');let closed=false;
+        const page={isClosed:()=>closed,async evaluate(fn){
+          if(fn===installBoundaryAcquisitionDiagnostics)return {timeOrigin:1,installedAt:2};
+          if(fn===readBoundaryAcquisitionDiagnostics)return {records:[{type:'modeler:destroyConnectHandle',details:{sourceSha256:'fixture'}}],callbackErrors:[]};
+          throw Error('unexpected browser evaluation');
+        },async screenshot(options){requests.push({...options});return 'image';}};
+        return {open:async()=>({page}),stop:async()=>{closed=true;}};
+      },
+      runner:async(_options,config)=>{
+        const cases=await config.registerCases();assert.equal(cases.length,6);
+        for(const [index,c]of cases.entries()){
+          assert.equal(c.run,original.run);const h=config.harnessFactory({});const {page}=await h.open();
+          const source={path:`${index}-source-control.png`,fullPage:true,type:'png'};
+          await page.screenshot(source);assert.equal(source.fullPage,true,'requested options are not mutated');
+          await page.screenshot({path:`${index}-preview.png`,fullPage:true});await h.stop();
+        }
+      },
+    });
+    assert.deepEqual(requests.filter(x=>x.path.endsWith('-source-control.png')).map(x=>x.fullPage),[true,false,true,false,true,false]);
+    assert.ok(requests.filter(x=>x.path.endsWith('-preview.png')).every(x=>x.fullPage===true));
+    for(let index=1;index<=6;index++){
+      const evidence=JSON.parse(await readFile(join(output,`repeat-${index}-final.json`),'utf8'));
+      assert.equal(evidence.screenshotCohort,index%2?'original-full-page':'viewport-only-source-control');
+      const options=evidence.driverPhases.find(p=>p.label==='source-screenshot-options');
+      assert.equal(options.requested.fullPage,true);assert.equal(options.effective.fullPage,index%2===1);
+    }
+  }finally{await rm(output,{recursive:true,force:true});}
+});
+
+test('callback errors and missing served traces fail visibly after evidence is saved and cleanup runs',async()=>{
+  const {runBoundaryAcquisitionDiagnostics}=await import('./browser-boundary-acquisition.mjs');
+  for(const callbackErrors of [[{message:'injected callback error'}],[]]){
+    const output=await mkdtemp(join(tmpdir(),'boundary-trace-failure-'));let closed=false,stops=0;
+    const page={isClosed:()=>closed,async evaluate(fn){
+      if(fn===installBoundaryAcquisitionDiagnostics)return {timeOrigin:1,installedAt:2};
+      if(fn===readBoundaryAcquisitionDiagnostics)return {records:[],callbackErrors};
+      throw Error('unexpected evaluation');
+    },async screenshot(){}};
+    try{
+      await runBoundaryAcquisitionDiagnostics({output,readSourceIdentity:async()=>({sha256:{'lib/Modeler.js':'fixture'}}),
+        harnessFactory:()=>({open:async()=>({page}),stop:async()=>{stops++;closed=true;}}),
+        runner:async(_options,config)=>{
+          const h=config.harnessFactory({});await h.open();
+          await assert.rejects(h.stop(),callbackErrors.length?/diagnostic callback failures/:/instrumentation was actually reached/);
+          assert.equal(stops,1);
+        },
+      });
+      const evidence=JSON.parse(await readFile(join(output,'repeat-1-final.json'),'utf8'));
+      assert.deepEqual(evidence.callbackErrors,callbackErrors);
+    }finally{await rm(output,{recursive:true,force:true});}
+  }
 });

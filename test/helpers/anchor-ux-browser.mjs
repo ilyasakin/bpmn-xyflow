@@ -17,7 +17,8 @@ import {
 const require = createRequire(import.meta.url);
 assert.equal(require("bpmn-js/package.json").version, "18.30.1");
 
-export function createAnchorHarness({ port, output }) {
+export function createAnchorHarness({ port, output, serverEntry = "lib/demo/serve.mjs" }) {
+assert.ok(["lib/demo/serve.mjs", "test/helpers/boundary-diagnostic-server.mjs"].includes(serverEntry), "known owned test server entry");
 const base = `http://localhost:${port}`, oracle = new BpmnModdle(), results = [];
 let server, browser, serverOutput = "";
 const refURL = `${base}/@fs/${path.resolve("test/anchor-ux/reference.html")}`;
@@ -1137,7 +1138,7 @@ async function run(id, name, engine, sample, fn) {
 
 async function start() {
   await mkdir(output, { recursive: true });
-  server = spawn(process.execPath, ["lib/demo/serve.mjs"], {
+  server = spawn(process.execPath, [serverEntry], {
     env: { ...process.env, PORT: String(port) },
     stdio: ["ignore", "pipe", "inherit"],
   });

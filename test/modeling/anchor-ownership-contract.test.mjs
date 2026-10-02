@@ -39,7 +39,7 @@ test("the published green39 script and copied d462 shared behavior retain exact 
     factory.slice(
       factory.indexOf("async function start() {\n") + "async function start() {\n".length,
       factory.indexOf("}\nasync function stop()"),
-    ),
+    ).replace('[serverEntry], {', '["lib/demo/serve.mjs"], {'),
     startup,
   );
   const stop = original.slice(

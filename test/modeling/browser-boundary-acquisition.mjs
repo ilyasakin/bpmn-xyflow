@@ -10,6 +10,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createAnchorHarness } from '../helpers/anchor-ux-browser.mjs';
 import { installBoundaryAcquisitionDiagnostics, readBoundaryAcquisitionDiagnostics } from '../helpers/boundary-acquisition-diagnostics.mjs';
 import { runAnchorFollowups, registeredAnchorFollowups } from './browser-anchor-followup.mjs';
+import { instrumentBoundaryTeardown } from '../helpers/boundary-teardown-transform.mjs';
 
 async function captureSourceIdentity() {
   const cwd=fileURLToPath(new URL('../../',import.meta.url));
@@ -17,7 +18,9 @@ async function captureSourceIdentity() {
   const sourceFiles=['lib/Modeler.js','lib/Viewer.js','lib/modeling/ConnectGrabPlacement.js'];
   const sha256={};
   for(const path of sourceFiles)sha256[path]=createHash('sha256').update(await readFile(new URL(`../../${path}`,import.meta.url))).digest('hex');
+  const instrumented=instrumentBoundaryTeardown(await readFile(new URL('../../lib/Modeler.js',import.meta.url),'utf8'));
   return {head:await git('rev-parse','HEAD'),committedLibTree:await git('rev-parse','HEAD:lib'),
+    instrumentation:{sourceSha256:instrumented.sourceSha256,servedSha256:instrumented.servedSha256},
     modifiedSourcePaths:(await git('diff','HEAD','--name-only','--','lib')).split('\n').filter(Boolean),sha256};
 }
 
@@ -33,10 +36,11 @@ return runner({batch:'b',engine:'local'}, {
     const found=cases.filter(c=>c.id==='F23-B'&&c.engine==='local'&&c.name==='selected-boundary-lower-origin');
     assert.equal(found.length,1,'exact unchanged recorded workflow');
     const original=found[0];
-    return Array.from({length:repeats},(_,index)=>({...original,name:`${original.name}-diagnostic-${index+1}`}));
+    return Array.from({length:repeats},(_,index)=>({...original,name:`${original.name}-diagnostic-${index%2?'viewport-only':'full-page'}-${index+1}`}));
   },
   harnessFactory:options=>{
-    const h=harnessFactory(options), index=++factoryIndex;
+    const h=harnessFactory({...options,serverEntry:'test/helpers/boundary-diagnostic-server.mjs'}), index=++factoryIndex;
+    const screenshotCohort=index%2?'original-full-page':'viewport-only-source-control';
     const originalOpen=h.open;
     let page, originalScreenshot, originalEvaluate, browserClock, dumped=false;
     const phases=[];
@@ -57,9 +61,13 @@ return runner({batch:'b',engine:'local'}, {
       mark('final-dump:after');
       await mkdir(output,{recursive:true});
       await writeFile(`${output}/repeat-${index}-final.json`,JSON.stringify({
-        ...evidence,source,browserClock,nodeTimeOrigin:performance.timeOrigin,driverPhases:phases,
-        capturePolicy:'One passive installation; Node-only driver phases; one final browser dump. No diagnostic browser calls during the original workflow.',
+        ...evidence,source,browserClock,nodeTimeOrigin:performance.timeOrigin,driverPhases:phases,screenshotCohort,
+        capturePolicy:'Diagnostic served teardown trace; one passive installation without per-event CTM/hit reads; Node-only phases; one final dump. Only the declared cohort source screenshot differs.',
       },null,2));
+      assert.deepEqual(evidence.callbackErrors,[],'diagnostic callback failures remain visible');
+      const removals=evidence.records.filter(record=>record.type==='modeler:destroyConnectHandle');
+      assert.ok(removals.length,'served teardown instrumentation was actually reached');
+      assert.ok(removals.every(record=>record.details.sourceSha256===source.sha256['lib/Modeler.js']),'served trace matches the recorded original product bytes');
     };
     h.open=async(...args)=>{
       const opened=await originalOpen(...args);page=opened.page;
@@ -70,7 +78,11 @@ return runner({batch:'b',engine:'local'}, {
       originalScreenshot=page.screenshot.bind(page);
       page.screenshot=async(...screenshotArgs)=>{
         const path=screenshotArgs[0]?.path || 'unnamed';
-        return observed(`screenshot:${path}`,()=>originalScreenshot(...screenshotArgs));
+        const sourceControl=path.endsWith('-source-control.png');
+        const effective=sourceControl&&screenshotCohort==='viewport-only-source-control'
+          ?[{...screenshotArgs[0],fullPage:false},...screenshotArgs.slice(1)]:screenshotArgs;
+        if(sourceControl)mark('source-screenshot-options',{requested:screenshotArgs[0],effective:effective[0],screenshotCohort});
+        return observed(`screenshot:${path}`,()=>originalScreenshot(...effective));
       };
       // Phase markers stay in Node: no extra browser round trip, artifact dump
       // or wait is inserted between any original evaluation/screenshot calls.

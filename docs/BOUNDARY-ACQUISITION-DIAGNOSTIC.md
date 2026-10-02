@@ -26,59 +26,96 @@ native failure. In particular, the original artifacts do not record window
 blur, pointerleave, selection notifications or unchanged-value viewport
 notifications between acquisition and mousedown.
 
-## Diagnostic gate
+## Diagnostic gate: teardown caller and screenshot control
 
 Run `node test/modeling/browser-boundary-acquisition.mjs` through the existing
-owned browser-suite runner. It executes six fresh whole-case lifecycles of the
-unchanged F23-B `selected-boundary-lower-origin` workflow. All original actions,
-assertions, original errors and cleanup deadlines remain. Original39, its
-shared factory, ownership24 and F11 source files are unchanged.
+owned browser-suite runner. It executes six fresh whole-case lifecycles of F23-B
+`selected-boundary-lower-origin`, alternating three original full-page source
+screenshots and three viewport-only source screenshots. Only the latter cohort's
+`-source-control.png` capture has `fullPage:false`; every other capture, gesture,
+assertion and original error remains unchanged. The actual requested/effective
+options and cohort are recorded. These are diagnostic comparisons. The original
+uninstrumented F23 workflow remains the acceptance control.
 
-A passive observer records trusted native input and focus/leave events, the
-public Viewer notifications, exact before/current viewport values, control DOM
-identity/geometry/removal, hit ownership and selection/history. A stack is
-recorded for public viewport/selection notifications to distinguish their
-origin. The observer is installed once before the workflow. The driver records
-evaluation and screenshot boundaries in Node only: it inserts no diagnostic
-browser evaluation, artifact dump or settling wait between the original calls.
-It never patches product methods, dispatches input or retries an action.
+The dedicated test server has the same routes, plugins, root and startup behavior
+as the normal demo server, with one added Vite transform. That transform matches
+the unique three-removal statement in `destroyConnectHandle`. Immediately after
+those original removals and before the original variable resets, served code
+records the actual caller stack, removed DOM identity, former owner, anchor, grab
+and acquisition flags. It introduces no await, hit/layout query, modeling command
+or changed product decision. A callback failure is caught so the original resets
+still execute; its error is retained, dumped, and fails the diagnostic gate.
+Missing trace activation also fails rather than producing a vacuous success.
+No file under `lib` is edited, and the original and transformed source hashes
+are recorded dynamically, including when the test is applied to a newer product.
 
-One final browser read runs during owned cleanup, after the original workflow
-and its normal success/failure evidence. Its JSON includes Node phase timestamps,
-the browser time origin and installation timestamp, the checked-out Git head,
-committed `lib` tree, modified production paths and SHA256 hashes of Modeler,
-Viewer and the grab-placement helper. The Node installation envelope bounds
-clock alignment without an additional browser synchronization call. Cleanup
-still runs if that final read fails; a second cleanup does not repeat the dump.
-The passive snapshots themselves still consume execution time, so even this
-reduced capture cannot make passing repetitions prove the original race fixed.
+There is one explicit extracted-factory exception: `anchor-ux-browser.mjs` now
+accepts a server entry restricted to its existing default or the diagnostic
+server. The retained ownership startup check normalizes only that server-entry token.
+A separate byte-normalization contract verifies that its remaining startup,
+cleanup, gesture and assertion code is unchanged. The original native39 file is
+byte-identical. The ownership24 and F11 workflows are unaffected.
+
+## Observation and timing limits
+
+The browser observer is installed once. During the workflow it records native
+event targets, DOM attributes/identity, selection/history and public viewport
+notifications. It reuses the matrix already recorded by the original capture-
+phase input observer. It performs no additional `getScreenCTM`,
+`getBoundingClientRect`, `elementFromPoint` or computed-style reads in critical
+event/microtask/mutation callbacks. Fresh CTM and hit observations are reserved
+for the final dump. The original factory's pre-handler CTM reads are unchanged.
+
+Initial window dimensions are sampled at installation. Native resize callbacks
+record window inner/outer dimensions; a passive ResizeObserver retains the
+provided document/container content and border-box sizes without querying
+layout. Other snapshots use the latest recorded dimensions, explicitly allowing
+observer delivery to lag a native resize. This can reveal a dimension transition;
+a resize event alone does not prove that a dimension changed.
+
+The driver records phase timestamps in Node only. It inserts no diagnostic
+browser evaluation, artifact dump or settling wait between original calls.
+One final browser read runs during owned cleanup after normal workflow evidence.
+Its JSON contains the Node phases, browser time origin/installation timestamp,
+Git head, committed `lib` tree, modified source paths and hashes. The installation
+envelope bounds clock alignment without another synchronization call. Cleanup
+runs on dump failure; repeat cleanup does not repeat the dump. Passive callbacks
+and the post-removal stack trace still cost time, so passing repeats cannot prove
+the original race fixed.
 
 Evidence is under `test-artifacts/boundary-acquisition-diagnostics`, including
-one per-repeat final trace and the ordinary case screenshots/XML/results. The
-trace reports any record-limit truncation. The original failing assertion
-remains the gate. No new browser pass is claimed by the structural checks.
+one final trace per repeat and the ordinary screenshots/XML/results. Record-limit
+truncation is explicit. No hosted result is claimed for this new diagnostic.
 
-## First diagnostic run: six passes, cause unresolved
+## Earlier diagnostic evidence: cause still unresolved
 
-At `a0108a7`, all six original workflows passed with the first diagnostic driver.
-Every acquired grab retained the same DOM identity until mousedown. There were
-five genuine wheel-driven viewport notifications per case, all before the
-critical acquisition interval; no unchanged-value notification was observed.
-No blur, pointerleave or selection change occurred between final arrival at
-`(1134,715)` and the subsequent press. Every source-control screenshot produced
-a native window resize event while leaving the handle intact.
+At `a0108a7`, all six workflows passed with the first driver. Every acquired grab
+retained its DOM identity through mousedown. No same-value viewport notification,
+blur, pointerleave or selection change occurred during acquisition-to-press.
+Every source screenshot coincided with a native window resize while the handle
+remained intact. Arrival-to-press took 202–210 ms; the old JSON dump added 35–43 ms
+before the next original evaluation. Additional awaited browser phase calls
+could also mask a race, motivating the reduced driver.
 
-The arrival-to-press interval was 202–210 ms. The screenshot occupied 107–114 ms,
-and the old diagnostic dump added 35–43 ms before the next original evaluation.
-The old driver also inserted two awaited browser evaluations around each
-original evaluation. Those round trips could mask a timing race. The original
-failed input trace has no timestamps, so an exact timing comparison is not
-available. This evidence motivated the reduced capture above, not a production
-change or closure of F23-B.
+On unchanged product `70edde9`, all six reduced-driver cases passed. Arrival-to-
+press was 116.6–133.8 ms. A window resize occurred 8.8–11.8 ms after each source
+screenshot began, without a handle removal or other critical lifecycle change.
+The output PNGs are 1800×1200 and the surrounding canvas is 1800×1152 at y48,
+but event-time window dimensions were not recorded. Installed Puppeteer24.43
+uses `captureBeyondViewport:true` for these full-page captures and does not call
+`setViewport` in that branch. Thus neither the event nor the PNG proves a
+transient size change. The separate D20 `def0baf` cohort also passed six cases
+with intact handles. It does not explain the older Boundary failure.
 
-Focused checks: `selected-boundary-acquisition.test.mjs` verifies the actual
-registered geometry/history sequence; `boundary-acquisition-diagnostics.test.mjs`
-checks the serialized observer, unchanged-transform/removal detection,
-non-consuming input, lifecycle disposal, absence of intermediate diagnostic
-browser calls, transparent operation values/errors, single final dump and owned
-cleanup on diagnostic failure.
+Those reduced snapshots still read CTM and hit geometry after product handlers.
+The present capture removes those extra critical reads and records the actual
+teardown caller, with the declared screenshot control. The original201214
+failure remains open until evidence establishes its cause.
+
+Focused checks: `selected-boundary-acquisition.test.mjs` retains the actual
+registered geometry/history replay. `boundary-acquisition-diagnostics.test.mjs`
+checks passive ownership, cached geometry, dimensions, driver transparency,
+cohorts, final dump and failure visibility. `boundary-teardown-transform.test.mjs`
+checks the exact insertion boundary, original reset semantics despite callback
+failure, route/plugin parity, restricted server entry and unchanged acceptance
+workflow bytes.

@@ -180,16 +180,21 @@ point. The historical failed results above are retained as investigation evidenc
   source correction starts acquisition at the actual current resize-control
   pointer while preserving the separately projected docking marker, directional
   guard, corridor and press areas. The exact manual regression passes locally.
-  Eight separate low/high-zoom native corner cases and the repaired paired
-  manual replay remain pending; the original twelve painted-origin cases remain.
+  All eight separate low/high-zoom native corner cases passed on `def0baf3`.
+  The exact independent manual replay on paired site `ad787b92` also passed:
+  direct resize-square approach, exact original docking, one new flow, byte-exact
+  Undo/Redo, ordinary resize ownership and 1 px midpoint choice. No painted-origin
+  workaround was used. The original twelve painted-origin cases also pass.
 - **F23-B reproducibility:** one `201214b6` push run lost an acquired boundary
   source control before press, causing a transaction drag instead of connection.
   The same PR run, later ordinary runs, two independent manual attempts and six
   passive diagnostic repetitions passed with identical intended coordinates.
   This remains unresolved. The first diagnostic driver added browser round
-  trips, so a reduced capture removes those critical-interval calls rather than
-  treating passing repetitions as a fix. No speculative product change is made
-  for this finding.
+  trips; reduced capture removed them and also passed, without establishing the
+  original teardown cause. Both runs observed screenshot-time resize events,
+  but no control removal in their critical intervals. Further test-only caller
+  tracing and a controlled screenshot comparison are being prepared. No
+  speculative product change is made for this finding.
 
 The independent visible-control report also verified off-midpoint left/top
 origins against exported XML, selected click/retry without resize, stationary

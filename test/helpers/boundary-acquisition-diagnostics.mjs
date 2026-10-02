@@ -23,19 +23,33 @@ export function installBoundaryAcquisitionDiagnostics() {
     x: Number(element.getAttribute('cx')), y: Number(element.getAttribute('cy')),
     r: Number(element.getAttribute('r')),
   } : null;
-  const snapshot = () => {
+  const windowDimensions=()=>({innerWidth:window.innerWidth,innerHeight:window.innerHeight,
+    outerWidth:window.outerWidth,outerHeight:window.outerHeight,devicePixelRatio:window.devicePixelRatio});
+  let dimensions={window:windowDimensions(),observed:[]};
+  const initialMatrix=matrix(container.querySelector('.bpmn-xyflow-viewport'));
+  const initialRootMatrix=matrix(container.querySelector('.bpmn-xyflow-canvas'));
+  const snapshot = (fresh=false) => {
     const handle=container.querySelector('.bpmn-xyflow-connect-handle');
     const docking=container.querySelector('.bpmn-xyflow-connect-docking');
     const port=handle?.querySelector('.bpmn-xyflow-connect-port');
+    // The original acceptance driver already captured this matrix before the
+    // product mouse handler. Reuse it; never force layout during diagnostics.
+    const delivered=(window.anchorInput||[]).findLast(input=>input.screenMatrix);
     return { viewport: modeler.getViewport(), selection: modeler.getSelection(),
       history: { size:modeler.commandStack.size(), undo:modeler.canUndo(), redo:modeler.canRedo() },
       handle:identify(handle), marker:coordinate(docking?.querySelector('.bpmn-xyflow-connect-docking-point')),
-      grab:coordinate(port), handleHTML:handle?.outerHTML || null, dockingHTML:docking?.outerHTML || null,
-      matrix:matrix(container.querySelector('.bpmn-xyflow-viewport')),
-      rootMatrix:matrix(container.querySelector('.bpmn-xyflow-canvas')),
-      point, hit:point?identify(document.elementFromPoint(point.x,point.y)):null,
-      focus:document.hasFocus(), visibility:document.visibilityState,
-      active:identify(document.activeElement) };
+      grab:coordinate(port),
+      matrix:delivered?.screenMatrix || initialMatrix,rootMatrix:initialRootMatrix,
+      matrixEvidence:delivered?{source:'existing native input',type:delivered.type,x:delivered.x,y:delivered.y}:{source:'installation'},
+      point,dimensions,focus:document.hasFocus(),visibility:document.visibilityState,
+      active:identify(document.activeElement),
+      ...(fresh?{finalGeometry:{
+        matrix:matrix(container.querySelector('.bpmn-xyflow-viewport')),
+        rootMatrix:matrix(container.querySelector('.bpmn-xyflow-canvas')),
+        hit:point?identify(document.elementFromPoint(point.x,point.y)):null,
+        window:windowDimensions(),handleHTML:handle?.outerHTML || null,dockingHTML:docking?.outerHTML || null,
+      }}:{}),
+    };
   };
   const record=(type, details={})=>{
     if(disposed)return;
@@ -45,7 +59,9 @@ export function installBoundaryAcquisitionDiagnostics() {
   for(const type of ['pointermove','pointerdown','pointerup','pointerleave','pointerout','pointercancel','lostpointercapture','mousemove','mousedown','mouseup','blur','focus','resize','wheel','keydown','keyup','visibilitychange']){
     const callback=event=>{
       if(Number.isFinite(event.clientX)&&Number.isFinite(event.clientY)) point={x:event.clientX,y:event.clientY};
-      const details={trusted:event.isTrusted,client:point,button:event.button,buttons:event.buttons,
+      const previousDimensions=type==='resize'?dimensions:undefined;
+      if(type==='resize')dimensions={...dimensions,window:windowDimensions()};
+      const details={trusted:event.isTrusted,client:point,button:event.button,buttons:event.buttons,previousDimensions,
         pointerType:event.pointerType,key:event.key,deltaY:event.deltaY,
         targetKind:event.target===window?'window':event.target===document?'document':'node',
         target:identify(event.target),related:identify(event.relatedTarget)};
@@ -54,6 +70,27 @@ export function installBoundaryAcquisitionDiagnostics() {
     };
     window.addEventListener(type,callback,{capture:true,passive:true});
     disposers.push(()=>window.removeEventListener(type,callback,true));
+  }
+  if(window.__bpmnBoundaryTeardownRecord)throw Error('teardown observer already installed');
+  window.__bpmnBoundaryTeardownErrors=[];
+  window.__bpmnBoundaryTeardownRecord=details=>{
+    const {handle,...values}=details;
+    record('modeler:destroyConnectHandle',{...values,handle:identify(handle)});
+  };
+  disposers.push(()=>{delete window.__bpmnBoundaryTeardownRecord;});
+  if(window.ResizeObserver){
+    const sizes=new Map();
+    const observer=new window.ResizeObserver(entries=>{
+      for(const entry of entries)sizes.set(entry.target,{
+        target:identify(entry.target),
+        content:{x:entry.contentRect.x,y:entry.contentRect.y,width:entry.contentRect.width,height:entry.contentRect.height},
+        border:[...(entry.borderBoxSize||[])].map(box=>({inlineSize:box.inlineSize,blockSize:box.blockSize})),
+      });
+      dimensions={...dimensions,observed:[...sizes.values()]};
+      record('observer:resize',{entries:entries.map(entry=>sizes.get(entry.target))});
+    });
+    observer.observe(document.documentElement);observer.observe(container);
+    disposers.push(()=>observer.disconnect());
   }
   let previousViewport=modeler.getViewport();
   for(const type of ['viewport.change','selection.change','element.hover','element.out','diagram.clear','import.done']){
@@ -85,7 +122,7 @@ export function installBoundaryAcquisitionDiagnostics() {
   observer.observe(container,{subtree:true,childList:true,attributes:true,attributeOldValue:true});
   window.boundaryAcquisitionDiagnostics={
     mark:label=>record('phase',{label}),
-    read:()=>({records:[...records],dropped,current:snapshot()}),
+    read:()=>({records:[...records],dropped,callbackErrors:[...window.__bpmnBoundaryTeardownErrors],current:snapshot(true)}),
     stop:()=>{record('phase',{label:'stop'});disposed=true;observer.disconnect();disposers.forEach(dispose=>dispose());},
   };
   record('phase',{label:'installed'});
