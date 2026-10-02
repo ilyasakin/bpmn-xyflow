@@ -378,8 +378,11 @@ for (const mode of ["source", "endpoint"])
       const changedView = await h.state(page);
       assert.equal(changedView.xml, beforeView.xml);
       assert.deepEqual(changedView.history, beforeView.history);
-      await continuingPort(h, page, b.id, "left");
-      return (await h.create(page, b.id, t1.id, "left", "top", { name: key })).edge;
+      // B's left midpoint is already owned by its incoming connection.
+      // This workflow tests camera refresh using a visible free point on the same side.
+      await continuingPort(h, page, b.id, "left", 0.25);
+      return (await h.create(page, b.id, t1.id, "left", "top", { name: key, sourceFraction: 0.25 }))
+        .edge;
     }
     const edge = Object.values(initial.edges).find((e) => e.source === a.id && e.target === t1.id);
     await h.chooseEdge(page, edge.id);

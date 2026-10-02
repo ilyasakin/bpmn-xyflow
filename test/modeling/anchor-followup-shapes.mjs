@@ -9,11 +9,14 @@ import {
   assertReferenceConnectionRoute as referenceRoute,
 } from "../helpers/anchor-reference-followup.mjs";
 import { assertReferenceConnectionUndo } from "../helpers/anchor-followup-model.mjs";
-import { continuingPort, readFollowupPort } from "../helpers/anchor-followup-controls.mjs";
+import { continuingPort, readFollowupPort, chooseFollowupEdge } from "../helpers/anchor-followup-controls.mjs";
 import {
   assertOnlyAnchorGeometry,
   assertOnlyAnchorDeletion,
 } from "../helpers/anchor-model-guard.mjs";
+
+import { renderedDI, selectVisibleFollowupBody } from '../helpers/anchor-followup-dom.mjs';
+import { assertReferenceBodyMove } from '../helpers/anchor-followup-reference-move.mjs';
 
 export const anchorShapeCases = [];
 const EMPTY = "Empty diagram",
@@ -87,10 +90,7 @@ async function capture(h, page, key) {
   return preview;
 }
 async function painted(h, page, state, edge) {
-  const visible = await h.renderEnds(page, edge.id);
-  h.near(visible.start, h.screen(state, edge.points[0]), 0.05, "painted source matches saved DI");
-  h.near(visible.end, h.screen(state, edge.points.at(-1)), 0.05, "painted target matches saved DI");
-  return visible;
+  return renderedDI(page, edge);
 }
 async function bodyMove(h, page, id, dx, dy, key) {
   const before = await h.state(page),
@@ -103,7 +103,8 @@ async function bodyMove(h, page, id, dx, dy, key) {
   await h.drag(page, start, { x: start.x + dx, y: start.y + dy });
   const after = await h.state(page);
   assert.notDeepEqual(bounds(h.node(after, id)), bounds(n), "body move actually changes bounds");
-  await assertOnlyAnchorGeometry(before.xml, after.xml, {
+  if (before.engine === "upstream") await assertReferenceBodyMove(h, before, after, id);
+  else await assertOnlyAnchorGeometry(before.xml, after.xml, {
     shapeIds: [id],
     edgeIds: incident(before, [id]),
     labelIds: drawing(before, id)?.label?.bounds ? [id] : [],
@@ -121,6 +122,7 @@ async function connect(h, page, key, source, target, from, to, options = {}) {
     ["bpmn:Participant", "bpmn:SubProcess", "bpmn:Transaction"].includes(sourceNode.type)
   )
     await selectOutline(h, page, source, "left", 0.2);
+  else if (options.selected || s.engine === "upstream") await selectVisibleFollowupBody(h, page, source);
   let result;
   if (s.engine === "local") {
     result = await h.create(page, source, target, from, to, { ...options, name: key });
@@ -155,12 +157,22 @@ async function connect(h, page, key, source, target, from, to, options = {}) {
       (await h.hit(page, end)).owners.includes(target),
       "reference drop includes the intended target in the actual hit stack",
     );
-    let live, observation;
+    let live, observation, previewContext;
     await observeReference(page, "connect");
     try {
       await h.drag(page, start.point, end, {
         capture: async () => {
           live = await capture(h, page, key);
+          const input = (await h.raw(page)).input.findLast(event => event.type === "mousemove");
+          previewContext = await page.evaluate(() => {
+            const d = window.referenceModeler.get("dragging").context(), c = d?.data?.context;
+            return { active: !!d?.active, prefix: d?.prefix, start: c?.start?.id,
+              source: c?.source?.id, target: c?.target?.id, hover: c?.hover?.id,
+              canExecute: c?.canExecute && typeof c.canExecute === "object" ? { type: c.canExecute.type } : c?.canExecute };
+          });
+          previewContext.input = input;
+          previewContext.hit = input ? await h.hit(page, input) : null;
+          await h.save(page, key + "-reference-preview-state", { live, previewContext });
         },
       });
     } finally {
@@ -168,6 +180,7 @@ async function connect(h, page, key, source, target, from, to, options = {}) {
     }
     const after = await h.state(page),
       added = Object.values(after.edges).filter((edge) => !before.edges[edge.id]);
+    await h.save(page, key + "-reference-commit", { observation, added, live, previewContext });
     assert.equal(added.length, 1);
     const edge = added[0];
     assert.equal(edge.source, source);
@@ -396,15 +409,20 @@ for (const engine of engines)
           );
           assert.equal(delivered?.trusted, true);
           overlapHit = {
-            status: "unresolved",
+            status: "verified-hover-owner",
             requested: point,
             delivered,
             target: await h.hit(page, delivered),
-            policy:
-              "diagnostic only; no hit-parity outcome is inferred from this overlap inspection",
+            policy: "exact delivered hover receiver; no unperformed click-selection claim",
           };
           assert.equal(overlapHit.target.inside, true);
+          assert.equal(overlapHit.target.id, "TimeoutFlow");
+          assert.equal(overlapHit.target.tag, "circle");
+          assert.equal(overlapHit.target.class, engine === "local" ? "bpmn-xyflow-hover-bendpoint-hit" : "djs-hit");
+          assert.equal(delivered.target, engine === "local" ? "bpmn-xyflow-connection-visual" : "djs-hit djs-hit-stroke");
+          for (const owner of ["FlightTimeout", "ReserveFlight", "BookingTransaction"]) assert.ok(overlapHit.target.owners.includes(owner));
           await h.noChange(page, initial, "inspecting overlap changes no model");
+          assert.deepEqual((await h.raw(page)).selection, initial.selection);
           await h.save(page, key + "-overlap", { point, overlapHit });
         }
         const r = await connect(h, page, key, "FlightTimeout", "CancelBooking", "bottom", "left", {
@@ -418,8 +436,7 @@ for (const engine of engines)
         return {
           edge: r.edge,
           overlapHit,
-          acceptanceScope: "the intended boundary source control and resulting connection",
-          unresolved: overlap ? ["native overlap receiver baseline"] : [],
+          acceptanceScope: overlap ? "exact delivered overlap hover receiver plus intended boundary source connection" : "the intended boundary source control and resulting connection",
           referenceAffordance:
             engine === "upstream" ? "visible context Connect; no local perimeter port" : null,
         };
@@ -483,7 +500,7 @@ for (const edit of ["resize", "endpoint"])
           policy: "local Task resize extension",
         };
       }
-      await h.chooseEdge(page, made.edge.id);
+      await chooseFollowupEdge(h, page, made.edge.id);
       const old = await h.state(page),
         edge = old.edges[made.edge.id],
         from = await selectedEndpoint(h, page, edge.id, 0);
@@ -601,6 +618,11 @@ async function toggleSubprocess(h, page, id, expanded) {
     await page.mouse.click(at.x, at.y);
   } else {
     await h.clickButton(page, '.djs-context-pad [data-action="replace"]');
+    // The popup clips lower entries; use its ordinary visible search control.
+    await h.clickButton(page, '.djs-popup-search input');
+    await page.keyboard.sendCharacter('Sub-process');
+    assert.equal(await page.$eval('.djs-popup-search input', e => e.value), 'Sub-process');
+    await h.settle(page);
     await h.clickButton(
       page,
       `.djs-popup [data-id="replace-with-${expanded ? "expanded" : "collapsed"}-subprocess"]`,
@@ -927,7 +949,17 @@ for (const engine of engines)
               "native reference self-connection attempt is activated",
             );
             assert.equal(active.prefix, "connect");
-            live = await capture(h, page, key);
+            if (kind === "Participant") {
+              const rejected = await page.evaluate(() => {
+                const d = window.referenceModeler.get("dragging").context(), c = d?.data?.context;
+                return { active: !!d?.active, prefix: d?.prefix, allowed: c?.canExecute, start: c?.start?.id, hover: c?.hover?.id };
+              });
+              assert.deepEqual(rejected, { active: true, prefix: "connect", allowed: false, start: source, hover: source });
+              // Returning to the same invalid pool position can collapse the
+              // preview to zero length. Active rejection is the exact oracle.
+              live = await h.preview(page);
+              await h.save(page, key + "-active-rejection", { rejected, live });
+            } else live = await capture(h, page, key);
             await page.mouse.click(end.x, end.y);
             await h.settle(page);
             start = chosen;
@@ -1006,7 +1038,7 @@ for (const engine of engines)
           assert.equal(route.source, source);
           assert.equal(route.target, source);
           await painted(h, page, moved.after, route);
-          await h.chooseEdge(page, edge.id);
+          await chooseFollowupEdge(h, page, edge.id);
           const preDelete = await h.state(page);
           await h.save(page, key + "-delete-before", { edgeId: edge.id });
           await page.keyboard.press("Delete");
@@ -1086,8 +1118,8 @@ for (const engine of engines)
       assert.ok(edge && other);
       const source = variant === "hovered-source-other-selection",
         index = source ? 0 : edge.points.length - 1;
-      if (source) await h.chooseEdge(page, other.id);
-      else await h.chooseEdge(page, edge.id);
+      if (source) await chooseFollowupEdge(h, page, other.id);
+      else await chooseFollowupEdge(h, page, edge.id);
       const before = await h.state(page),
         from = source
           ? await hoverEndpoint(h, page, edge.id, index)
@@ -1117,7 +1149,7 @@ for (const engine of engines)
       if (["background-rejection", "activated-escape"].includes(variant)) {
         await h.noChange(page, before, variant);
         assert.deepEqual(after.edges, before.edges);
-        await h.chooseEdge(page, edge.id);
+        await chooseFollowupEdge(h, page, edge.id);
         const validFrom = await selectedEndpoint(h, page, edge.id, 0),
           validBefore = await h.state(page),
           validTo = h.screen(validBefore, h.side(b, "top", 0.3));

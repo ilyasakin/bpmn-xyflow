@@ -12,6 +12,9 @@ before(async () => { dom = await setupDOM(); ({ default: Modeler } = await dom.l
 after(async () => dom.cleanup());
 async function fixture() {
   const listeners = new WeakMap(), restores = [];
+  const size = { width: window.innerWidth, height: window.innerHeight };
+  window.innerWidth = 1188; window.innerHeight = 762;
+  restores.push(() => { window.innerWidth = size.width; window.innerHeight = size.height; });
   for (const target of [window, window.SVGElement.prototype, window.HTMLElement.prototype]) {
     const original = target.addEventListener;
     target.addEventListener = function(type, callback, options) {
@@ -52,6 +55,145 @@ const portPoint = h => { const circle = h.port()?.querySelector('.bpmn-xyflow-co
 const markerPoint = h => { const circle = h.m.getContainer().querySelector('.bpmn-xyflow-connect-docking-point'); assert.ok(circle); return { x: Number(circle.getAttribute('cx')), y: Number(circle.getAttribute('cy')) }; };
 async function unchanged(m, before, count) { assert.equal(await m.getXML(), before); assert.equal(m.commandStack.size(), count); }
 async function history(m, before, after) { for (let i = 0; i < 3; i++) { assert.equal(m.undo(), true); assert.equal(await m.getXML(), before); assert.equal(m.redo(), true); assert.equal(await m.getXML(), after); } }
+
+test('D15: clipped selected midpoint/corner grabs stay reachable through fine choice, click/retry, cancel and history', async () => {
+  const h = await fixture(), { m } = h;
+  try {
+    const source = m.getElement('Task_1'), svg = m.getSvg(), container = m.getContainer();
+    const target=m.addShape('bpmn:EndEvent',{x:750,y:350});
+    svg.getBoundingClientRect = () => container.getBoundingClientRect();
+    const positions = [
+      [{x:source.x,y:source.y+40},{x:4,y:350},{x:0,y:1}],
+      [{x:source.x+source.width,y:source.y+40},{x:1184,y:350},{x:0,y:1}],
+      [{x:source.x+50,y:source.y},{x:590,y:4},{x:1,y:0}],
+      [{x:source.x+50,y:source.y+source.height},{x:590,y:758},{x:1,y:0}],
+      ...[[0,0,4,4],[1,0,1184,4],[0,1,4,758],[1,1,1184,758]].map(([right,bottom,x,y]) => [
+        projectRoundedTask(source,10,{x:source.x+(right?source.width:0),y:source.y+(bottom?source.height:0)}),{x,y},null])
+    ];
+    for (const selected of [false,true]) for (const zoom of [.2,.5,1,2,4]) for (const [anchor,screen,tangent] of positions) {
+      const viewport = {x:screen.x-anchor.x*zoom,y:screen.y-anchor.y*zoom,zoom};
+      await m.setViewport(viewport); m.select(selected?source.id:[]);
+      const before = await m.getXML(), count = m.commandStack.size();
+      h.move(anchor,source); const chosen=markerPoint(h);
+      assert.ok(Math.hypot(chosen.x-anchor.x,chosen.y-anchor.y)<1e-8,'projected point differs only by affine floating-point precision');
+      const handle = h.port(), grab = portPoint(h);
+      const at = {x:viewport.x+grab.x*zoom,y:viewport.y+grab.y*zoom};
+      assert.ok(at.x>=6.75-1e-8&&at.x<=1188-6.75+1e-8&&at.y>=6.75-1e-8&&at.y<=762-6.75+1e-8,'whole painted grab has a visible margin');
+      assert.ok(Math.hypot(grab.x-anchor.x,grab.y-anchor.y)*zoom>=12-1e-8);
+      assert.equal(Number(handle.querySelector('.bpmn-xyflow-connect-hit').getAttribute('r'))*zoom,5.75);
+      if(tangent){
+        const next={x:anchor.x+tangent.x/zoom,y:anchor.y+tangent.y/zoom};
+        h.move(next,source);const fine=markerPoint(h);assert.ok(Math.hypot(fine.x-next.x,fine.y-next.y)<1e-8,'one CSSpx perimeter change still chooses a fresh origin');
+        h.move(anchor,source);assert.deepEqual(markerPoint(h),chosen);
+      }
+      const steps=Math.ceil(Math.hypot(grab.x-anchor.x,grab.y-anchor.y)*zoom);
+      for(let step=1;step<=steps;step++){
+        const fraction=step/steps;
+        const point={x:anchor.x+(grab.x-anchor.x)*fraction,y:anchor.y+(grab.y-anchor.y)*fraction};
+        h.hover(point,fraction===1?handle.querySelector('.bpmn-xyflow-connect-hit'):source);
+        h.move(point,fraction===1?handle.querySelector('.bpmn-xyflow-connect-hit'):source);
+        assert.equal(h.port(),handle);assert.deepEqual(markerPoint(h),chosen);assert.deepEqual(portPoint(h),grab);
+      }
+      h.press(grab);h.up(grab,source);await unchanged(m,before,count);
+      assert.deepEqual(markerPoint(h),chosen);assert.deepEqual(portPoint(h),grab);
+      h.press(grab);h.move({x:grab.x+30/zoom,y:grab.y+30/zoom},source);h.key('Escape');h.up(grab,source);
+      await unchanged(m,before,count);
+      h.move(anchor,source);const retry=portPoint(h);h.press(retry);
+      const end={x:target.x,y:target.y+target.height/2};
+      h.move(end,target);h.up(end,target);
+      const edge=m.getGraph().edges.at(-1);assert.equal(edge.source,source);assert.deepEqual(xy(edge.waypoints[0]),chosen);
+      const after=await m.getXML();await history(m,before,after);assert.equal(m.undo(),true);
+    }
+  }finally{h.close();}
+});
+
+test('D15: real chrome rectangles constrain placement; full occlusion creates no hidden press target', async () => {
+  const h=await fixture(),{m}=h;
+  try{
+    const source=m.getElement('Task_1'),anchor={x:source.x+source.width,y:source.y+40};
+    const before=await m.getXML(),count=m.commandStack.size();m.select(source.id);
+    const overlay=document.createElement('div');overlay.className='bpmn-xyflow-minimap';m.getContainer().appendChild(overlay);
+    overlay.getBoundingClientRect=()=>({left:anchor.x+8,top:anchor.y-80,right:anchor.x+200,bottom:anchor.y+80,width:192,height:160});
+    h.move(anchor,source);const grab=portPoint(h);assert.ok(grab.x+5.75<anchor.x+8||grab.y+5.75<anchor.y-80||grab.y-5.75>anchor.y+80);
+    overlay.getBoundingClientRect=()=>m.getContainer().getBoundingClientRect();h.move(anchor,source);
+    assert.equal(h.port(),null);assert.equal(m.getContainer().querySelector('.bpmn-xyflow-connect-hit'),null);
+    overlay.remove();h.move(anchor,source);assert.ok(h.port());await unchanged(m,before,count);
+  }finally{h.close();}
+});
+
+test('D15: a partially visible canvas intersects browser and visual viewport limits without pan or history', async () => {
+  const h=await fixture(),{m}=h,descriptor=Object.getOwnPropertyDescriptor(window,'visualViewport');
+  try{
+    const source=m.getElement('Task_1'),anchor={x:source.x+source.width,y:source.y+40};
+    const before=await m.getXML(),count=m.commandStack.size();m.select(source.id);
+    window.innerWidth=900;window.innerHeight=500;
+    for(const visual of [null,{offsetLeft:70,offsetTop:20,width:700,height:350}]){
+      Object.defineProperty(window,'visualViewport',{configurable:true,value:visual});
+      const right=visual?770:900,bottom=visual?370:500;
+      const viewport={x:right-4-anchor.x,y:bottom-4-anchor.y,zoom:1};await m.setViewport(viewport);
+      h.move(anchor,source);const grab=portPoint(h);
+      assert.ok(grab.x+viewport.x+6.75<=right&&grab.y+viewport.y+6.75<=bottom);
+      assert.deepEqual(markerPoint(h),anchor);assert.deepEqual(m.getViewport(),viewport);await unchanged(m,before,count);
+    }
+  }finally{
+    if(descriptor)Object.defineProperty(window,'visualViewport',descriptor);else delete window.visualViewport;
+    h.close();
+  }
+});
+
+test('F23-T: acquired source tether survives context-pad exit over an existing route and remains reusable', async () => {
+  const h=await fixture(),{m}=h;
+  try{
+    window.innerWidth=1800;window.innerHeight=1200;
+    m.getContainer().getBoundingClientRect=()=>({left:0,top:0,right:1800,bottom:1200,width:1800,height:1200});
+    const source=m.getElement('Task_1');m.moveShape(source,{x:-315-source.x,y:-100-source.y});
+    const target=m.addShape('bpmn:Task',{x:9,y:-157});
+    const edge=m.connect(source,target);m.updateWaypoints(edge,[{x:-215,y:-60.163732815549736},{x:-103,y:-60.163732815549736},{x:-103,y:-117.16373281554974},{x:9,y:-117.16373281554974}]);
+    const viewport={x:1177.5051283563844,y:773.8441792855494,zoom:1.05701804056138};await m.setViewport(viewport);m.select(source.id);
+    const pad=m.getContainer().querySelector('.bpmn-xyflow-context-pad');
+    pad.getBoundingClientRect=()=>({left:956.2443127669906,top:668,right:1018.2443127669906,bottom:842,width:62,height:174});
+    const graph=x=>({x:(x-viewport.x)/viewport.zoom,y:(710-viewport.y)/viewport.zoom});
+    const resize=m.getContainer().querySelector('[data-resize-dir="e"]'),line=h.gfx(edge).querySelector('.bpmn-xyflow-connection-visual');
+    const before=await m.getXML(),count=m.commandStack.size();
+    h.hover(graph(950),resize);h.move(graph(950),resize);
+    const handle=h.port(),anchor=markerPoint(h),grab=portPoint(h);
+    for(const x of [959,969,979,989,998,1008,1018,1028]){
+      const hit=x<1018?pad:x===1018?line:handle.querySelector('.bpmn-xyflow-connect-hit');
+      h.hover(graph(x),hit);h.move(graph(x),hit);
+      assert.ok(h.port()===handle,'crossing the old edge must not replace the already-displayed source control at x='+x);
+      assert.deepEqual(markerPoint(h),anchor);assert.deepEqual(portPoint(h),grab);
+    }
+    h.press(grab);h.up(grab,source);await unchanged(m,before,count);
+    h.press(grab);const end={x:target.x,y:target.y+30};h.move(end,target);h.up(end,target);
+    assert.deepEqual(xy(m.getGraph().edges.at(-1).waypoints[0]),anchor);
+    assert.deepEqual(edge.waypoints.map(xy),[{x:-215,y:-60.163732815549736},{x:-103,y:-60.163732815549736},{x:-103,y:-117.16373281554974},{x:9,y:-117.16373281554974}]);
+    await history(m,before,await m.getXML());
+  }finally{h.close();}
+});
+
+test('F05/D15: a selected pool beside its right context pad retains a reachable exact source after an invalid loop', async () => {
+  const h=await fixture(),{m}=h;
+  try{
+    window.innerWidth=1800;window.innerHeight=1200;
+    m.getContainer().getBoundingClientRect=()=>({left:0,top:0,right:1800,bottom:1200,width:1800,height:1200});
+    await m.importXML(await readFile('test/fixtures/scenarios/order-payment-delivery.bpmn','utf8'));
+    const source=m.getElement('BuyerPool'),target=m.getElement('SellerPool');
+    const viewport={x:420.6476373682847,y:346.1470149483662,zoom:.881178045639757};await m.setViewport(viewport);m.select(source.id);
+    const right=viewport.x+(source.x+source.width)*viewport.zoom;
+    const pad=m.getContainer().querySelector('.bpmn-xyflow-context-pad');
+    pad.getBoundingClientRect=()=>({left:right+6,top:367,right:right+68,bottom:485,width:62,height:118});
+    const point={x:(1724-viewport.x)/viewport.zoom,y:(447-viewport.y)/viewport.zoom};
+    const before=await m.getXML(),count=m.commandStack.size();h.move(point,source);
+    const anchor=markerPoint(h),grab=portPoint(h),radius=5.75/viewport.zoom;
+    assert.equal(anchor.x,1480);assert.ok(grab.x*viewport.zoom+viewport.x+6.75<=1800);
+    assert.ok(grab.x+radius<(right+6-viewport.x)/viewport.zoom,'grab clears the actual right context pad');
+    h.press(grab);h.move({x:source.x+source.width,y:source.y+20},source);h.up({x:source.x+source.width,y:source.y+20},source);
+    await unchanged(m,before,count);
+    h.move(point,source);const retry=portPoint(h);h.press(retry);const end={x:target.x+target.width,y:target.y+50};h.move(end,target);h.up(end,target);
+    const edge=m.getGraph().edges.at(-1);assert.equal(edge.type,'bpmn:MessageFlow');assert.equal(edge.source,source);assert.equal(edge.target,target);
+    assert.deepEqual(xy(edge.waypoints[0]),anchor);await history(m,before,await m.getXML());
+  }finally{h.close();}
+});
 
 for (const selected of [false, true]) test(`AX-01/02: all four perimeter sides remain continuous, selected=${selected}`, async () => {
   const h = await fixture(), { m } = h;

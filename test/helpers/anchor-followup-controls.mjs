@@ -62,11 +62,22 @@ export async function revealNative(h, page, points) {
   throw new Error("Native pan did not reveal the requested controls");
 }
 
+/** An invalid reference drag restores selection; another click would toggle it off. */
+export async function chooseFollowupEdge(h, page, id) {
+  const before = await h.raw(page);
+  if (before.selection.length !== 1 || before.selection[0] !== id) await h.chooseEdge(page, id);
+  assert.deepEqual(
+    (await h.raw(page)).selection,
+    [id],
+    "the requested edge alone owns its visible editing controls",
+  );
+}
+
 export async function endpoint(h, page, id, side) {
   const state = await h.state(page),
     points = state.edges[id]?.points;
   assert.ok(points);
-  await h.chooseEdge(page, id);
+  await chooseFollowupEdge(h, page, id);
   const index = side === "source" ? 0 : points.length - 1;
   if (state.engine === "local") return selectedBendpoint(page, id, index);
   const point = h.screen(state, points[index]);
@@ -353,6 +364,7 @@ export async function connectNative(
   target,
   {
     side = "right",
+    sourceFraction = 0.5,
     targetSide = "left",
     fraction = 0.35,
     continuing = false,
@@ -365,6 +377,7 @@ export async function connectNative(
     source,
     target,
     side,
+    sourceFraction,
     targetSide,
     fraction,
     continuing,
@@ -377,8 +390,8 @@ export async function connectNative(
   const port = reference
     ? { point: await h.contextConnect(page, source) }
     : continuing
-      ? await continuingPort(h, page, source, side)
-      : await h.sourcePort(page, source, side);
+      ? await continuingPort(h, page, source, side, sourceFraction)
+      : await h.sourcePort(page, source, side, sourceFraction);
   const before = await h.state(page),
     to = h.screen(before, h.side(h.node(before, target), targetSide, fraction));
   assert.ok(

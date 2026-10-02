@@ -1,6 +1,7 @@
 /** Batch C, UI-only and unrun. The two-instance workflow is registered separately. */
 import assert from "node:assert/strict";
 import { writeFile } from "node:fs/promises";
+import { panNativeExact } from "../helpers/anchor-followup-input-policy.mjs";
 import { connectNative } from "../helpers/anchor-followup-controls.mjs";
 export const anchorInterruptionCases = [];
 const add = (id, name, run) =>
@@ -68,44 +69,35 @@ add("F26-R", "sample-switch-after-click-to-arm", async (h, page, key) => {
     b = loaded.nodes.find((n) => n.name === "T1");
   assert.ok(a && b);
   await h.noChange(page, loaded, "old armed source cannot replay into the replacement graph");
-  const next = await connectNative(h, page, a.id, b.id, { side: "left", targetSide: "top" });
+  // The incoming connection owns B's left midpoint; use the free left-quarter
+  // outline point to test a fresh source after sample replacement.
+  const next = await connectNative(h, page, a.id, b.id, {
+    side: "left",
+    sourceFraction: 0.25,
+    targetSide: "top",
+  });
   await h.creationOnly(next.before, next.after, next.edge);
   await h.history(page, next.before, next.after);
   return { next: next.edge, replacedSource: source };
 });
 
-async function panBy(h, page, dx) {
-  const before = await h.state(page);
-  let remaining = dx;
-  for (let count = 0; Math.abs(remaining) > 0.5 && count < 20; count++) {
-    const point = await h.blank(page),
-      delta = Math.max(-100, Math.min(100, remaining));
-    await page.mouse.move(point.x, point.y);
-    await page.mouse.down({ button: "middle" });
-    try {
-      await page.mouse.move(point.x + delta, point.y, { steps: 6 });
-    } finally {
-      await page.mouse.up({ button: "middle" });
-    }
-    await h.settle(page);
-    const after = await h.raw(page);
-    remaining = dx - (after.viewport.x - before.viewport.x);
-  }
-  assert.ok(Math.abs(remaining) <= 0.5, "native pan reaches its measured screen offset");
-  const after = await h.state(page);
-  assert.equal(after.xml, before.xml);
-  assert.deepEqual(after.history, before.history);
-  assert.deepEqual(after.selection, before.selection, "native pan retains the selected source");
-}
 add("F27", "selected-source-at-canvas-edge-and-pan-recovery", async (h, page, key) => {
   const { source, target } = await h.tasks(page, "left", 1);
   await h.selectNode(page, source);
   let s = await h.state(page),
     anchor = h.side(h.node(s, source), "right");
   const desired = Math.min(1799, s.container.x + s.container.width) - 4;
-  await panBy(h, page, desired - h.screen(s, anchor).x);
+  const positioning = await panNativeExact(h, page, desired - h.screen(s, anchor).x);
   s = await h.state(page);
   const point = h.screen(s, anchor);
+  assert.equal(
+    point.x,
+    h.screen({ ...positioning.before, viewport: positioning.expectedViewport }, anchor).x,
+  );
+  assert.ok(
+    Math.abs(point.x - desired) <= 0.5,
+    "chosen outline is within the unavoidable half-pixel integer pan quantization",
+  );
   await page.mouse.move(point.x, point.y, { steps: 8 });
   await h.settle(page);
   const edgeEvidence = await page.evaluate((id) => {
@@ -144,12 +136,12 @@ add("F27", "selected-source-at-canvas-edge-and-pan-recovery", async (h, page, ke
   await page.screenshot({ path: `${h.output}/${key}-edge-reachability.png`, fullPage: true });
   await writeFile(
     `${h.output}/${key}-edge-reachability.json`,
-    JSON.stringify({ requested: point, source, evidence: edgeEvidence }, null, 2),
+    JSON.stringify({ requested: point, positioning, source, evidence: edgeEvidence }, null, 2),
   );
   await h.noChange(page, s, "edge hover is non-mutating");
   // Always exercise visible recovery and retain its evidence, even if clipping
   // was found. Recovery cannot turn an unreachable initial control into a pass.
-  await panBy(h, page, -180);
+  await panNativeExact(h, page, -180);
   const next = await connectNative(h, page, source, target, { side: "right", targetSide: "right" });
   await h.creationOnly(next.before, next.after, next.edge);
   await h.history(page, next.before, next.after);
