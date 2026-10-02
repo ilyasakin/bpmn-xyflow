@@ -62,8 +62,43 @@ boundary owner's outline is accessible through invisible label padding while
 label dragging remains intact, and plain/Shift source-control presses both
 activate Connect without lasso. Exact Cancel XML is preserved. The corrected
 matrix contains 39 cases, retaining all 38 and adding the wider-gap movement
-regression. These corrections still require their own hosted native run and
-paired-preview exploratory review.
+regression. At that freeze, hosted native execution and paired-preview exploratory review
+were still pending.
+
+### Second hosted execution
+
+Revision `edc9a168949b76d517368c72932db3ebdff56c34` completes 30 of 39 cases.
+The remaining failures are not acceptance passes:
+
+- Five local checks wrongly apply tethered-grab immobility to ordinary
+  coincident ports. The recorded native pointer changes from 899 to 898 CSS px;
+  at zoom 1.057018 the corresponding marker change is exactly 0.94605765 graph
+  units. The revised expectation must follow actual delivered input for a
+  coincident port, while retaining exact immobility for a displaced grab
+- AX-13 identifies a further source defect: its displaced boundary grab's
+  approach crosses its label and enclosing transaction. Owner resolution replaces
+  the boundary's affordance before the pointer reaches the grab. An existing
+  tether's approach must remain stable without intercepting normal label/body
+  presses
+- Three upstream context cases require exact reference activation/snapping
+  expectations. Zero-motion mousedown does not start Connect; click/native
+  dragstart does. Its measured target snapping must be kept separate from local
+  explicit pointer docking
+
+The boundary-tether correction is independently verified through every delivered
+artifact coordinate, using pointermove followed by mousemove with exact owner,
+marker, grab and XML checks. The other eight failed cases now have reviewed
+input/reference expectations; their native rerun remains pending.
+
+The WIP paired site `da87e1ce34e4b709ddb93810c1df44e3f3195e71` pins this
+`edc9a168` runtime. Its production browser/import checks pass and its deployment
+is Ready. Independent manual exploration has verified off-center task origins on
+all four sides, selected/unselected examples, immediate continuation from a
+just-used destination, stationary/1px-jitter no-op behavior, deliberate visible
+loops, and the original clean-process circle movement/resize reproductions.
+This is bounded evidence on that exact WIP revision, not broad acceptance; it
+does not include the subsequent tether correction. The wider 62 variants across
+22 follow-up workflows remain prepared/unrun.
 
 The baseline observations and unexecuted scope below are retained as the original
 case specification. Per-case execution evidence is in the run artifact

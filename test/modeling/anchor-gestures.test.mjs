@@ -35,6 +35,7 @@ async function fixture() {
   const port = () => m.getContainer().querySelector('.bpmn-xyflow-connect-handle');
   return { m, gfx, port,
     move(point, node) { hit = node?.nodeType ? node : node ? gfx(node) : null; call(window, 'mousemove', input(point, hit || m.getSvg()), 'onMouseMove'); },
+    hover(point, node) { const target=node?.nodeType?node:gfx(node); call(m.getSvg(),'pointermove',input(point,target,{pointerType:'mouse'})); },
     press(point, extra = {}) { const handle = port(); assert.ok(handle, 'visible connection port'); const target=handle.querySelector('.bpmn-xyflow-connect-hit'); call(window,'pointerdown',input(point,target,{pointerId:1,type:'pointerdown',...extra}),'pointerDown'); const event=input(point,target,extra); call(m.getSvg(),'mousedown',event,'onMouseDown'); call(handle, 'mousedown', event); },
     controlPress(point,target) { call(m.getSvg(),'mousedown',input(point,target),'onMouseDown'); },
     shiftPress(point,node) { const target=gfx(node),event=input(point,target,{shiftKey:true,pointerId:1,type:'pointerdown'}); call(window,'pointerdown',event,'pointerDown'); call(m.getSvg(),'mousedown',event,'onMouseDown'); },
@@ -358,6 +359,17 @@ test('boundary outline remains reachable through its own label padding without t
     assert.ok(grab.x+hitRadius<label.x-padding||grab.x-hitRadius>label.x+label.width+padding||grab.y+hitRadius<label.y-padding||grab.y-hitRadius>label.y+label.height+padding,'grab hit disc clears the complete label hit rectangle');
     const crossing={x:anchor.x+(grab.x-anchor.x)*.5,y:anchor.y+(grab.y-anchor.y)*.5};
     h.move(crossing,labelHit);assert.deepEqual(portPoint(h),grab,'crossing the label along the tether retains the grab');
+    const frame=m.getElement('BookingTransaction'),frameHit=h.gfx(frame).querySelector('.bpmn-xyflow-shape-hit');
+    // Native pointermove emits Viewer element.hover before window mousemove.
+    // AX-13 crosses the label, then the enclosing transaction on its tether.
+    for(const fraction of [.6,.75,.9,1]) {
+      const at={x:anchor.x+(grab.x-anchor.x)*fraction,y:anchor.y+(grab.y-anchor.y)*fraction};
+      h.hover(at,frameHit);assert.equal(h.port()?.getAttribute('data-connect-source'),boundary.id,'Viewer hover cannot replace the tether owner');
+      h.move(at,frameHit);assert.equal(h.port()?.getAttribute('data-connect-source'),boundary.id,'window mousemove cannot replace the tether owner');
+      assert.deepEqual(portPoint(h),grab,'complete native approach retains the exact displaced grab');
+    }
+    const outside={x:frame.x+50,y:frame.y+40};h.hover(outside,frameHit);h.move(outside,frameHit);assert.equal(h.port()?.getAttribute('data-connect-source'),frame.id,'leaving the corridor discovers the actual underlying owner');
+    h.move(point,labelHit);assert.equal(h.port()?.getAttribute('data-connect-source'),boundary.id);
     const text={x:label.x+label.width*.8,y:label.y+label.height/2};h.move(text,labelHit);assert.ok(!h.port(),'genuine label text keeps its own hover target');
     await unchanged(m,before,count);
     h.controlPress(text,labelHit);h.move({x:text.x+25,y:text.y+18},label);h.up({x:text.x+25,y:text.y+18},label);

@@ -2,6 +2,7 @@
 // these controls natively; only this ordinary application initialization/import
 // code mutates the model. empty.bpmn matches the local demo's initial document.
 import Modeler from "bpmn-js/lib/Modeler";
+import { observeReferenceConnect } from "../helpers/anchor-reference-connect.mjs";
 import { observeReferenceBackgroundClicks } from "../helpers/hover-background.mjs";
 import "bpmn-js/dist/assets/diagram-js.css";
 import "bpmn-js/dist/assets/bpmn-js.css";
@@ -18,6 +19,7 @@ const samples = [
   ],
 ];
 const model = new Modeler({ container: "#viewer" });
+window.anchorReferenceConnect = observeReferenceConnect(model);
 window.referenceModeler = model; // Read-only evidence access in the native test.
 window.anchorReferenceClicks = observeReferenceBackgroundClicks(model.get("eventBus"));
 const byId = (id) => document.getElementById(id),

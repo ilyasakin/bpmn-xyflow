@@ -12,6 +12,10 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import puppeteer from "puppeteer";
 import { BpmnModdle } from "bpmn-moddle";
+import {
+  assertSourcePortApproach,
+  referenceTaskTopConnectExpectation,
+} from "../helpers/anchor-native-oracles.mjs";
 import { selectedBendpoint } from "../helpers/native-bendpoint-control.mjs";
 import {
   nativeWheelStepBudget,
@@ -239,16 +243,24 @@ async function open(engine, sample = "Empty diagram") {
     await page.setViewport({ width: 1800, height: 1200 });
     await page.evaluateOnNewDocument(() => {
       window.anchorInput = [];
-      for (const type of ["mousedown", "mousemove", "mouseup", "keydown", "keyup", "wheel"])
+      for (const type of [
+        "mousedown",
+        "mousemove",
+        "mouseup",
+        "click",
+        "dragstart",
+        "keydown",
+        "keyup",
+        "wheel",
+      ])
         window.addEventListener(
           type,
           (event) => {
-            const matrix =
-              event.type === "mouseup"
-                ? document
-                    .querySelector("#viewer .bpmn-xyflow-viewport, #viewer .viewport")
-                    ?.getScreenCTM()
-                : null;
+            const matrix = ["mousemove", "mouseup"].includes(event.type)
+              ? document
+                  .querySelector("#viewer .bpmn-xyflow-viewport, #viewer .viewport")
+                  ?.getScreenCTM()
+              : null;
             const delivered = matrix
               ? new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse())
               : null;
@@ -608,7 +620,8 @@ async function sourcePort(page, id, which, f = 0.5, { selected = false } = {}) {
       evidence.anchor,
       "unobstructed visible port coincides with its docking point",
     );
-  await page.mouse.move(evidence.grabScreen.x, evidence.grabScreen.y, { steps: 8 });
+  const pressPoint = { x: Math.round(evidence.grabScreen.x), y: Math.round(evidence.grabScreen.y) };
+  await page.mouse.move(pressPoint.x, pressPoint.y, { steps: 8 });
   await settle(page);
   const reached = await page.evaluate((id) => {
     const g = document.querySelector(`.bpmn-xyflow-connect-handle[data-connect-source="${id}"]`),
@@ -617,27 +630,31 @@ async function sourcePort(page, id, which, f = 0.5, { selected = false } = {}) {
       ),
       p = g?.querySelector(".bpmn-xyflow-connect-port");
     if (!g || !m || !p) return null;
-    const q = new DOMPoint(
-        Number(p.getAttribute("cx")),
-        Number(p.getAttribute("cy")),
-      ).matrixTransform(p.getScreenCTM()),
-      hit = document.elementFromPoint(q.x, q.y);
+    const delivered = window.anchorInput.findLast((e) => e.type === "mousemove"),
+      hit = delivered && document.elementFromPoint(delivered.x, delivered.y);
     return {
       anchor: { x: Number(m.getAttribute("cx")), y: Number(m.getAttribute("cy")) },
       hit: g === hit || g.contains(hit),
+      delivered,
     };
   }, id);
   assert.ok(reached, "visible source control survives the actual approach to its grab point");
   assert.equal(reached.hit, true);
-  assert.deepEqual(
-    reached.anchor,
-    evidence.anchor,
-    "approaching the tethered handle does not move the chosen docking point",
-  );
   const after = await state(page);
+  assertSourcePortApproach({
+    evidence,
+    reached,
+    pressPoint,
+    projectedPoint: projected(node(before, id), graph(after, pressPoint)),
+  });
   assert.equal(after.xml, before.xml, "hover changes no model");
   assert.deepEqual(after.history, before.history);
-  return { point: evidence.grabScreen, anchor: evidence.anchor, requested, evidence };
+  return {
+    point: pressPoint,
+    anchor: reached.anchor,
+    requested,
+    evidence: { ...evidence, reached },
+  };
 }
 
 async function contextConnect(page, id) {
@@ -940,6 +957,8 @@ async function create(
     staticDropHit.owners.includes(target),
     `intended target is present in the actual hit stack: ${JSON.stringify(staticDropHit)}`,
   );
+  if (before.engine === "upstream")
+    await page.evaluate(() => window.anchorReferenceConnect.clear());
   let live;
   await drag(page, start.point, to, {
     capture: async () => {
@@ -971,12 +990,75 @@ async function create(
       1e-7,
       "committed source retains the exact visible docking marker",
     );
-  near(
-    edge.points.at(-1),
-    expectedTarget,
-    epsilon,
-    "committed target follows delivered native pointer on the outline",
-  );
+  let reference;
+  if (before.engine === "upstream") {
+    reference = await page.evaluate(() => window.anchorReferenceConnect.events);
+    const rawEnd = reference.findLast((e) => e.type === "connect.end" && e.phase === "raw"),
+      bpmn = reference.findLast((e) => e.type === "connect.end" && e.phase === "post-bpmn"),
+      snapped = reference.findLast((e) => e.type === "connect.end" && e.phase === "post-grid"),
+      command = reference.findLast((e) => e.phase === "command");
+    assert.equal(rawEnd?.input?.trusted, true);
+    assert.deepEqual(rawEnd.point, { x: Math.round(delivered.x), y: Math.round(delivered.y) });
+    const expectedHints = referenceTaskTopConnectExpectation(
+      node(before, source),
+      targetNode,
+      delivered,
+    );
+    assert.deepEqual(
+      bpmn?.point,
+      expectedHints.connectionEnd,
+      "reference Task top drop snaps ten units into its bounds",
+    );
+    assert.deepEqual(
+      bpmn?.start,
+      expectedHints.connectionStart,
+      "reference SequenceFlow starts at the source midpoint before crop",
+    );
+    assert.deepEqual(
+      bpmn?.snapped,
+      { x: true, y: true },
+      "both BPMN-snapped axes are protected from grid resnapping",
+    );
+    assert.deepEqual(
+      snapped?.point,
+      bpmn.point,
+      "default grid preserves this already-snapped Task coordinate",
+    );
+    assert.deepEqual(
+      snapped?.hints,
+      expectedHints,
+      "observed snapping agrees with the independently derived Task policy",
+    );
+    assert.equal(snapped?.oracleError, undefined);
+    assert.ok(
+      snapped?.expectedRoute?.length >= 2,
+      "pre-command pinned layout/crop reconstruction exists",
+    );
+    assert.deepEqual(
+      [snapped.source, snapped.target, command?.source, command?.target],
+      [source, target, source, target],
+    );
+    assert.deepEqual(
+      command.hints,
+      snapped.hints,
+      "the command receives the observed snapped inputs",
+    );
+    assert.equal(edge.points.length, snapped.expectedRoute.length);
+    edge.points.forEach((point, index) =>
+      near(
+        point,
+        snapped.expectedRoute[index],
+        1e-7,
+        "reference route follows actual pre-command snapping, layout and cropping",
+      ),
+    );
+  } else
+    near(
+      edge.points.at(-1),
+      expectedTarget,
+      epsilon,
+      "committed target follows delivered native pointer on the outline",
+    );
   const rendered = await renderEnds(page, edge.id);
   near(rendered.start, screen(after, edge.points[0]), 0.05, "painted source and DI coincide");
   near(rendered.end, screen(after, edge.points.at(-1)), 0.05, "painted target and DI coincide");
@@ -990,6 +1072,7 @@ async function create(
         chosenTarget: chosen,
         staticDropHit,
         deliveredTarget: delivered,
+        reference,
         preview: live,
         edge,
         rendered,
@@ -1603,27 +1686,34 @@ try {
           button = await contextConnect(page, source),
           before = await state(page),
           p = { x: Math.round(button.x), y: Math.round(button.y) };
-        await page.mouse.move(p.x, p.y);
-        await page.mouse.down();
-        let pending;
-        try {
-          if (distance) await page.mouse.move(p.x, p.y + distance);
-          await settle(page);
-          pending = await page.evaluate(() => {
-            const d = window.referenceModeler.get("dragging").context();
-            return d ? { active: !!d.active, prefix: d.prefix } : null;
-          });
-          assert.ok(pending, "actual context-pad press starts the reference Connect gesture");
-          assert.equal(pending.prefix, "connect");
-          assert.equal(
-            pending.active,
-            false,
-            "at most five delivered CSS pixels do not activate Connect",
-          );
-        } finally {
-          await page.mouse.up();
-        }
+        await page.evaluate(() => window.anchorReferenceConnect.clear());
+        // The advertised reference entry arms on click (or HTML dragstart),
+        // not mousedown. Test the real click-to-arm path before its threshold.
+        await page.mouse.click(p.x, p.y);
         await settle(page);
+        if (distance) await page.mouse.move(p.x, p.y + distance);
+        await settle(page);
+        const pending = await page.evaluate(() => {
+          const d = window.referenceModeler.get("dragging").context();
+          return d ? { active: !!d.active, prefix: d.prefix } : null;
+        });
+        const activation = await page.evaluate(() => window.anchorReferenceConnect.events);
+        assert.ok(
+          activation.some(
+            (e) =>
+              e.phase === "context" &&
+              e.type === "click" &&
+              e.action === "connect" &&
+              e.input.trusted,
+          ),
+          "the actual advertised context entry receives a trusted click",
+        );
+        assert.deepEqual(
+          pending,
+          { active: false, prefix: "connect" },
+          "at most five delivered CSS pixels leave the click-armed Connect inactive",
+        );
+        assert.equal(await preview(page), null, "inactive Connect shows no active route");
         await noChange(
           page,
           before,
@@ -1636,7 +1726,7 @@ try {
           mode: "context",
           name: key + "-valid",
         });
-        return { distance, pending, nextValid: valid.edge };
+        return { distance, pending, activation, nextValid: valid.edge };
       },
     );
   // Reference gesture policy uses the real global Connect palette entry. Unlike
