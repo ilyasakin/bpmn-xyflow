@@ -50,7 +50,8 @@ test('container movement, internal bends, resize, undo and repeated redo are exa
   const before = geometry(m), points = edge.waypoints.map(p=>({...p}));
   m.moveShapes([parent,a],{x:70,y:30});
   assert.equal(a.x,480+70);
-  assert.deepEqual(edge.waypoints, points.map(p=>({x:p.x+70,y:p.y+30})));
+  assert.deepEqual(edge.waypoints, points.map(p=>({ ...p, x:p.x+70,y:p.y+30,
+    ...(p.original ? { original: { ...p.original, x:p.original.x+70, y:p.original.y+30 } } : {}) })));
   for(let i=0;i<3;i++){ m.undo(); assert.deepEqual(geometry(m),before); assert.deepEqual(edge.waypoints,points); m.redo(); }
   const moved = geometry(m);
   m.resizeShape(parent,{x:parent.x-25,y:parent.y-20,width:parent.width+80,height:parent.height+40});

@@ -154,8 +154,10 @@ try {
           const connectionEnd = { x: nodes[0].x + nodes[0].width, y: nodes[0].y + nodes[0].height * 3 / 4 };
           const pinned = modeler.connect(nodes[2], nodes[0], { connectionStart, connectionEnd });
           assert.ok(pinned);
-          assert.deepEqual(pinned.waypoints[0], connectionStart);
-          assert.deepEqual(pinned.waypoints.at(-1), connectionEnd);
+          assert.deepEqual(pinned.waypoints[0], { ...connectionStart,
+            original: { x: nodes[2].x + nodes[2].width / 2, y: connectionStart.y } });
+          assert.deepEqual(pinned.waypoints.at(-1), { ...connectionEnd,
+            original: { x: nodes[0].x + nodes[0].width / 2, y: connectionEnd.y } });
           modeler.undo();
           assert.equal(await modeler.getXML(), beforePinned);
           const boundary = modeler.addShape('bpmn:BoundaryEvent', {

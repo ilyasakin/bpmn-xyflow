@@ -286,7 +286,13 @@ test('selected connection endpoints outrank colliding hover-create ports without
   m.clearSelection();hover(a);assert.ok(m.getContainer().querySelector('.bpmn-xyflow-connect-handle'));
   m.select(edge.id);assert.equal(m.getContainer().querySelector('.bpmn-xyflow-connect-handle'),null);
   hover(b);assert.ok(m.getContainer().querySelector('.bpmn-xyflow-connect-handle'),'nonoverlapping valid port remains available');
-  hover(a);assert.equal(m.getContainer().querySelector('.bpmn-xyflow-connect-handle'),null,'selected endpoint is not covered');
+  hover(a);
+  const port=m.getContainer().querySelector('.bpmn-xyflow-connect-handle'),grab=port?.querySelector('.bpmn-xyflow-connect-hit'),marker=m.getContainer().querySelector('.bpmn-xyflow-connect-docking-point');
+  const endpoint=m.getContainer().querySelector('.bpmn-xyflow-bendpoint-hit[data-bend-index="0"]');
+  assert.ok(port&&grab&&marker&&endpoint,'both distinct controls remain available');
+  assert.deepEqual({x:Number(marker.getAttribute('cx')),y:Number(marker.getAttribute('cy'))},xy(edge.waypoints)[0]);
+  assert.ok(Math.hypot(Number(grab.getAttribute('cx'))-Number(endpoint.getAttribute('cx')),Number(grab.getAttribute('cy'))-Number(endpoint.getAttribute('cy')))>Number(grab.getAttribute('r'))+Number(endpoint.getAttribute('r')),'outward create hit does not cover the selected endpoint hit');
+  const children=[...port.parentNode.children];assert.ok(children.indexOf(port)<children.indexOf(endpoint.parentNode),'selected endpoint control remains above the create grab');
   assert.equal(await m.getXML(),before);assert.equal(m.commandStack.size(),size);
   m.clearSelection();const group=m.addShape('bpmn:Group',{x:1000,y:500});hover(group);assert.equal(m.getContainer().querySelector('.bpmn-xyflow-connect-handle'),null,'ineligible source has no create port');
  }finally{h.close();}

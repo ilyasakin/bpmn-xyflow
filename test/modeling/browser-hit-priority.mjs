@@ -220,7 +220,10 @@ async function selectedEndpointPriority() {
     await page.click('#undo-btn');assert.equal((await state(page)).xml,before.xml,'native Undo restores exact XML');
     // A selected route must not globally disable unrelated visible create ports.
     const other=await screen(page,{x:500,y:490});await page.mouse.move(other.x,other.y);
-    const port=await screen(page,{x:550,y:490});assert.equal((await hit(page,port)).port,true,'nonoverlapping unrelated create port is still usable');
+    // The source affordance now follows the requested outline point. Approach
+    // that visible position instead of assuming center hover creates a fixed right port.
+    const port=await screen(page,{x:550,y:490});await page.mouse.move(port.x,port.y,{steps:8});await settle(page);
+    assert.equal((await hit(page,port)).port,true,'nonoverlapping unrelated create port is still usable');
     const end=await screen(page,{x:660,y:270});assert.equal((await hit(page,end)).id,'Target');
     try{await page.mouse.move(port.x,port.y);await page.mouse.down();await page.mouse.move(end.x,end.y,{steps:12});await page.mouse.up();}finally{await page.mouse.up().catch(()=>{});}
     const created=await state(page);assert.equal(created.flows.length,before.flows.length+1);assert.ok(created.flows.some(f=>f.source==='Other'&&f.target==='Target'));

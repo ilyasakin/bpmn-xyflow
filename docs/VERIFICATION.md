@@ -1,11 +1,36 @@
 # Verification checkpoints — 2026-10-01
 
+## Reopened anchor interaction review — 2026-10-02
+
+Fresh user feedback and independent native exploration reopened acceptance on the
+previously tested site `99e608a` / runtime `5a994b6`. The prior results below are
+historical evidence for those cases, not proof that ordinary anchor workflows
+were complete. The new [risk-based interaction matrix](ANCHOR-UX-CASES.md) defines
+visible actions and expected geometry, semantics and history before assertions.
+
+Confirmed blockers in the published preview:
+
+- **D1 — Source choice:** hovering top, left or bottom still offers only the
+  right-side source handle; selection exposes resize controls, not other origins
+- **D2 — Accidental creation:** a stationary source-port click or 1px jitter
+  creates a self-loop and an Undo entry. Deliberate valid BPMN loops are a
+  separate, supported behavior; the reference drag activation threshold is 5px
+- **D3 — Moving a connected task:** the unchanged circular target docking moves
+  to its bounding rectangle, leaving a visible gap
+- **D4 — Resizing a freshly connected task:** a small width change moves the
+  right-side source to the top and leaves the circle target detached
+
+Repairs and structural checks are in progress. New native cases, independent
+reference gestures, exact-head CI and paired preview exploration are required.
+No newly prepared test is counted as executed, and existing green suites are
+regressions rather than acceptance for these newly reported workflows.
+
 This records revision-bound core acceptance. It does not establish upstream
 API/plugin compatibility or exhaustive behavioral equivalence.
 [PARITY.md](PARITY.md) is the current acceptance ledger;
 [SCENARIOS.md](SCENARIOS.md) describes workflows and sources.
 
-## Completed bounded acceptance
+## Historical bounded acceptance — 2026-10-01
 
 - Current fully green configured library revision: **`5a994b6`**, in
   [run 36859641614](https://github.com/ilyasakin/bpmn-xyflow/actions/runs/36859641614).

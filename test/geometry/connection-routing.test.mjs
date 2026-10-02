@@ -304,7 +304,8 @@ test("pinned reconnect preserves unrelated manual bends and opposite pointer doc
   });
   close(route[0], { x: 200, y: 145 });
   close(route.at(-1), points.at(-1));
-  assert.deepEqual(route.slice(2), points.slice(2));
+  assert.deepEqual(route.slice(2, -1), points.slice(2, -1));
+  assert.deepEqual(route.at(-1), { ...points.at(-1), original: { x: 650, y: 350 } });
   assert.ok(orthogonal(route));
 });
 

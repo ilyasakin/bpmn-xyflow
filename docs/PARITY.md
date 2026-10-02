@@ -1,10 +1,41 @@
 # Core parity verification
 
+## Reopened anchor interaction review — 2026-10-02
+
+Fresh user feedback and independent native exploration reopened acceptance on the
+previously tested site `99e608a` / runtime `5a994b6`. The prior results below are
+historical evidence for those cases, not proof that ordinary anchor workflows
+were complete. The new [risk-based interaction matrix](ANCHOR-UX-CASES.md) defines
+visible actions and expected geometry, semantics and history before assertions.
+
+Confirmed blockers in the published preview:
+
+- **D1 — Source choice:** hovering top, left or bottom still offers only the
+  right-side source handle; selection exposes resize controls, not other origins
+- **D2 — Accidental creation:** a stationary source-port click or 1px jitter
+  creates a self-loop and an Undo entry. Deliberate valid BPMN loops are a
+  separate, supported behavior; the reference drag activation threshold is 5px
+- **D3 — Moving a connected task:** the unchanged circular target docking moves
+  to its bounding rectangle, leaving a visible gap
+- **D4 — Resizing a freshly connected task:** a small width change moves the
+  right-side source to the top and leaves the circle target detached
+
+The first reviewed correction prepares a perimeter-following grab control,
+measured drag activation, logical outline docking, and atomic refusal rollback.
+Local checks pass 528 unit tests, 417 generated-export XSD validations plus ten
+native fixtures, lint (zero errors), build, workflow validation and the 85-file
+packed-consumer gate. These are preflight results, not user-interaction acceptance.
+The first 38 native cases are prepared but unrun; additional matrix rows remain
+open. Independent reference gestures, exact-head CI and paired preview
+exploration are required.
+No newly prepared test is counted as executed, and existing green suites are
+regressions rather than acceptance for these newly reported workflows.
+
 This is an implementation and verification ledger, not a claim of full bpmn-js
 compatibility. The XYFlow engine and direct API remain intentional. Passing a
 round-trip through this project's own parser is insufficient evidence of validity.
 
-## Current reconstruction — 2026-10-01
+## Historical reconstruction — 2026-10-01
 
 The recovered branch starts from library
 `7bc8a3a2610267a11d18556720b8744e93924e3d`. That historical native gate was red:
@@ -149,7 +180,7 @@ reference's normal creation level rather than its import-order quirk. These
 intentional differences, and measured precision/shared-title differences, remain
 separate from equal-behavior assertions.
 
-## Completed acceptance and continuing regression requirements
+## Historical acceptance and continuing regression requirements
 
 The recorded automated and manual acceptance gates are complete for site
 `99e608a` and library `5a994b6`. Manual testing used paste import; file-chooser

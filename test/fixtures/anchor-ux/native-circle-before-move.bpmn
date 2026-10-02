@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0" xmlns:color="http://www.omg.org/spec/BPMN/non-normative/color/1.0" xmlns:xml="http://www.w3.org/XML/1998/namespace" xmlns="" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_1" isExecutable="false">
+    <bpmn:startEvent id="StartEvent_1">
+      <bpmn:outgoing>SequenceFlow_muqa2jk4_7</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:task id="Task_muqa1yix_5" name="Check request">
+      <bpmn:incoming>SequenceFlow_muqa2jk4_7</bpmn:incoming>
+      <bpmn:outgoing>SequenceFlow_muqa30xw_8</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:endEvent id="EndEvent_muqa25gc_6">
+      <bpmn:incoming>SequenceFlow_muqa30xw_8</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="SequenceFlow_muqa2jk4_7" sourceRef="StartEvent_1" targetRef="Task_muqa1yix_5" />
+    <bpmn:sequenceFlow id="SequenceFlow_muqa30xw_8" sourceRef="Task_muqa1yix_5" targetRef="EndEvent_muqa25gc_6" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_1">
+      <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1">
+        <dc:Bounds x="75" y="100" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_muqa1yix_5_di" bpmnElement="Task_muqa1yix_5">
+        <dc:Bounds x="136" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_muqa25gc_6_di" bpmnElement="EndEvent_muqa25gc_6">
+        <dc:Bounds x="259" y="101" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="232" y="142" width="90" height="20" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="SequenceFlow_muqa2jk4_7_di" bpmnElement="SequenceFlow_muqa2jk4_7">
+        <di:waypoint x="111" y="118" />
+        <di:waypoint x="124" y="118" />
+        <di:waypoint x="124" y="124.125" />
+        <di:waypoint x="136" y="124.125" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="SequenceFlow_muqa30xw_8_di" bpmnElement="SequenceFlow_muqa30xw_8">
+        <di:waypoint x="236" y="120" />
+        <di:waypoint x="249" y="120" />
+        <di:waypoint x="249" y="109.37218800914619" />
+        <di:waypoint x="261.7912776253634" y="109.37218800914619" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

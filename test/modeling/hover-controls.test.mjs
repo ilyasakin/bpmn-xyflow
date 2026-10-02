@@ -232,7 +232,7 @@ test('promoted selected hit circles edit their exact source, target and interior
       h.down(hit,start);h.target(kind==='interior'?null:c);h.move(destination);assert.notEqual(await m.getXML(),before,'selected promoted control activates actual route preview');
       h.up(destination);assert.deepEqual(xy(other),otherPoints);assert.equal(m.commandStack.size(),size+1);
       if(kind==='interior')assert.deepEqual(xy(edge)[index],destination);
-      else {assert.equal(edge[kind],c);assert.deepEqual(xy(edge)[kind==='source'?edge.waypoints.length-1:0],opposite);}
+      else {assert.equal(edge[kind],c);assert.deepEqual(edge.waypoints[kind==='source'?edge.waypoints.length-1:0],opposite,'unchanged opposite visible and logical docking metadata are exact');}
       await exactHistory(m,before,await m.getXML());m.destroy();
     }
   }finally{root.close();}
