@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { runInNewContext } from 'node:vm';
 import { Window } from 'happy-dom';
-import { assertAffordance, collectViewportAffordance, collectViewportSurfaces, collectPanGeometry, nativePanViewport, panSteps, viewportSourceCases } from './browser-viewport-source-grabs.mjs';
+import { advertisedCornerCases } from './browser-advertised-corner-grabs.mjs';
+import { assertAffordance, collectViewportAffordance, collectViewportSurfaces, collectPanGeometry, nativePanViewport, panSteps, viewportSourceCases, advertisedCornerPoint } from './browser-viewport-source-grabs.mjs';
 
 test('native viewport plan covers each boundary and chrome risk with independent case lifecycles', () => {
   assert.equal(viewportSourceCases.length, 12);
@@ -125,4 +126,18 @@ test('serialized native pan observer uses the actual root SVG inverse for both d
   const context={document:{querySelector:s=>{assert.equal(s,'#viewer .bpmn-xyflow-canvas');return svg;}}};
   const result=runInNewContext(`(${collectPanGeometry.toString()})([{x:100,y:248},{x:118,y:250}])`,context);
   assert.deepEqual(JSON.parse(JSON.stringify(result)),{matrix:{a:2,b:0,c:0,d:2,e:20,f:48},points:[{x:40,y:100},{x:49,y:101}]});
+});
+
+
+test('D20 separately covers the actual advertised resize corners at low/high zoom without replacing painted-origin cases', () => {
+  assert.equal(viewportSourceCases.length,12);assert.equal(advertisedCornerCases.length,8);
+  assert.equal(new Set(advertisedCornerCases.map(c=>c.id)).size,8);
+  for(const direction of ['nw','ne','sw','se'])assert.deepEqual(advertisedCornerCases.filter(c=>c.direction===direction).map(c=>c.zoom),[.5,2]);
+  const node={x:1076,y:595,width:100,height:80};
+  assert.deepEqual(advertisedCornerPoint(node,'se'),{x:1176,y:675});
+  assert.deepEqual(advertisedCornerPoint(node,'sw'),{x:1076,y:675});
+  assert.deepEqual(advertisedCornerPoint(node,'ne'),{x:1176,y:595});
+  assert.deepEqual(advertisedCornerPoint(node,'nw'),{x:1076,y:595});
+  assert.throws(()=>advertisedCornerPoint(node,'s'));assert.throws(()=>advertisedCornerPoint({...node,x:NaN},'se'));
+  assert.ok(advertisedCornerCases.every(c=>c.engine==='local'&&c.sample==='Empty diagram'&&typeof c.run==='function'));
 });

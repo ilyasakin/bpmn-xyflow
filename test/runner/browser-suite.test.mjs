@@ -165,3 +165,11 @@ test('six unchanged boundary diagnostics have a dedicated bounded supervisor', (
   assert.equal(BROWSER_SUITE_TIMEOUTS['test:browser:boundary-acquisition'], 6 * 215000 + 90000);
   assert.ok(BROWSER_SUITE_TIMEOUTS['test:browser:boundary-acquisition'] < 30 * 60000);
 });
+
+
+test('eight advertised corners have an independent whole-case budget', () => {
+  assert.equal(BROWSER_SUITES['test:browser:advertised-corner'], 'test/modeling/browser-advertised-corner-grabs.mjs');
+  assert.equal(BROWSER_SUITE_TIMEOUTS['test:browser:advertised-corner'], 8 * 215000 + 90000);
+  assert.ok(BROWSER_SUITE_TIMEOUTS['test:browser:advertised-corner'] < 40 * 60000);
+  assert.equal(BROWSER_SUITE_TIMEOUTS['test:browser:viewport-source'], 12 * 215000 + 90000);
+});

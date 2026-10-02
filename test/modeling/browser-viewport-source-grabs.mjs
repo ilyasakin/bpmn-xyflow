@@ -159,7 +159,7 @@ export function assertAffordance(e, layout, owner) {
   assert.deepEqual({ x: e.tether.x1, y: e.tether.y1 }, e.anchor); assert.deepEqual({ x: e.tether.x2, y: e.tether.y2 }, e.grabGraph);
 }
 
-async function approach(h, page, source, desired, key, phase, requireAttributionCrossing = false) {
+async function approach(h, page, source, desired, key, phase, requireAttributionCrossing = false, advertisedDirection) {
   const before = await h.state(page), start = h.screen(before, desired);
   await page.evaluate(() => { window.viewportSourceAcquireMarker = window.anchorInput.at(-1); });
   await page.mouse.move(start.x, start.y, { steps: 12 }); await h.settle(page);
@@ -172,7 +172,13 @@ async function approach(h, page, source, desired, key, phase, requireAttribution
   assert.equal(acquired?.trusted, true);
   assert.ok(Math.abs(acquired.x - start.x) <= 1 && Math.abs(acquired.y - start.y) <= 1, 'delivered acquiring point is within native pixel quantization');
   const initial = await readAffordance(page, source), layout = await surfaces(page);
-  await h.save(page, `${key}-${phase}-marker`, { desired, start, acquired, initial, layout });
+  const acquisition = advertisedDirection ? await page.evaluate(point => {
+    const hit = document.elementFromPoint(point.x, point.y), resize = hit?.closest('.bpmn-xyflow-resize-handle');
+    return { className: hit?.getAttribute('class'), resizeDirection: resize?.getAttribute('data-resize-dir') };
+  }, acquired) : null;
+  await h.save(page, `${key}-${phase}-marker`, { desired, start, acquired, initial, layout, acquisition });
+  if (advertisedDirection) assert.equal(acquisition.resizeDirection, advertisedDirection,
+    'the delivered acquisition is the visible resize corner that advertises this grab');
   assertAffordance(initial, layout, source);
   assert.ok(initial.taskRadius > 0, 'actual painted Task corner radius is available');
   const expectedOrigin = projectRoundedTask(h.node(before, source), initial.taskRadius, h.graph(before, acquired));
@@ -204,7 +210,7 @@ async function approach(h, page, source, desired, key, phase, requireAttribution
   return reached;
 }
 
-async function workflow(h, page, key, { name, direction, zoom, offset }) {
+export async function viewportSourceWorkflow(h, page, key, { name, direction, zoom, offset, advertised = false }) {
   const first = await h.state(page), start = first.nodes.find(n => n.type === 'bpmn:StartEvent');
   await h.selectNode(page, start.id); await page.keyboard.press('Delete'); await h.settle(page);
   assert.equal((await h.raw(page)).nodes.some(n => n.id === start.id), false);
@@ -213,11 +219,12 @@ async function workflow(h, page, key, { name, direction, zoom, offset }) {
   const target = await h.palette(page, 'Task', { x: 900 + offset[0], y: 650 + offset[1] });
   await h.selectNode(page, source);
   let state = await h.state(page);
-  const desired = roundedTaskPoint(h.node(state, source), 10, direction), client = positionFor(name, await surfaces(page));
+  const sourceNode = h.node(state, source);
+  const desired = advertised ? advertisedCornerPoint(sourceNode, direction) : roundedTaskPoint(sourceNode, 10, direction), client = positionFor(name, await surfaces(page));
   const current = h.screen(state, desired), pan = await panBy(h, page, client.x - current.x, client.y - current.y);
   state = await h.state(page); const positioned = h.screen(state, desired);
   assert.ok(Math.abs(positioned.x - client.x) <= .51 && Math.abs(positioned.y - client.y) <= .51, 'native integer pan reaches the intended boundary within pixel quantization');
-  const before = await h.state(page), port = await approach(h, page, source, desired, key, 'initial', name === 'south-east');
+  const before = await h.state(page), port = await approach(h, page, source, desired, key, 'initial', !advertised && name === 'south-east', advertised ? direction : undefined);
   assert.deepEqual(before.selection, [source], 'the selected source owns its resize controls');
   await page.mouse.click(port.press.x, port.press.y); await h.settle(page);
   const clicked = await h.noChange(page, before, 'stationary edge grab creates no model/history command');
@@ -233,7 +240,7 @@ async function workflow(h, page, key, { name, direction, zoom, offset }) {
   } });
   const cancelled = await h.noChange(page, before, 'Escape returns the complete document/history exactly');
   assert.deepEqual(cancelled.viewport, before.viewport); assert.deepEqual(cancelled.selection, before.selection); assert.equal(await h.preview(page), null);
-  const again = await approach(h, page, source, desired, key, 'retry', name === 'south-east');
+  const again = await approach(h, page, source, desired, key, 'retry', !advertised && name === 'south-east', advertised ? direction : undefined);
   let committedPreview;
   await h.drag(page, again.press, to, { capture: async () => {
     committedPreview = await h.preview(page); assert.ok(committedPreview?.length > 5);
@@ -256,19 +263,25 @@ async function workflow(h, page, key, { name, direction, zoom, offset }) {
   // from the constrained source has already been positively demonstrated.
   const middle = { x: 900, y: 650 }, p = h.screen(restored, desired);
   const recovery = await panBy(h, page, Math.sign(middle.x - p.x) * 100, Math.sign(middle.y - p.y) * 100);
-  return { name, direction, requestedZoom: zoom, actualZoom: before.viewport.zoom, source, target, client, positioned, pan, port, cancelledPreview, committedPreview, edge, rendered, recovery };
+  return { name, direction, advertised, requestedZoom: zoom, actualZoom: before.viewport.zoom, source, target, client, positioned, pan, port, cancelledPreview, committedPreview, edge, rendered, recovery };
+}
+
+export function advertisedCornerPoint(node, direction) {
+  assert.ok(['nw','ne','sw','se'].includes(direction));
+  assert.ok([node.x,node.y,node.width,node.height].every(Number.isFinite));
+  return { x: node.x + (direction.endsWith('e') ? node.width : 0),
+    y: node.y + (direction.startsWith('s') ? node.height : 0) };
 }
 
 export const viewportSourceCases = definitions.map(([name, direction, zoom, offset], index) => ({
   id: `D15-${String(index + 1).padStart(2, '0')}`, name, engine: 'local', sample: 'Empty diagram',
-  direction, zoom, run: (h, page, key) => workflow(h, page, key, { name, direction, zoom, offset })
+  direction, zoom, run: (h, page, key) => viewportSourceWorkflow(h, page, key, { name, direction, zoom, offset })
 }));
 
-export async function runViewportSourceCases() {
-  const output = 'test-artifacts/viewport-source-grabs', basePort = Number(process.env.BPMN_VIEWPORT_SOURCE_PORT || 5320);
+export async function runViewportSourceCases(cases = viewportSourceCases, { output = 'test-artifacts/viewport-source-grabs', basePort = Number(process.env.BPMN_VIEWPORT_SOURCE_PORT || 5320) } = {}) {
   await mkdir(output, { recursive: true });
   const persist = (name, result, signal) => writeFile(`${output}/${name}`, JSON.stringify(result, null, 2), { signal });
-  const results = await runFollowupCases(viewportSourceCases, {
+  const results = await runFollowupCases(cases, {
     createHarness: (_c, i) => createAnchorHarness({ port: basePort + i, output }),
     verifyStopped: (_h, _c, i) => assertFollowupPortClosed(basePort + i),
     captureFailure: async (h, page, key, error, signal) => {
@@ -280,10 +293,10 @@ export async function runViewportSourceCases() {
     persistProgress: (snapshot, i, signal) => persist(`results-progress-${String(i + 1).padStart(3, '0')}.json`, snapshot, signal),
     persistAggregate: (snapshot, signal) => persist('results.json', snapshot, signal)
   });
-  assert.equal(results.length, viewportSourceCases.length);
+  assert.equal(results.length, cases.length);
   const failed = results.filter(r => r.status !== 'passed');
   console.log(`Viewport source grabs: ${results.length - failed.length}/${results.length} passed`);
-  assert.equal(failed.length, 0, `Native D15 failures; see ${output}/results.json`);
+  assert.equal(failed.length, 0, `Native viewport source failures; see ${output}/results.json`);
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   if (process.argv.includes('--list')) console.log(JSON.stringify(viewportSourceCases.map(({run:_run,...c})=>({...c,status:'prepared-unrun'})),null,2));

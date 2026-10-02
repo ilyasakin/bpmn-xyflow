@@ -27,6 +27,7 @@ export const BROWSER_SUITES = Object.freeze({
   'test:browser:container-resize': 'test/modeling/browser-container-resize.mjs',
   'test:browser:viewport-source': 'test/modeling/browser-viewport-source-grabs.mjs',
   'test:browser:boundary-acquisition': 'test/modeling/browser-boundary-acquisition.mjs',
+  'test:browser:advertised-corner': 'test/modeling/browser-advertised-corner-grabs.mjs',
   'test:browser:anchor-ownership': 'test/modeling/browser-anchor-ownership.mjs',
   'test:browser:anchor-followup-a-local': 'test/modeling/browser-anchor-followup-a-local.mjs',
   'test:browser:anchor-followup-a-upstream': 'test/modeling/browser-anchor-followup-a-upstream.mjs',
@@ -44,6 +45,7 @@ export const BROWSER_SUITES = Object.freeze({
 export const BROWSER_SUITE_TIMEOUTS = Object.freeze({
   'test:browser:viewport-source': 2670000,
   'test:browser:boundary-acquisition': 1380000,
+  'test:browser:advertised-corner': 1810000,
   'test:browser:anchor-followup-a-local': 2455000,
   'test:browser:anchor-followup-a-upstream': 305000,
   'test:browser:anchor-followup-b-local-1': 2025000,

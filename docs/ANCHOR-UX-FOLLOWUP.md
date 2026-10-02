@@ -116,10 +116,10 @@ its planned variants have an executed result or an explicit remaining blocker.
 Do not infer full anchor acceptance from either the green39 cases or one of
 these batches alone.
 
-## Current defect register and verification checkpoint
+## Recorded 947 checkpoint and subsequent verification
 
 This is an active investigation, not a completion statement. The first-run
-results above remain historical evidence; the latest native checkpoint is
+results above remain historical evidence; the table below records checkpoint
 library `947a36071969f083953dd9e99d1fc85f6b6439b0`, paired with site
 `39c9fca12c773122da0a5b368624daff4ee1e4a6` (2026-10-02).
 
@@ -153,9 +153,9 @@ its production interaction/import gates, but that does not close the open
 library cases. All fixes must be independently reviewed and rerun against their
 exact published head before this register is closed.
 
-### Reviewed correction prepared after this checkpoint
+### Correction published as 201214b6
 
-The next candidate contains the scoped D18 cancellation handler and D19
+The published correction contains the scoped D18 cancellation handler and D19
 acquired-tether retention across editor chrome, both independently reviewed.
 D19 leaves the attribution link and other chrome input ownership unchanged and
 releases the source control on corridor departure or editor exit. It preserves
@@ -163,6 +163,37 @@ the chosen outline location. The reference popup/lane setup corrections and the
 two retained D14 assertions are also independently reviewed; their native input,
 full-model guards and exact history checks remain in place.
 
-These source and test corrections still require a combined exact-head native
-rerun. The twelve-case viewport result above remains failed until that rerun
-establishes the actual outcome.
+All twelve viewport cases subsequently passed on `201214b6`, as did the
+container, anchor, ownership and hit suites. The expanded reference F11 case
+passed on test-only follow-up `a0108a7`; its correction checks the actual active
+Connect receiver after the source context pad closes, at the unchanged drop
+point. The historical failed results above are retained as investigation evidence.
+
+
+## Remaining acquisition findings
+
+- **D20 / QA-EDGE-01:** independent manual testing on site `9fa7caad` / runtime
+  `201214b6` found that an advertised corner grab moves when approached directly
+  from the selected Task's resize square. The very first 2 px move reproduced
+  the drift. Visiting the painted marker first worked, but is an undisclosed
+  extra step and does not satisfy the advertised direct approach. The reviewed
+  source correction starts acquisition at the actual current resize-control
+  pointer while preserving the separately projected docking marker, directional
+  guard, corridor and press areas. The exact manual regression passes locally.
+  Eight separate low/high-zoom native corner cases and the repaired paired
+  manual replay remain pending; the original twelve painted-origin cases remain.
+- **F23-B reproducibility:** one `201214b6` push run lost an acquired boundary
+  source control before press, causing a transaction drag instead of connection.
+  The same PR run, later ordinary runs, two independent manual attempts and six
+  passive diagnostic repetitions passed with identical intended coordinates.
+  This remains unresolved. The first diagnostic driver added browser round
+  trips, so a reduced capture removes those critical-interval calls rather than
+  treating passing repetitions as a fix. No speculative product change is made
+  for this finding.
+
+The independent visible-control report also verified off-midpoint left/top
+origins against exported XML, selected click/retry without resize, stationary
+no-op versus deliberate loop, reconnect with a fixed opposite endpoint, true
+circle/diamond docking through move/resize, populated transaction resize, and
+exact Undo/Redo. Held-drag Escape is established by hosted native input; the
+manual tool's atomic drag is explicitly not substituted for that gesture.

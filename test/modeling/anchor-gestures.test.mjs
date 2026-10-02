@@ -57,6 +57,69 @@ const markerPoint = h => { const circle = h.m.getContainer().querySelector('.bpm
 async function unchanged(m, before, count) { assert.equal(await m.getXML(), before); assert.equal(m.commandStack.size(), count); }
 async function history(m, before, after) { for (let i = 0; i < 3; i++) { assert.equal(m.undo(), true); assert.equal(await m.getXML(), before); assert.equal(m.redo(), true); assert.equal(await m.getXML(), after); } }
 
+test('D20: the advertised resize-corner grab is reachable directly without visiting its rounded marker', async () => {
+  const h=await fixture(),{m}=h;
+  try {
+    // Captured manual geometry in canvas-local coordinates (native canvas top78).
+    // Happy DOM has no context-pad layout; only measured attribution/minimap
+    // boxes are supplied, never inferred context-pad geometry.
+    window.innerWidth=1180;window.innerHeight=679;
+    const box=(element,left,top,right,bottom)=>element.getBoundingClientRect=()=>({left,top,right,bottom,width:right-left,height:bottom-top});
+    box(m.getContainer(),0,0,1180,679);box(m.getSvg(),0,0,1180,679);
+    const source=m.getElement('Task_1');m.moveShape(source,{x:1076-source.x,y:595-source.y});
+    const target=m.addShape('bpmn:Task',{x:650,y:302});await m.setViewport({x:0,y:0,zoom:1});m.select(source.id);
+    box(m.getContainer().querySelector('.bjs-powered-by'),1112,641.90625,1165,664);
+    const minimap=document.createElement('div');minimap.className='bpmn-xyflow-minimap';m.getContainer().appendChild(minimap);box(minimap,970,483,1170,633);
+    const resize=m.getContainer().querySelector('[data-resize-dir="se"]'),start={x:1176,y:675};
+    h.hover(start,resize);h.move(start,resize);
+    const handle=h.port(),anchor=markerPoint(h),grab=portPoint(h),before=await m.getXML(),count=m.commandStack.size();
+    assert.ok(Math.hypot(anchor.x-1173.0710678118655,anchor.y-672.0710678118654)<1e-9);
+    assert.ok(Math.hypot(grab.x-1101.99999325,grab.y-672.071067811866)<1e-9, JSON.stringify({anchor,grab}));
+    for(let i=1;i<=37;i++){
+      const point={x:1176-2*i,y:Math.round(675-3*i/37)};
+      const receiver=i<=2?resize:i>=35?handle.querySelector('.bpmn-xyflow-connect-hit'):source;
+      h.hover(point,receiver);h.move(point,receiver);
+      assert.equal(h.port(),handle);assert.deepEqual(markerPoint(h),anchor,'advertised corner origin stays fixed at delivered step '+i);assert.deepEqual(portPoint(h),grab);
+    }
+    await unchanged(m,before,count);assert.deepEqual(m.getSelection(),[source.id]);
+    h.press(grab);h.up(grab,source);assert.deepEqual(markerPoint(h),anchor);assert.deepEqual(portPoint(h),grab);await unchanged(m,before,count);
+    h.press(grab);const end={x:target.x+25,y:target.y};h.move(end,target);assert.ok(m.getContainer().querySelector('.bpmn-xyflow-connect-preview'));h.up(end,target);
+    assert.deepEqual(xy(m.getGraph().edges.at(-1).waypoints[0]),anchor);await history(m,before,await m.getXML());
+  }finally{h.close();}
+});
+
+test('D20: advertised corners keep directional grab travel distinct from resize, perimeter choice and departure across zooms', async () => {
+  const h=await fixture(),{m}=h;
+  try {
+    const source=m.getElement('Task_1');m.getSvg().getBoundingClientRect=()=>m.getContainer().getBoundingClientRect();
+    for(const zoom of [.2,.5,1,2,4])for(const [dir,right,bottom]of [['nw',false,false],['ne',true,false],['sw',false,true],['se',true,true]]){
+      const corner={x:source.x+(right?source.width:0),y:source.y+(bottom?source.height:0)};
+      const camera={x:(right?1184:4)-corner.x*zoom,y:(bottom?758:4)-corner.y*zoom,zoom};await m.setViewport(camera);m.select([]);m.select(source.id);
+      const resize=m.getContainer().querySelector(`[data-resize-dir="${dir}"]`),before=await m.getXML(),count=m.commandStack.size();
+      h.hover(corner,resize);h.move(corner,resize);const handle=h.port(),anchor=markerPoint(h),grab=portPoint(h);
+      assert.ok(Math.hypot(anchor.x-projectRoundedTask(source,10,corner).x,anchor.y-projectRoundedTask(source,10,corner).y)<1e-8);
+      const start={x:camera.x+corner.x*zoom,y:camera.y+corner.y*zoom},end={x:Math.round(camera.x+grab.x*zoom),y:Math.round(camera.y+grab.y*zoom)};
+      const steps=Math.ceil(Math.hypot(end.x-start.x,end.y-start.y));
+      for(let i=1;i<=steps;i++){
+        const css={x:Math.round(start.x+(end.x-start.x)*i/steps),y:Math.round(start.y+(end.y-start.y)*i/steps)};
+        const point={x:(css.x-camera.x)/zoom,y:(css.y-camera.y)/zoom};
+        const receiver=Math.hypot(point.x-grab.x,point.y-grab.y)*zoom<=5.75?handle.querySelector('.bpmn-xyflow-connect-hit'):
+          Math.abs(point.x-corner.x)<=4&&Math.abs(point.y-corner.y)<=4?resize:source;
+        h.hover(point,receiver);h.move(point,receiver);assert.equal(h.port(),handle);assert.deepEqual(markerPoint(h),anchor);assert.deepEqual(portPoint(h),grab);
+      }
+      await unchanged(m,before,count);assert.deepEqual(m.getSelection(),[source.id]);
+      // A genuine blank-canvas departure releases the advertised control.
+      const blank={x:(594-camera.x)/zoom,y:(381-camera.y)/zoom};h.hover(blank,m.getSvg());h.move(blank,null);assert.equal(h.port(),null);
+      h.hover(corner,resize);h.move(corner,resize);assert.deepEqual(markerPoint(h),anchor);assert.deepEqual(portPoint(h),grab);
+      // The original square still starts Resize, never Connect.
+      h.hover(corner,resize);h.move(corner,resize);h.controlPress(corner,resize);
+      h.move({x:corner.x+(right?20:-20)/zoom,y:corner.y+(bottom?20:-20)/zoom},null);
+      assert.equal(m.getContainer().querySelector('.bpmn-xyflow-connect-preview'),null);assert.notEqual(source.width,100);
+      h.key('Escape');assert.equal(source.width,100);await unchanged(m,before,count);
+    }
+  }finally{h.close();}
+});
+
 test('viewport native southeast: actual small-step approach survives attribution HTML without changing origin', async () => {
   const h=await fixture(),{m}=h;
   try {

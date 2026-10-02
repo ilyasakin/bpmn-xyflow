@@ -286,3 +286,34 @@ jobs:
           path: test-artifacts/
           if-no-files-found: ignore
           retention-days: 14
+
+  advertised-corner:
+    name: Native advertised corner source acquisition
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Select installed sandbox-capable Chrome
+        run: |
+          CHROME_PATH="$(command -v google-chrome)"
+          test -x "$CHROME_PATH"
+          "$CHROME_PATH" --version
+          readlink -f "$CHROME_PATH"
+          echo "PUPPETEER_EXECUTABLE_PATH=$CHROME_PATH" >> "$GITHUB_ENV"
+      - name: Exercise all advertised corner approaches at low and high zoom
+        run: node test/run-browser-suite.mjs test:browser:advertised-corner
+      - name: Upload advertised corner evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bpmn-advertised-corner-evidence
+          path: test-artifacts/
+          if-no-files-found: ignore
+          retention-days: 14
