@@ -9,6 +9,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import puppeteer from 'puppeteer';
 import { BpmnModdle } from 'bpmn-moddle';
+import { installNativeSourceHitCapture, visibleSourceProbe, assertVisibleSourceProbe } from '../helpers/native-source-hit-policy.mjs';
 
 const require=createRequire(import.meta.url),oracle=new BpmnModdle();
 assert.equal(require('bpmn-js/package.json').version,'18.30.1','native comparison uses the pinned upstream release');
@@ -59,6 +60,7 @@ async function setup(engine,xml,zoom) {
     }
     return result.warnings.map(w=>w.message);
   },{engine,xml,zoom});assert.deepEqual(warnings,[],`${engine} setup warnings`);
+  await page.evaluate(installNativeSourceHitCapture);
   return{page,errors};
   }catch(error){await page.close().catch(()=>{});throw error;}
 }
@@ -75,16 +77,20 @@ async function clearSelection(page) {
   await page.mouse.click(blank.x,blank.y);await settle(page);assert.deepEqual(await page.evaluate(()=>window.hitEngine.selection()),[],'native background click clears previous selection overlays');
 }
 async function settle(page){await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));}
+async function history(page) {return page.evaluate(()=>window.upstream?{index:window.upstream.get('commandStack')._stackIdx,undo:window.upstream.get('commandStack').canUndo(),redo:window.upstream.get('commandStack').canRedo()}:{size:window.modeler.commandStack.size(),undo:window.modeler.canUndo(),redo:window.modeler.canRedo()});}
 async function sample(page,center,offset,id) {
   // Remove selection handles through native input before every probe.
   await clearSelection(page);
+  const selectionBefore=await page.evaluate(()=>window.hitEngine.selection()),historyBefore=await history(page);
+  await page.evaluate(()=>{window.nativeHitCapture.events.length=0;});
   const p=await screen(page,center);p.y+=offset;
   await page.mouse.move(p.x,p.y);const target=await hit(page,p);
   assert.equal(target.inside,true,`native probe is inside the visible canvas: ${JSON.stringify(p)}`);
   await page.mouse.click(p.x,p.y);
   await settle(page);
   const selection=await page.evaluate(()=>window.hitEngine.selection());
-  return{offset,point:p,target,selection,expectedShape:id};
+  const native=await page.evaluate(()=>{const c=window.nativeHitCapture,input=c.events.slice(),down=input.find(e=>e.type==='mousedown');return{input,restoredControl:down?c.control(document.elementFromPoint(down.point.x,down.point.y),down.point):null};});
+  return{offset,point:p,target,selection,expectedShape:id,selectionBefore,historyBefore,historyAfter:await history(page),...native};
 }
 async function diagnoseBookingEndpoint(page) {
   // Diagnostic evidence only. Keep the original strict paired probes above;
@@ -170,9 +176,9 @@ async function paired(name,xml,zoom,center,id,{ring,label=false,connections=['Fl
         await writeFile(`test-artifacts/browser-hit-${name}-${engine}-diagnostics.json`,JSON.stringify(diagnostics,null,2));
       }
     }
-    // All outcomes must match. The sole intentional policy difference is
-    // imported external labels above later-imported routes; pinned upstream
-    // acknowledges this import ordering defect in BpmnOrderingProvider.
+    // Selection matches except the exact imported-label order baseline and
+    // fixed measured points that visibly hit the local source Connect tool.
+    // Invisible padding over the owner or an unrelated shape is never allowed.
     const candidates=[id,id+'_label',...connections];
     for(const engine of ['upstream','local']) {
       const probe=pair[engine][0];
@@ -183,8 +189,9 @@ async function paired(name,xml,zoom,center,id,{ring,label=false,connections=['Fl
     let intentionalDifferences=0;
     for(let i=0;i<pair.upstream.length;i++) {
       const u=pair.upstream[i],l=pair.local[i];
-      if(u.ring){assert.deepEqual(u.selection,[id],'upstream ring point actually selects boundary');assert.deepEqual(l.selection,[id],'local ring point actually selects boundary');}
-      if(name==='external-label-over-route') {
+      if(visibleSourceProbe(name,u)) {
+        assertVisibleSourceProbe(name,u,l);intentionalDifferences++;
+      } else if(name==='external-label-over-route') {
         // Exact observed baseline at each point, not a blanket allowance for
         // either selection or any upstream-edge/local-shape mismatch.
         const onRoute=u.label||Math.abs(u.offset)<=7.5*zoom;
@@ -192,7 +199,11 @@ async function paired(name,xml,zoom,center,id,{ring,label=false,connections=['Fl
         assert.deepEqual(l.selection,[id+'_label'],'local imported label remains consistently selectable');
         assert.equal(u.target.id,u.selection[0]);assert.equal(l.target.id,l.selection[0]);
         if(onRoute)intentionalDifferences++;
-      } else assert.deepEqual(l.selection,u.selection,`same native selection at offset ${u.offset??'glyph'}`);
+      } else {
+        if(u.ring){assert.deepEqual(u.selection,[id],'upstream ring point actually selects boundary');assert.deepEqual(l.selection,[id],'local ring point actually selects boundary');}
+        assert.deepEqual(l.selection,u.selection,`same native selection at offset ${u.offset??'glyph'}`);
+        assert.deepEqual(l.historyAfter,l.historyBefore,'ordinary shape/edge selection adds no command');
+      }
     }
     if(name==='external-label-over-route')assert.ok(intentionalDifferences>0,'intentional difference must be observed, never counted as equality');
     results.push({name,status:intentionalDifferences?'intentional-difference':'passed',intentionalDifferences,upstream:pair.upstream,local:pair.local});console.log(`PASS native hit priority ${name}`);
@@ -202,6 +213,47 @@ async function paired(name,xml,zoom,center,id,{ring,label=false,connections=['Fl
     // redundant screenshot of its now-background tab (which can stall Chrome).
     for(const {page,engine}of pages)if(!pair[engine]){await page.bringToFront().catch(()=>{});await page.screenshot({path:`test-artifacts/browser-hit-${name}-${engine}-failure.png`,fullPage:true}).catch(()=>{});}
   } finally {await writeFile('test-artifacts/browser-hit-priority-results.json',JSON.stringify(results,null,2));for(const {page}of pages)await page.close().catch(()=>{});}
+}
+
+async function unrelatedTargetOutsidePaint(kind) {
+  const name=`source-halo-${kind}-pass-through`,expected=kind==='neighbor'?'Neighbor':'HaloFlow';let page;
+  let xml=fixture(shape('Neighbor','task',236,150,100,80));
+  if(kind==='edge') {
+    xml=fixture(shape('Other','task',450,450,100,80))
+      .replace('<bpmn:task id="Source"','<bpmn:task id="EdgeSource"/><bpmn:task id="Source"')
+      .replace('</bpmn:process>','<bpmn:sequenceFlow id="HaloFlow" sourceRef="EdgeSource" targetRef="Target"/></bpmn:process>')
+      .replace('<bpmndi:BPMNShape id="Source_di"','<bpmndi:BPMNShape id="EdgeSource_di" bpmnElement="EdgeSource"><dc:Bounds x="100" y="146" width="100" height="80"/></bpmndi:BPMNShape><bpmndi:BPMNShape id="Source_di"')
+      .replace('</bpmndi:BPMNPlane>','<bpmndi:BPMNEdge id="HaloFlow_di" bpmnElement="HaloFlow"><di:waypoint x="200" y="186"/><di:waypoint x="400" y="186"/><di:waypoint x="400" y="240"/><di:waypoint x="660" y="240"/></bpmndi:BPMNEdge></bpmndi:BPMNPlane>');
+  }
+  try {
+    const context=await setup('local',xml,1);page=context.page;
+    const before=await state(page),beforeHistory=await history(page),body=await screen(page,{x:230,y:240});
+    await page.mouse.click(body.x,body.y);await settle(page);assert.deepEqual(await page.evaluate(()=>window.hitEngine.selection()),['Source']);
+    const outline=await screen(page,{x:230,y:200});await page.mouse.move(outline.x,outline.y,{steps:8});await settle(page);
+    const grab=await page.evaluate(()=>{const p=document.querySelector('.bpmn-xyflow-connect-handle[data-connect-source="Source"] .bpmn-xyflow-connect-port');assertPort();function assertPort(){if(!p)throw Error('Missing selected Source grab');}const r=p.getBoundingClientRect();return{x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)};});
+    await page.mouse.move(grab.x,grab.y);await settle(page);
+    const acquired=await page.evaluate(grab=>{const c=window.nativeHitCapture;return c.control(document.elementFromPoint(grab.x,grab.y),grab);},grab);
+    assert.equal(acquired?.owner,'Source','native approach reaches the actual displaced Source tool');
+    const point={x:grab.x+7,y:grab.y};
+    const prior=await page.evaluate(point=>{const c=window.nativeHitCapture,p=document.querySelector('.bpmn-xyflow-connect-handle[data-connect-source="Source"] .bpmn-xyflow-connect-port');return c.control(p,point);},point);
+    await page.evaluate(()=>{window.nativeHitCapture.events.length=0;});
+    await page.mouse.move(point.x,point.y);await settle(page);
+    const observed=await page.evaluate(point=>{const c=window.nativeHitCapture,p=document.querySelector('.bpmn-xyflow-connect-handle[data-connect-source="Source"] .bpmn-xyflow-connect-port');return{target:c.describe(document.elementFromPoint(point.x,point.y)),port:c.control(p,point),input:c.events.slice()};},point);
+    assert.equal(observed.target.id,expected);assert.equal(observed.target.owner,null);
+    assert.deepEqual(prior.center,acquired.center,'test the exact displayed grab before the native move');
+    if(kind==='neighbor'){assert.equal(observed.port?.owner,'Source');assert.deepEqual(observed.port.center,acquired.center,'neighbor approach retains the same displayed grab');}
+    else assert.equal(observed.port,null,'real edge hover removes the obsolete source tool');
+    const distance=Math.hypot(prior.localPoint.x-prior.center.x,prior.localPoint.y-prior.center.y)*prior.zoom;
+    assert.ok(distance>5.75&&distance<8,'native point is exclusively inside the former invisible halo');
+    assert.equal(prior.inFill||prior.inStroke,false);
+    await page.mouse.click(point.x,point.y);await settle(page);
+    const input=await page.evaluate(()=>window.nativeHitCapture.events.slice()),down=input.find(e=>e.type==='mousedown');
+    assert.equal(down?.trusted,true);assert.deepEqual(down.point,point);assert.equal(down.target.id,expected);assert.equal(down.target.owner,null);
+    assert.deepEqual(await page.evaluate(()=>window.hitEngine.selection()),[expected]);
+    assert.equal((await state(page)).xml,before.xml);assert.deepEqual(await history(page),beforeHistory);assert.deepEqual(context.errors,[]);
+    await evidence(page,name,'local',{grab,point,acquired,prior,observed,input,distance});results.push({name,status:'passed'});
+  }catch(error){results.push({name,status:'failed',error:error.stack||String(error)});console.error(`FAIL native hit priority ${name}: ${error.stack||error}`);if(page)await evidence(page,name,'local',{error:error.stack,input:await page.evaluate(()=>window.nativeHitCapture?.events)}).catch(()=>{});}
+  finally{await writeFile('test-artifacts/browser-hit-priority-results.json',JSON.stringify(results,null,2));await page?.close().catch(()=>{});}
 }
 async function selectedEndpointPriority() {
   const name='selected-endpoint-versus-create-port';let page;
@@ -256,6 +308,8 @@ try {
   await paired('external-label-over-route',fixture(labelled),1,{x:430,y:240},'Crossing',{label:'record'});
   await paired('external-label-unobstructed',fixture({...labelled,label:{...labelled.label,y:200}}),1,{x:430,y:210},'Crossing',{label:'select'});
   await selectedEndpointPriority();
+  await unrelatedTargetOutsidePaint('neighbor');
+  await unrelatedTargetOutsidePaint('edge');
   await writeFile('test-artifacts/browser-hit-priority-results.json',JSON.stringify(results,null,2));
   const failures=results.filter(r=>r.status==='failed');assert.equal(failures.length,0,failures.map(r=>`${r.name}: ${r.error}`).join('\n'));console.log(`PASS ${results.length} native hit-priority groups (${results.filter(r=>r.status==='intentional-difference').length} explicit intentional difference)`);
 }finally{await browser?.close();server?.kill('SIGTERM');}

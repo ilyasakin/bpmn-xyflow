@@ -82,7 +82,7 @@ for (const zoom of [.5, 1, 2]) test(`AX-04/24: click, jitter and exact five CSS 
     await m.setViewport({ x: 37, y: -21, zoom }); const source = m.getElement('Task_1'), start = {x:source.x,y:source.y+20};
     const before = await m.getXML(), count = m.commandStack.size();
     for (const distance of [0, 1, 4, 5]) {
-      h.move(start, source); assert.equal(Number(h.port().querySelector('.bpmn-xyflow-connect-hit').getAttribute('r')) * zoom, 8);
+      h.move(start, source); assert.equal(Number(h.port().querySelector('.bpmn-xyflow-connect-hit').getAttribute('r')) * zoom, 5.75);
       h.press(start); h.move({x:start.x+distance/zoom,y:start.y},source); h.up(start,source);
       assert.ok(!m.getContainer().querySelector('.bpmn-xyflow-connect-preview')); await unchanged(m,before,count);
     }
@@ -133,7 +133,7 @@ test('AX-23/25: existing resize and selected edge controls take priority, ports 
   try{
     const source=m.getElement('Task_1'),target=m.addShape('bpmn:Task',{x:750,y:350});m.select(source.id);
     const middle={x:source.x+source.width,y:source.y+source.height/2};h.move(middle,source);assert.ok(portPoint(h).x>middle.x+4,'resize handle retains its own location while the grab is offset');
-    const start={x:source.x,y:source.y+20};h.move(start,source);assert.ok(h.port());await m.setViewport({x:20,y:40,zoom:.5});h.move(start,source);assert.equal(Number(h.port().querySelector('.bpmn-xyflow-connect-hit').getAttribute('r')),16);
+    const start={x:source.x,y:source.y+20};h.move(start,source);assert.ok(h.port());await m.setViewport({x:20,y:40,zoom:.5});h.move(start,source);assert.equal(Number(h.port().querySelector('.bpmn-xyflow-connect-hit').getAttribute('r')),11.5);
     const edge=m.connect(source,target,{connectionStart:middle});m.select(edge.id);h.move(edge.waypoints[0],source);assert.ok(Math.hypot(portPoint(h).x-edge.waypoints[0].x,portPoint(h).y-edge.waypoints[0].y)>28,'selected endpoint retains its screen hit area while the grab is offset');assert.ok(m.getContainer().querySelector('[data-bend-index="0"]'));
   }finally{h.close();}
 });
@@ -558,4 +558,58 @@ test('selected midpoint tangent tracking and direct body-to-grab acquisition ret
       h.press(grab);h.up(grab,source);assert.deepEqual(markerPoint(h),anchor);assert.deepEqual(portPoint(h),grab);await unchanged(m,before,count);
     }
   } finally {h.close();}
+});
+
+test('source press area equals visible grab paint across shape families and zooms without narrowing the approach corridor', async () => {
+  const h=await fixture(),{m}=h;
+  try {
+    const shapes=[m.getElement('Task_1'),m.getElement('StartEvent_1'),m.addShape('bpmn:ExclusiveGateway',{x:700,y:350})];
+    for(const zoom of [.5,.65,1,1.4,2]){
+      await m.setViewport({x:140,y:100,zoom});
+      for(const source of shapes){
+        m.select([]);const point={x:source.x+source.width/2,y:source.y};h.move(point,source);
+        const before=await m.getXML(),count=m.commandStack.size(),handle=h.port(),port=handle.querySelector('.bpmn-xyflow-connect-port'),hit=handle.querySelector('.bpmn-xyflow-connect-hit');
+        const paint=(Number(port.getAttribute('r'))+parseFloat(port.style['stroke-width'])/2)*zoom,press=Number(hit.getAttribute('r'))*zoom;
+        assert.ok(Math.abs(paint-5.75)<1e-12);assert.ok(Math.abs(press-paint)<1e-12,'transparent control has no clickable padding outside visible paint');
+        assert.equal(port.style['pointer-events'],'visiblePainted');assert.equal(hit.style['pointer-events'],'all');
+        const anchor=markerPoint(h),grab=portPoint(h);
+        if(Math.hypot(grab.x-anchor.x,grab.y-anchor.y)>1e-8){
+          assert.ok(Math.hypot(grab.x-anchor.x,grab.y-anchor.y)*zoom>=12-1e-8);
+          const nx=(grab.x-anchor.x)/Math.hypot(grab.x-anchor.x,grab.y-anchor.y),ny=(grab.y-anchor.y)/Math.hypot(grab.x-anchor.x,grab.y-anchor.y);
+          const near={x:(anchor.x+grab.x)/2-ny*6/zoom,y:(anchor.y+grab.y)/2+nx*6/zoom};
+          // An already acquired outward approach retains the old eight-pixel
+          // travel tolerance even at points outside the new painted press disc.
+          const halfway={x:(anchor.x+grab.x)/2,y:(anchor.y+grab.y)/2};h.move(halfway,source);h.move(near,source);assert.deepEqual(markerPoint(h),anchor);assert.deepEqual(portPoint(h),grab);
+        }
+        h.press(grab);h.up(grab,source);assert.deepEqual(markerPoint(h),anchor);await unchanged(m,before,count);
+        assert.doesNotMatch((await m.saveSVG()).svg,/bpmn-xyflow-connect-(?:handle|port|hit)/);
+      }
+    }
+  } finally {h.close();}
+});
+
+test('registered ordinary owner, neighboring-shape and crossing-edge clicks remain available outside visible port paint', async () => {
+  for(const kind of ['owner','neighbor','edge']){
+    const h=await fixture(),{m}=h;
+    try {
+      const source=m.getElement('Task_1'),zoom=1.4;await m.setViewport({x:140,y:100,zoom});
+      const anchor={x:source.x+source.width,y:source.y+20},delta=7/zoom;
+      let recipient=source,point={x:anchor.x-delta,y:anchor.y};
+      if(kind==='neighbor'){
+        recipient=m.addShape('bpmn:Task',{x:anchor.x+6.5/zoom+50,y:anchor.y});point={x:anchor.x+delta,y:anchor.y};
+      } else if(kind==='edge'){
+        point={x:anchor.x+delta,y:anchor.y};
+        const upper=m.addShape('bpmn:Task',{x:point.x,y:source.y-130}),lower=m.addShape('bpmn:Task',{x:point.x,y:source.y+150});
+        recipient=m.connect(upper,lower,{waypoints:[{x:point.x,y:upper.y+upper.height},{x:point.x,y:lower.y}]});assert.ok(recipient);
+      }
+      m.select([]);h.move(anchor,source);const grab=portPoint(h),hit=h.port().querySelector('.bpmn-xyflow-connect-hit');
+      assert.deepEqual(grab,anchor);assert.ok(Math.hypot(point.x-grab.x,point.y-grab.y)*zoom>Number(hit.getAttribute('r'))*zoom);
+      assert.ok(Math.hypot(point.x-grab.x,point.y-grab.y)*zoom<8,'point lies in the old invisible halo');
+      const before=await m.getXML(),count=m.commandStack.size();
+      // These registered-handler assertions do not substitute for browser hit
+      // testing: the native hit suite independently checks the actual receiver.
+      h.bodyPress(point,recipient);h.up(point,recipient);assert.deepEqual(m.getSelection(),[recipient.id]);await unchanged(m,before,count);
+      assert.ok(!m.getContainer().querySelector('.bpmn-xyflow-connect-preview'));
+    } finally {h.close();}
+  }
 });

@@ -31,10 +31,10 @@ jobs:
         run: python -m pip install lxml==6.1.1
       - name: Verify source and semantic parity
         run: pnpm run lint && pnpm run test:schema && pnpm run test:unit
-      - name: Verify every independent browser suite
+      - name: Verify remaining independent browser suites
         run: |
           status=0
-          for suite in test:smoke test:react test:multi test:browser:viewer test:browser:scenarios test:browser:actions test:browser:connections test:browser:touch test:browser:core test:browser:advanced test:browser:hits test:browser:labels test:browser:io test:browser:flow test:browser:groups test:browser:hover; do
+          for suite in test:smoke test:react test:multi test:browser:viewer test:browser:scenarios test:browser:actions test:browser:connections test:browser:touch test:browser:core test:browser:advanced test:browser:labels test:browser:io test:browser:flow test:browser:groups test:browser:hover; do
             echo "::group::$suite"
             if ! node test/run-browser-suite.mjs "$suite"; then
               status=1
@@ -115,6 +115,37 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: bpmn-anchor-ownership-evidence
+          path: test-artifacts/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  hit-priority:
+    name: Native hit priority
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Select installed sandbox-capable Chrome
+        run: |
+          CHROME_PATH="$(command -v google-chrome)"
+          test -x "$CHROME_PATH"
+          "$CHROME_PATH" --version
+          readlink -f "$CHROME_PATH"
+          echo "PUPPETEER_EXECUTABLE_PATH=$CHROME_PATH" >> "$GITHUB_ENV"
+      - name: Exercise native shape, edge and source-control hit priority
+        run: node test/run-browser-suite.mjs test:browser:hits
+      - name: Upload hit-priority evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bpmn-hit-priority-evidence
           path: test-artifacts/
           if-no-files-found: ignore
           retention-days: 14
