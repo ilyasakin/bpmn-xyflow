@@ -15,7 +15,7 @@ import {
   assertOnlyAnchorDeletion,
 } from "../helpers/anchor-model-guard.mjs";
 
-import { renderedDI, selectVisibleFollowupBody } from '../helpers/anchor-followup-dom.mjs';
+import { renderedDI, selectVisibleFollowupBody, chooseAdjacentReferenceDrop, clickReferenceSubprocessReplacement } from '../helpers/anchor-followup-dom.mjs';
 import { assertReferenceBodyMove } from '../helpers/anchor-followup-reference-move.mjs';
 
 export const anchorShapeCases = [];
@@ -152,7 +152,14 @@ async function connect(h, page, key, source, target, from, to, options = {}) {
       before = await h.state(page),
       targetNode = h.node(before, target);
     const chosen = h.side(targetNode, to, options.fraction ?? 0.5),
-      end = h.screen(before, chosen);
+      requestedEnd = h.screen(before, chosen);
+    const targetPreparation = options.integerReferenceDrop
+      ? await chooseAdjacentReferenceDrop(h, page, target, requestedEnd) : null;
+    const end = targetPreparation?.point || requestedEnd;
+    if (targetPreparation) await h.save(page, key + "-reference-target-pixels", {
+      targetPreparation,
+      priorMeasuredRefusal: { revision: "0c33c80", hover: "ApprovalDecision_label", canExecute: null, createdEdges: 0 },
+    });
     assert.ok(
       (await h.hit(page, end)).owners.includes(target),
       "reference drop includes the intended target in the actual hit stack",
@@ -172,6 +179,16 @@ async function connect(h, page, key, source, target, from, to, options = {}) {
           });
           previewContext.input = input;
           previewContext.hit = input ? await h.hit(page, input) : null;
+          if (targetPreparation) {
+            assert.equal(input?.trusted, true);
+            assert.deepEqual({ x: input.x, y: input.y }, end);
+            assert.equal(previewContext.active, true);
+            assert.equal(previewContext.prefix, "connect");
+            assert.equal(previewContext.hover, target);
+            assert.equal(previewContext.target, target);
+            assert.deepEqual(previewContext.canExecute, { type: options.expectedType || "bpmn:SequenceFlow" });
+            assert.equal(previewContext.hit.id, target);
+          }
           await h.save(page, key + "-reference-preview-state", { live, previewContext });
         },
       });
@@ -197,7 +214,7 @@ async function connect(h, page, key, source, target, from, to, options = {}) {
     h.near(live.screenEnd, rendered.end, 1.5, "reference preview target matches commit");
     await h.creationOnly(before, after, edge);
     await h.history(page, before, after);
-    result = { before, after, edge, start, live, chosen, release, observation };
+    result = { before, after, edge, start, live, chosen, release, observation, targetPreparation };
   }
   await h.save(page, key + "-after", {
     edge: result.edge,
@@ -569,6 +586,7 @@ for (const engine of engines)
             })
           : await connect(h, page, key, "SubmitRequest", "ApprovalDecision", "bottom", "bottom", {
               fraction: 0.65,
+              integerReferenceDrop: engine === "upstream",
             });
       const gateway = h.node(r.after, "ApprovalDecision"),
         p = variant === "selected-gateway-left" ? r.edge.points[0] : r.edge.points.at(-1);
@@ -618,15 +636,8 @@ async function toggleSubprocess(h, page, id, expanded) {
     await page.mouse.click(at.x, at.y);
   } else {
     await h.clickButton(page, '.djs-context-pad [data-action="replace"]');
-    // The popup clips lower entries; use its ordinary visible search control.
-    await h.clickButton(page, '.djs-popup-search input');
-    await page.keyboard.sendCharacter('Sub-process');
-    assert.equal(await page.$eval('.djs-popup-search input', e => e.value), 'Sub-process');
-    await h.settle(page);
-    await h.clickButton(
-      page,
-      `.djs-popup [data-id="replace-with-${expanded ? "expanded" : "collapsed"}-subprocess"]`,
-    );
+    await clickReferenceSubprocessReplacement(h, page,
+      `replace-with-${expanded ? "expanded" : "collapsed"}-subprocess`);
   }
   await h.settle(page);
   const after = await h.state(page);

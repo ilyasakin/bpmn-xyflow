@@ -54,3 +54,31 @@ export async function selectVisibleFollowupBody(h, page, id) {
   }
   throw Error(`No unobstructed visible body point for ${id}: ${JSON.stringify(attempts)}`);
 }
+
+/** Only adjacent, representable CSS pixels may replace the intended reference drop. */
+export function adjacentDropPixels(point) {
+  assert.ok(Number.isFinite(point.x) && Number.isFinite(point.y));
+  return [...new Set([Math.floor(point.x),Math.ceil(point.x)])].flatMap(x =>
+    [...new Set([Math.floor(point.y),Math.ceil(point.y)])].map(y => ({x,y})))
+    .sort((a,b) => Math.hypot(a.x-point.x,a.y-point.y)-Math.hypot(b.x-point.x,b.y-point.y));
+}
+
+export async function chooseAdjacentReferenceDrop(h, page, id, point) {
+  const originalHit = await h.hit(page, point), candidates = [];
+  for (const candidate of adjacentDropPixels(point)) candidates.push({point:candidate,hit:await h.hit(page,candidate)});
+  const chosen = candidates.find(candidate => candidate.hit.inside && candidate.hit.id === id);
+  assert.ok(chosen, `No adjacent native pixel belongs to ${id}: ${JSON.stringify({point,candidates})}`);
+  return {original:point,originalHit,candidates,point:chosen.point};
+}
+
+export async function clickReferenceSubprocessReplacement(h, page, action) {
+  // The installed popup shows search only for more than five actionable entries.
+  const search = await page.$('.djs-popup-search input');
+  if (search) {
+    await h.clickButton(page,'.djs-popup-search input');
+    await page.keyboard.sendCharacter('Sub-process');
+    assert.equal(await page.$eval('.djs-popup-search input',e=>e.value),'Sub-process');
+    await h.settle(page);
+  }
+  await h.clickButton(page,`.djs-popup [data-id="${action}"]`);
+}

@@ -39,3 +39,18 @@ measurement and original rendered text remain unchanged. Provenance records both
 the upstream and patched hashes, and tests require this exact one-operation diff.
 TextRenderer still matches the pinned exact-width line-fitting boundary. The
 root diagram-js dependency and XYFlow interaction engine remain unchanged.
+
+ContainerResize uses the unchanged pinned ResizeBehavior constraints and LaneUtil
+box planner on detached graph views. Its wrapper preserves the live model and
+applies mutations through the local command stack. Both files retain their exact
+source paths and hashes in provenance. The diagram-js ResizeUtil and AttachUtil
+functions already supplied by the root dependency are algorithm-identical to
+the pinned15.27.1 versions (only import/type paths differ). Modifier lane resizing
+uses the root SpaceTool's pure adjustment method; its pinned counterpart replaces
+array membership checks with Sets without changing the planned operations.
+The adapter is checked against complete pinned resize event/command chains.
+The root AnchorsHelper algorithm is likewise unchanged from the pinned release.
+The scoped lane SpaceTool mutation seam uses it for a single affected endpoint,
+and the already-vendored LayoutUtil computes the same label adjustment used by
+LabelBehavior. See docs/CONTAINER-RESIZE.md for the deliberate connected-route
+correction to the pinned modifier-resize defect and its separate native gate.

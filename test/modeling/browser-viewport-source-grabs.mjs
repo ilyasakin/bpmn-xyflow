@@ -55,14 +55,16 @@ async function panBy(h, page, dx, dy) {
   return events;
 }
 
-async function surfaces(page) {
-  return page.evaluate(() => {
+export function collectViewportSurfaces() {
     const box = e => { const r = e.getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height }; };
     const root = document.querySelector('#viewer'), canvas = box(root), chrome = [...root.querySelectorAll('.bpmn-xyflow-palette,.bpmn-xyflow-editor-actions,.bpmn-xyflow-minimap,.bjs-powered-by,.bpmn-xyflow-context-pad')]
       .filter(e => getComputedStyle(e).display !== 'none' && getComputedStyle(e).visibility !== 'hidden')
-      .map(e => ({ className: e.className, ...box(e) })).filter(r => r.width > 0 && r.height > 0);
+      .map(e => ({ className: e.getAttribute('class') || '', ...box(e) })).filter(r => r.width > 0 && r.height > 0);
     return { canvas, chrome, width: innerWidth, height: innerHeight };
-  });
+}
+
+async function surfaces(page) {
+  return page.evaluate(collectViewportSurfaces);
 }
 
 function positionFor(name, layout) {

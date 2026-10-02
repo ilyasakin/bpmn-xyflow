@@ -171,6 +171,41 @@ test('F23-T: acquired source tether survives context-pad exit over an existing r
   }finally{h.close();}
 });
 
+test('D16: leaving a reached source grab gives the underlying edge hover ownership outside its paint', async () => {
+  const h=await fixture(),{m}=h;
+  try {
+    const source=m.getElement('Task_1');m.moveShape(source,{x:180-source.x,y:200-source.y});
+    const upper=m.addShape('bpmn:Task',{x:100,y:146}),target=m.addShape('bpmn:Task',{x:660,y:200});
+    const edge=m.connect(upper,target);m.updateWaypoints(edge,[{x:200,y:186},{x:400,y:186},{x:400,y:240},{x:660,y:240}]);
+    const line=h.gfx(edge).querySelector('.bpmn-xyflow-connection-visual');
+    for(const zoom of [1,.5,2,4]) for(const direction of [1,-1]) {
+      await m.setViewport({x:370-230*zoom,y:348-200*zoom,zoom});m.select([]);m.select(source.id);
+      const before=await m.getXML(),count=m.commandStack.size(),selection=m.getSelection(),viewport=m.getViewport();
+      const anchor={x:230,y:200};h.hover(anchor,source);h.move(anchor,source);
+      const handle=h.port(),chosen=markerPoint(h),grab=portPoint(h),hit=handle.querySelector('.bpmn-xyflow-connect-hit');
+      if(zoom===1)assert.deepEqual(grab,{x:230,y:185.99},'exact hosted grab geometry');
+      const steps=Math.ceil(Math.hypot(grab.x-anchor.x,grab.y-anchor.y)*zoom);
+      for(let n=1;n<=steps;n++){
+        const point={x:anchor.x+(grab.x-anchor.x)*n/steps,y:anchor.y+(grab.y-anchor.y)*n/steps};
+        const receiver=n===steps?hit:source;h.hover(point,receiver);h.move(point,receiver);
+        assert.equal(h.port(),handle,'small-step acquisition stays stable');assert.deepEqual(markerPoint(h),chosen);
+      }
+      const inside={x:grab.x+direction*5/zoom,y:grab.y};h.hover(inside,hit);h.move(inside,hit);assert.equal(h.port(),handle,'ordinary motion within painted grab stays acquired');
+      const arrival=zoom===1?{x:230,y:186}:grab;
+      for(let n=0;n<3;n++){h.hover(arrival,hit);h.move(arrival,hit);assert.equal(h.port(),handle,'duplicate pointer/mouse events at the painted grab are stable');}
+      const outside={x:grab.x+direction*7/zoom,y:zoom===1?186:grab.y};
+      assert.ok(Math.hypot(outside.x-grab.x,outside.y-grab.y)*zoom>5.75);
+      assert.ok(Math.hypot(outside.x-grab.x,outside.y-grab.y)*zoom<8);
+      h.hover(outside,line);h.move(outside,line);
+      assert.ok(!h.port(),'arrival is over: leaving painted grab must release the obsolete source tool');
+      const hover=m.getContainer().querySelector('.bpmn-xyflow-hover-controls');assert.equal(hover?.getAttribute('data-element-id'),edge.id,'the actual underlying edge receives its ordinary hover controls');
+      h.hover(outside,line);h.move(outside,line);assert.ok(!h.port(),'duplicate departure events cannot reacquire source');
+      await unchanged(m,before,count);assert.deepEqual(m.getSelection(),selection);assert.deepEqual(m.getViewport(),viewport);
+      h.bodyPress(outside,edge);h.up(outside,edge);assert.deepEqual(m.getSelection(),[edge.id]);await unchanged(m,before,count);
+    }
+  }finally{h.close();}
+});
+
 test('F05/D15: a selected pool beside its right context pad retains a reachable exact source after an invalid loop', async () => {
   const h=await fixture(),{m}=h;
   try{

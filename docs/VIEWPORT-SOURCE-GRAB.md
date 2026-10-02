@@ -44,3 +44,25 @@ cancels and commits a connection from the constrained source before any pan
 recovery. Exact source position, painted visibility, selection, full XML/DI and
 history are asserted. These cases are prepared and independently reviewed;
 hosted execution is pending at this checkpoint.
+
+## Releasing a reached source grab (D16)
+
+The hosted `source-halo-edge-pass-through` case at runtime `0c33c80` exposed
+an approach-lifecycle regression. The pointer reached a grab painted at
+(230,185.99), with delivered input (230,186), then moved tangentially to
+(237,186). That point already hit the underlying `HaloFlow` and lay outside
+the 5.75 CSSpx painted radius. The wider 8 CSSpx acquisition corridor still
+suppressed the line's normal hover controls.
+
+The modeler now remembers actual arrival on the displayed grab. Once the
+pointer leaves its painted disc onto an edge, the obsolete source tool yields
+to ordinary edge hover. Duplicate pointer/mouse events at the grab remain
+stable. Small-step travel toward a displaced grab across a route still keeps
+the chosen source (F23-T); neighboring shape clicks and painted-only press
+ownership retain their existing behavior. No hit region is enlarged.
+
+Registered-handler coverage reproduces the exact delivered coordinates, both
+tangential departures at four zooms, inside-paint motion, duplicate arrival
+and departure events, ordinary edge selection, and unchanged XML/history,
+selection and viewport before the click. The retained hosted negative is
+unchanged and remains the native acceptance gate.

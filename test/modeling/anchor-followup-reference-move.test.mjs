@@ -54,3 +54,38 @@ test('installed GlobalConnect activates a refused same-pool return even when its
     dragging.end(event('mouseup',point));assert.equal((await m.saveXML({format:true})).xml,before);assert.equal(m.get('commandStack').canUndo(),false);
   }finally{m.destroy();}
 });
+
+test('installed ContextPad replacement action exposes search only in the long collapsed-subprocess menu',async()=>{
+  const m=new Modeler({container:dom.createContainer()});
+  try{
+    await m.importXML(await readFile('test/fixtures/scenarios/order-payment-delivery.bpmn','utf8'));let shape=m.get('elementRegistry').get('Payment');
+    for(const expanded of[true,false]){
+      if(!expanded)shape=m.get('bpmnReplace').replaceElement(shape,{type:'bpmn:SubProcess',isExpanded:false});
+      const cp=m.get('contextPad');cp.open(shape);cp.getEntries(shape).replace.action.click({x:100,y:100},shape);
+      await new Promise(resolve=>setTimeout(resolve,0));
+      const menu=m.get('canvas').getContainer().querySelector('.djs-popup');assert.ok(menu);
+      assert.equal(!!menu.querySelector('.djs-popup-search input'),!expanded);
+      assert.ok(menu.querySelector(`[data-id="replace-with-${expanded?'collapsed':'expanded'}-subprocess"]`));m.get('popupMenu').close();
+    }
+  }finally{m.destroy();}
+});
+
+test('reference Connect rejects a label hover and accepts its actual gateway without weakening route semantics',async()=>{
+  const m=new Modeler({container:dom.createContainer(),autoScroll:{scrollThresholdIn:[0,0,0,0],scrollThresholdOut:[0,0,0,0]}});
+  try{
+    await m.importXML(await readFile('test/fixtures/scenarios/approval-rejection-rework.bpmn','utf8'));
+    const registry=m.get('elementRegistry'),source=registry.get('SubmitRequest'),gateway=registry.get('ApprovalDecision'),label=registry.get('ApprovalDecision_label'),dragging=m.get('dragging');
+    const save=async()=>(await m.saveXML({format:true})).xml,before=await save(),point={x:682,y:365},start={x:source.x+source.width/2,y:source.y+source.height/2};
+    const event=(type,p)=>new MouseEvent(type,{clientX:p.x,clientY:p.y,button:0,buttons:type==='mouseup'?0:1,bubbles:true,cancelable:true,view:window});
+    for(const target of[label,gateway]){
+      m.get('connect').start(event('mousedown',start),source);dragging.move(event('mousemove',{x:400,y:200}));dragging.hover({element:target,gfx:registry.getGraphics(target)});dragging.move(event('mousemove',point));
+      const c=dragging.context().data.context;assert.equal(dragging.context().active,true);assert.equal(c.hover,target);
+      if(target===label)assert.equal(c.canExecute,null);else assert.deepEqual(c.canExecute,{type:'bpmn:SequenceFlow'});
+      dragging.end(event('mouseup',point));
+      if(target===label){assert.equal(await save(),before);assert.equal(m.get('commandStack').canUndo(),false);}
+    }
+    const parsed=await oracle.fromXML(await save()),original=await oracle.fromXML(before),added=Object.values(parsed.elementsById).filter(e=>e.$type==='bpmn:SequenceFlow'&&!original.elementsById[e.id]);
+    assert.equal(added.length,1);assert.equal(added[0].sourceRef.id,'SubmitRequest');assert.equal(added[0].targetRef.id,'ApprovalDecision');
+    const after=await save();m.get('commandStack').undo();assert.equal(await save(),before);m.get('commandStack').redo();assert.equal(await save(),after);
+  }finally{m.destroy();}
+});

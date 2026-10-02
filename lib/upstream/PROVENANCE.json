@@ -35,6 +35,14 @@
     "LineUtil.js": {
       "source": "lib/util/LineUtil.js",
       "sha256": "ce5d1cb2d34d07378a975c4c9c4615f1eb75dd7c4c900a451eaef9004e06f145"
+    },
+    "modeling/behavior/ResizeBehavior.js": {
+      "source": "lib/features/modeling/behavior/ResizeBehavior.js",
+      "sha256": "ecdbfdf2caf94a2cf400413f63e4d38d3e5f4bd8e159a6d6903b2e1b8a990c8a"
+    },
+    "modeling/util/LaneUtil.js": {
+      "source": "lib/features/modeling/util/LaneUtil.js",
+      "sha256": "95e892798abe12bbf789d946347808c7a58fc5695d73021f90c9e93787dc852e"
     }
   }
 }

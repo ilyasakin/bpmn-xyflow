@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { runInNewContext } from 'node:vm';
-import { assertAffordance, collectViewportAffordance, panSteps, viewportSourceCases } from './browser-viewport-source-grabs.mjs';
+import { Window } from 'happy-dom';
+import { assertAffordance, collectViewportAffordance, collectViewportSurfaces, panSteps, viewportSourceCases } from './browser-viewport-source-grabs.mjs';
 
 test('native viewport plan covers each boundary and chrome risk with independent case lifecycles', () => {
   assert.equal(viewportSourceCases.length, 12);
@@ -66,4 +67,36 @@ test('serialized native collector rejects transparent paint and inherited invisi
     [f=>f.root.style.display='none','markerVisible'],
     [f=>f.root.style.visibility='hidden','tetherVisible']
   ]){const f=fixture();mutate(f);assert.equal(f.read()[key],false);}
+});
+
+
+test('serialized viewport surfaces normalize actual HTML and SVG class values before obstacle filtering', async () => {
+  const window=new Window(),document=window.document;
+  try {
+    const root=document.createElement('div');root.id='viewer';document.body.appendChild(root);
+    const box={left:0,top:48,right:800,bottom:650,width:800,height:602};root.getBoundingClientRect=()=>box;
+    const palette=document.createElement('div');palette.className='bpmn-xyflow-palette';root.appendChild(palette);
+    palette.getBoundingClientRect=()=>({left:0,top:48,right:120,bottom:490,width:120,height:442});
+    const minimap=document.createElementNS('http://www.w3.org/2000/svg','svg');minimap.setAttribute('class','bpmn-xyflow-minimap');root.appendChild(minimap);
+    minimap.getBoundingClientRect=()=>({left:650,top:490,right:790,bottom:630,width:140,height:140});
+    // Happy DOM currently inherits string className for SVG. Its genuine
+    // SVGAnimatedString implementation reproduces Chrome's class property
+    // without replacing the rendered class attribute used by this observer.
+    const animated=document.createElementNS('http://www.w3.org/2000/svg','image').href;
+    animated.baseVal=minimap.getAttribute('class');
+    assert.ok(animated instanceof window.SVGAnimatedString);
+    Object.defineProperty(minimap,'className',{configurable:true,get:()=>animated});
+    assert.equal(typeof palette.className,'string');assert.equal(typeof minimap.className,'object');
+    assert.equal(minimap.className.baseVal,'bpmn-xyflow-minimap');assert.equal(minimap.className.includes,undefined,'actual SVGAnimatedString reproduces the hosted premise');
+    const hidden=document.createElementNS('http://www.w3.org/2000/svg','g');hidden.setAttribute('class','bpmn-xyflow-context-pad');hidden.style.display='none';hidden.getBoundingClientRect=()=>box;root.appendChild(hidden);
+    const empty=document.createElementNS('http://www.w3.org/2000/svg','g');empty.setAttribute('class','bpmn-xyflow-editor-actions');empty.getBoundingClientRect=()=>({...box,width:0});root.appendChild(empty);
+    const context={document,getComputedStyle:window.getComputedStyle.bind(window),innerWidth:800,innerHeight:600};
+    const observed=runInNewContext(`(${collectViewportSurfaces.toString()})()`,context);
+    assert.ok(observed.chrome.every(r=>typeof r.className==='string'),'all serialized obstacle class names are text');
+    assert.equal(observed.chrome.length,2,'hidden and zero-area obstacles remain excluded');
+    assert.equal(observed.chrome.find(r=>r.className.includes('palette')).right,120);
+    assert.equal(observed.chrome.find(r=>r.className.includes('minimap')).left,650);
+    assert.deepEqual(JSON.parse(JSON.stringify(observed.canvas)),box);
+    assert.deepEqual([observed.width,observed.height],[800,600]);
+  }finally{await window.happyDOM.close();}
 });

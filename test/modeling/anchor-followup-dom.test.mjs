@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import vm from 'node:vm';
-import { assertRenderedDI, collectRenderedDI, selectVisibleFollowupBody } from '../helpers/anchor-followup-dom.mjs';
+import { assertRenderedDI, collectRenderedDI, selectVisibleFollowupBody, adjacentDropPixels, chooseAdjacentReferenceDrop, clickReferenceSubprocessReplacement } from '../helpers/anchor-followup-dom.mjs';
 
 test('recorded Chrome paint matches full SVG CTM, while rounded Canvas.viewbox fails the unchanged bound',()=>{
   const cases=[
@@ -39,4 +39,26 @@ test('visible body selection avoids a crossing center and never toggles a sole s
   const proof=await selectVisibleFollowupBody(h,page,'ShipOrder');assert.equal(proof.attempts.length,2);assert.equal(clicks,1);assert.deepEqual(proof.point,{x:130,y:140});
   await selectVisibleFollowupBody(h,page,'ShipOrder');assert.equal(clicks,1);assert.equal(moves,2);
   selection=[];h.hit=async()=>({inside:true,id:'DeliveryMessage'});await assert.rejects(selectVisibleFollowupBody(h,page,'ShipOrder'),/No unobstructed/);assert.equal(clicks,1);
+});
+
+test('reference drop normalization considers only adjacent integer pixels with the exact intended owner',async()=>{
+  const requested={x:800.4685,y:493.5785};
+  const h={hit:async(_page,p)=>({inside:true,id:p.y>=493.54?'ApprovalDecision_label':'ApprovalDecision'})};
+  const choice=await chooseAdjacentReferenceDrop(h,{},'ApprovalDecision',requested);
+  assert.equal(choice.originalHit.id,'ApprovalDecision_label');assert.deepEqual(choice.point,{x:800,y:493});
+  assert.equal(choice.candidates.length,4);
+  for(const {point}of choice.candidates){assert.ok(Number.isInteger(point.x)&&Number.isInteger(point.y));assert.ok(Math.abs(point.x-requested.x)<1&&Math.abs(point.y-requested.y)<1);}
+  assert.deepEqual(adjacentDropPixels({x:800,y:493}),[{x:800,y:493}]);
+  assert.throws(()=>adjacentDropPixels({x:NaN,y:493}));
+  await assert.rejects(chooseAdjacentReferenceDrop({hit:async()=>({inside:true,id:'ApprovalDecision_label'})},{},'ApprovalDecision',requested),/No adjacent/);
+  await assert.rejects(chooseAdjacentReferenceDrop({hit:async()=>({inside:false,id:'ApprovalDecision'})},{},'ApprovalDecision',requested),/No adjacent/);
+});
+
+test('short popup uses its exact visible action and long popup uses native search first',async()=>{
+  for(const searchable of[false,true]){
+    const calls=[],h={clickButton:async(_page,selector)=>{calls.push(['click',selector]);},settle:async()=>{}};
+    const page={$:async()=>searchable?{}:null,keyboard:{sendCharacter:async text=>{calls.push(['text',text]);}},$eval:async()=> 'Sub-process'};
+    await clickReferenceSubprocessReplacement(h,page,'replace-with-expanded-subprocess');
+    assert.deepEqual(calls,[...(searchable?[['click','.djs-popup-search input'],['text','Sub-process']]:[]),['click','.djs-popup [data-id="replace-with-expanded-subprocess"]']]);
+  }
 });

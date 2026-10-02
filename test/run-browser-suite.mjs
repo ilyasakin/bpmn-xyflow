@@ -24,6 +24,7 @@ export const BROWSER_SUITES = Object.freeze({
   'test:browser:groups': 'test/modeling/browser-group-labels.mjs',
   'test:browser:hover': 'test/modeling/browser-hover-connections.mjs',
   'test:browser:anchor-ux': 'test/modeling/browser-anchor-ux.mjs',
+  'test:browser:container-resize': 'test/modeling/browser-container-resize.mjs',
   'test:browser:viewport-source': 'test/modeling/browser-viewport-source-grabs.mjs',
   'test:browser:anchor-ownership': 'test/modeling/browser-anchor-ownership.mjs',
   'test:browser:anchor-followup-a-local': 'test/modeling/browser-anchor-followup-a-local.mjs',
