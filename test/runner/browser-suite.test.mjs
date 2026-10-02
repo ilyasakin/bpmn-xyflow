@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { BROWSER_SUITES, cleanupOwned, parseProcStat, runBrowserSuite, runManagedProcess, signalIdentity } from '../run-browser-suite.mjs';
+import { BROWSER_SUITE_TIMEOUTS, BROWSER_SUITES, cleanupOwned, parseProcStat, runBrowserSuite, runManagedProcess, signalIdentity } from '../run-browser-suite.mjs';
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const quiet = { write() {} };
@@ -141,3 +141,14 @@ test('runner cleans owned descendants on external termination and reports the si
     for (const pid of (await readFile(pidFile, 'utf8')).trim().split('\n').map(Number)) assert.equal(await live(pid), false);
   } finally { if (runner.exitCode === null) runner.kill('SIGKILL'); }
 }));
+
+
+test('follow-up supervisor budgets include every bounded case and cleanup', () => {
+  const groups = [["a-local", 11], ["a-upstream", 1], ["b-local-1", 9], ["b-local-2", 8], ["b-local-3", 8], ["b-upstream-1", 7], ["b-upstream-2", 7], ["b-upstream-3", 7], ["c-local", 4]];
+  for (const [suffix, count] of groups) {
+    const name = `test:browser:anchor-followup-${suffix}`;
+    assert.equal(BROWSER_SUITES[name], `test/modeling/browser-anchor-followup-${suffix}.mjs`);
+    assert.ok(BROWSER_SUITE_TIMEOUTS[name] >= count * 215000 + 90000);
+    assert.ok(BROWSER_SUITE_TIMEOUTS[name] < 45 * 60000);
+  }
+});

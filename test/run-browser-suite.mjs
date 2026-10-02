@@ -24,7 +24,30 @@ export const BROWSER_SUITES = Object.freeze({
   'test:browser:groups': 'test/modeling/browser-group-labels.mjs',
   'test:browser:hover': 'test/modeling/browser-hover-connections.mjs',
   'test:browser:anchor-ux': 'test/modeling/browser-anchor-ux.mjs',
-  'test:browser:anchor-ownership': 'test/modeling/browser-anchor-ownership.mjs'
+  'test:browser:anchor-ownership': 'test/modeling/browser-anchor-ownership.mjs',
+  'test:browser:anchor-followup-a-local': 'test/modeling/browser-anchor-followup-a-local.mjs',
+  'test:browser:anchor-followup-a-upstream': 'test/modeling/browser-anchor-followup-a-upstream.mjs',
+  'test:browser:anchor-followup-b-local-1': 'test/modeling/browser-anchor-followup-b-local-1.mjs',
+  'test:browser:anchor-followup-b-local-2': 'test/modeling/browser-anchor-followup-b-local-2.mjs',
+  'test:browser:anchor-followup-b-local-3': 'test/modeling/browser-anchor-followup-b-local-3.mjs',
+  'test:browser:anchor-followup-b-upstream-1': 'test/modeling/browser-anchor-followup-b-upstream-1.mjs',
+  'test:browser:anchor-followup-b-upstream-2': 'test/modeling/browser-anchor-followup-b-upstream-2.mjs',
+  'test:browser:anchor-followup-b-upstream-3': 'test/modeling/browser-anchor-followup-b-upstream-3.mjs',
+  'test:browser:anchor-followup-c-local': 'test/modeling/browser-anchor-followup-c-local.mjs'
+});
+
+// Whole-case setup, action, evidence and owned cleanup are bounded to215s.
+// The suite margin preserves reporting after every registered case is attempted.
+export const BROWSER_SUITE_TIMEOUTS = Object.freeze({
+  'test:browser:anchor-followup-a-local': 2455000,
+  'test:browser:anchor-followup-a-upstream': 305000,
+  'test:browser:anchor-followup-b-local-1': 2025000,
+  'test:browser:anchor-followup-b-local-2': 1810000,
+  'test:browser:anchor-followup-b-local-3': 1810000,
+  'test:browser:anchor-followup-b-upstream-1': 1595000,
+  'test:browser:anchor-followup-b-upstream-2': 1595000,
+  'test:browser:anchor-followup-b-upstream-3': 1595000,
+  'test:browser:anchor-followup-c-local': 950000
 });
 
 const OWNER_KEY = 'BPMN_BROWSER_SUITE_OWNER';
@@ -198,7 +221,7 @@ export async function runBrowserSuite(suite) {
   const script = BROWSER_SUITES[suite];
   if (pkg.scripts[suite] !== `node ${script}`) throw Error(`Unexpected package script for ${suite}; review the supervisor allowlist`);
   // Execute the known Node entrypoint directly: no shell and no arbitrary npm script.
-  return runManagedProcess({ suite, args: [script] });
+  return runManagedProcess({ suite, args: [script], timeoutMs: BROWSER_SUITE_TIMEOUTS[suite] || 300000 });
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {

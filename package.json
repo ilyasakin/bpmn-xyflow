@@ -17,7 +17,7 @@
     "start": "node lib/demo/serve.mjs",
     "dev": "vite",
     "build": "vite build",
-    "test": "pnpm run test:smoke && pnpm run test:react && pnpm run test:multi && pnpm run test:browser:viewer && pnpm run test:browser:scenarios && pnpm run test:browser:actions && pnpm run test:browser:connections && pnpm run test:browser:touch && pnpm run test:browser:core && pnpm run test:browser:advanced && pnpm run test:browser:hits && pnpm run test:browser:labels && pnpm run test:browser:io && pnpm run test:browser:flow && pnpm run test:browser:groups && pnpm run test:browser:hover && pnpm run test:browser:anchor-ux && pnpm run test:browser:anchor-ownership",
+    "test": "pnpm run test:smoke && pnpm run test:react && pnpm run test:multi && pnpm run test:browser:viewer && pnpm run test:browser:scenarios && pnpm run test:browser:actions && pnpm run test:browser:connections && pnpm run test:browser:touch && pnpm run test:browser:core && pnpm run test:browser:advanced && pnpm run test:browser:hits && pnpm run test:browser:labels && pnpm run test:browser:io && pnpm run test:browser:flow && pnpm run test:browser:groups && pnpm run test:browser:hover && pnpm run test:browser:anchor-ux && pnpm run test:browser:anchor-ownership && pnpm run test:browser:anchor-followup-a-local && pnpm run test:browser:anchor-followup-a-upstream && pnpm run test:browser:anchor-followup-b-local-1 && pnpm run test:browser:anchor-followup-b-local-2 && pnpm run test:browser:anchor-followup-b-local-3 && pnpm run test:browser:anchor-followup-b-upstream-1 && pnpm run test:browser:anchor-followup-b-upstream-2 && pnpm run test:browser:anchor-followup-b-upstream-3 && pnpm run test:browser:anchor-followup-c-local",
     "test:smoke": "node lib/demo/modeler/smoke-test.mjs",
     "test:react": "node lib/demo/react/smoke-test.mjs",
     "test:multi": "node lib/demo/multi-framework-smoke-test.mjs",
@@ -43,7 +43,16 @@
     "test:browser:groups": "node test/modeling/browser-group-labels.mjs",
     "test:browser:hover": "node test/modeling/browser-hover-connections.mjs",
     "test:browser:anchor-ux": "node test/modeling/browser-anchor-ux.mjs",
-    "test:browser:anchor-ownership": "node test/modeling/browser-anchor-ownership.mjs"
+    "test:browser:anchor-ownership": "node test/modeling/browser-anchor-ownership.mjs",
+    "test:browser:anchor-followup-a-local": "node test/modeling/browser-anchor-followup-a-local.mjs",
+    "test:browser:anchor-followup-a-upstream": "node test/modeling/browser-anchor-followup-a-upstream.mjs",
+    "test:browser:anchor-followup-b-local-1": "node test/modeling/browser-anchor-followup-b-local-1.mjs",
+    "test:browser:anchor-followup-b-local-2": "node test/modeling/browser-anchor-followup-b-local-2.mjs",
+    "test:browser:anchor-followup-b-local-3": "node test/modeling/browser-anchor-followup-b-local-3.mjs",
+    "test:browser:anchor-followup-b-upstream-1": "node test/modeling/browser-anchor-followup-b-upstream-1.mjs",
+    "test:browser:anchor-followup-b-upstream-2": "node test/modeling/browser-anchor-followup-b-upstream-2.mjs",
+    "test:browser:anchor-followup-b-upstream-3": "node test/modeling/browser-anchor-followup-b-upstream-3.mjs",
+    "test:browser:anchor-followup-c-local": "node test/modeling/browser-anchor-followup-c-local.mjs"
   },
   "engines": {
     "node": ">=20"
