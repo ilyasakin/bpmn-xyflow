@@ -8,6 +8,7 @@ import { endpoint, revealNative } from '../helpers/anchor-followup-controls.mjs'
 import { assertOnlyAnchorGeometry } from '../helpers/anchor-model-guard.mjs';
 import { runFollowupCases, assertFollowupPortClosed } from '../helpers/anchor-followup-lifecycle.mjs';
 
+import { directGatewayMarkerWorkflow, gatewayContextEntry, observeGatewayMarkerInput, GATEWAY_MARKER_ZOOMS } from '../helpers/gateway-marker-browser.mjs';
 import { gatewayVertices, nearestGatewayVertex as expectedGatewayVertex } from '../helpers/gateway-native-oracle.mjs';
 export { gatewayVertices, expectedGatewayVertex };
 const slope=(n,index)=>[
@@ -49,14 +50,15 @@ export function collectGatewayControl(id){
  const visible=e=>{for(let n=e;n;n=n.parentElement){const s=getComputedStyle(n);if(s.display==='none'||s.visibility==='hidden'||Number(s.opacity)<=0)return false;}return e.isConnected;};
  const ink=value=>{const color=String(value||'').trim().toLowerCase();if(!color||color==='none'||color==='transparent')return false;const slash=color.lastIndexOf('/');if(slash>=0)return parseFloat(color.slice(slash+1))>0;if(color.startsWith('rgba(')||color.startsWith('hsla('))return parseFloat(color.slice(color.lastIndexOf(',')+1))>0;return true;};
  const painted=e=>{const style=getComputedStyle(e);return visible(e)&&Number(e.getAttribute('r'))>0&&((ink(style.fill)&&Number(style.fillOpacity)>0)||(ink(style.stroke)&&Number(style.strokeOpacity)>0&&parseFloat(style.strokeWidth)>0));};
- const markers=[...root.querySelectorAll('.bpmn-xyflow-connect-fixed-anchor')].map(e=>({index:Number(e.getAttribute('data-anchor-index')),point:point(e),visible:painted(e),pointerEvents:getComputedStyle(e).pointerEvents}));
+ const zoom=window.modeler.getViewport().zoom,expectedStyle=document.createElement('span').style;expectedStyle.strokeWidth=String(1/zoom)+'px';
+ const markers=[...root.querySelectorAll('.bpmn-xyflow-connect-fixed-anchor')].map(e=>({index:Number(e.getAttribute('data-anchor-index')),point:point(e),visible:painted(e),pointerEvents:getComputedStyle(e).pointerEvents.toLowerCase(),radius:Number(e.getAttribute('r')),strokeWidth:e.style.strokeWidth,computedStrokeWidth:getComputedStyle(e).strokeWidth,expectedStrokeWidth:expectedStyle.strokeWidth}));
  const port=root.querySelector('.bpmn-xyflow-connect-port'),p=point(port),screen=new DOMPoint(p.x,p.y).matrixTransform(port.getScreenCTM()),press={x:Math.round(screen.x),y:Math.round(screen.y)};
- return {id,markers,anchor:point(dock),grab:p,press,visible:painted(port),hit:root.contains(document.elementFromPoint(press.x,press.y)),delivered:window.anchorInput.findLast(e=>e.type==='mousemove')};
+ return {id,zoom:window.modeler.getViewport().zoom,markers,anchor:point(dock),grab:p,press,visible:painted(port),hit:root.contains(document.elementFromPoint(press.x,press.y)),delivered:window.anchorInput.findLast(e=>e.type==='mousemove')};
 }
 export function assertGatewayControl(control,node,expected){
  assert.ok(control);assert.equal(control.id,node.id);assert.equal(control.visible,true);assert.equal(control.hit,true);
  assert.deepEqual(control.markers.map(m=>m.index),[0,1,2,3]);assert.deepEqual(control.markers.map(m=>m.point),gatewayVertices(node));
- assert.ok(control.markers.every(m=>m.visible&&m.pointerEvents==='none'),'all four fixed candidates are visible but pointer-inert');
+ assert.ok(control.markers.every(m=>m.visible&&m.pointerEvents==='visiblepainted'&&m.radius===2/control.zoom&&parseFloat(m.strokeWidth)>0&&m.strokeWidth===m.expectedStrokeWidth&&m.computedStrokeWidth===m.expectedStrokeWidth),'all four fixed candidates own only their exact visible paint');
  assert.deepEqual(control.anchor,expected);
 }
 async function acquire(h,page,id,index,selected,key){
@@ -114,17 +116,25 @@ async function move(h,page,id,key){
  for(const e of incident){fixed(changed,e.source===id?e.points[0]:e.points.at(-1));orthogonal(e.points);for(const owner of [e.source,e.target])assertGatewayRouteOutside(e.points,h.node(after,owner));await h.renderEnds(page,e.id);}
  await assertGatewayMoveGeometry(h.oracle,before.xml,after.xml,id,incident.map(e=>e.id));await h.history(page,before,after);await h.save(page,key,{incident,changed});
 }
+export async function gatewayReplacementExpectation(oracle,xml,id){
+ const expected=await oracle.fromXML(xml),old=expected.elementsById[id],next=oracle.create('bpmn:ParallelGateway');
+ assert.equal(old?.$type,'bpmn:ExclusiveGateway');
+ for(const [k,v]of Object.entries(old))if(k!=='$type')next[k]=v;
+ // Moddle reference properties are intentionally non-enumerable. Carry their
+ // declared values explicitly before replacing every reference to the owner.
+ for(const property of old.$descriptor.properties)if(property.isReference&&!property.isVirtual&&Object.hasOwn(old,property.name))next[property.name]=old[property.name];
+ next.$parent=old.$parent;
+ const list=old.$parent.flowElements;list[list.indexOf(old)]=next;
+ for(const object of Object.values(expected.elementsById))for(const property of object.$descriptor?.properties||[]){if(!property.isReference||property.isVirtual)continue;const value=object[property.name];if(Array.isArray(value))object[property.name]=value.map(v=>v===old?next:v);else if(value===old)object[property.name]=next;}
+ return (await oracle.toXML(expected.rootElement,{format:true})).xml;
+}
 async function replaceGateway(h,page,id,key){
  await h.selectNode(page,id);const before=await h.state(page);assert.equal(h.node(before,id).type,'bpmn:ExclusiveGateway');
  await h.clickButton(page,'.bpmn-xyflow-context-pad button[title^="Change type"]');
  const selector='.bpmn-xyflow-replace-menu [data-action="replace-with-parallel-gateway"]';
  assert.equal(await page.$eval(selector,e=>e.textContent),'Parallel gateway');await h.clickButton(page,selector);await h.settle(page);
  const after=await h.state(page);assert.equal(h.node(after,id).type,'bpmn:ParallelGateway');
- const expected=await h.oracle.fromXML(before.xml),old=expected.elementsById[id],next=h.oracle.create('bpmn:ParallelGateway');
- for(const [k,v]of Object.entries(old))if(k!=='$type')next[k]=v;next.$parent=old.$parent;
- const list=old.$parent.flowElements;list[list.indexOf(old)]=next;
- for(const object of Object.values(expected.elementsById))for(const property of object.$descriptor?.properties||[]){if(!property.isReference||property.isVirtual)continue;const value=object[property.name];if(Array.isArray(value))object[property.name]=value.map(v=>v===old?next:v);else if(value===old)object[property.name]=next;}
- assert.equal((await h.oracle.toXML(expected.rootElement,{format:true})).xml,after.canonical,'replace changes only the Gateway type and its corresponding object references');
+ assert.equal(await gatewayReplacementExpectation(h.oracle,before.xml,id),after.canonical,'replace changes only the Gateway type and its corresponding object references');
  for(const e of Object.values(after.edges).filter(e=>e.source===id||e.target===id))fixed(h.node(after,id),e.source===id?e.points[0]:e.points.at(-1));
  await h.history(page,before,after);await h.save(page,key,{id});
 }
@@ -156,6 +166,7 @@ export async function gatewayReferenceReopenState(_h,state,ids){
 }
 
 async function workflow(h,page,key,{index,selected}){
+ await page.evaluate(observeGatewayMarkerInput);
  await h.zoom(page,selected?1.4:.6);
  const source=await h.palette(page,'Gateway',{x:850,y:480}),other=await h.palette(page,'Gateway',{x:550,y:760}),target=await h.palette(page,'Task',{x:1250,y:760});
  await create(h,page,key+'-cancel',source,target,index,selected,{cancel:true});const id=await create(h,page,key+'-create',source,target,index,selected);
@@ -164,7 +175,9 @@ async function workflow(h,page,key,{index,selected}){
  await reconnect(h,page,key+'-target',id,'target',source,(index+2)%4);await move(h,page,source,key+'-move');
  if(index===0&&selected)await replaceGateway(h,page,source,key+'-replace');
  if(index===1&&selected)await deliberateLoop(h,page,key+'-loop',source);
- const after=await h.state(page),exclusiveIds=[source,other].filter(id=>h.node(after,id).type==='bpmn:ExclusiveGateway'),expected=await gatewayReferenceReopenState(h,after,exclusiveIds);await h.save(page,key+'-reference-defaults',{adjustments:expected.referenceAdjustments});await h.reopenThroughVisibleReference(page,expected,key+'-reopen');return{source,other,target,id,index,selected,edge:after.edges[id],referenceAdjustments:expected.referenceAdjustments};
+ const directMarkers=[];for(const zoom of GATEWAY_MARKER_ZOOMS)directMarkers.push(await directGatewayMarkerWorkflow(h,page,key+'-direct-'+zoom,{source,target,index,selected,zoom}));
+ if(index===0)await gatewayContextEntry(h,page,key+'-context-entry',source,selected?'touch':'keyboard',target);
+ const after=await h.state(page),exclusiveIds=[source,other].filter(id=>h.node(after,id).type==='bpmn:ExclusiveGateway'),expected=await gatewayReferenceReopenState(h,after,exclusiveIds);await h.save(page,key+'-reference-defaults',{adjustments:expected.referenceAdjustments});await h.reopenThroughVisibleReference(page,expected,key+'-reopen');return{source,other,target,id,index,selected,directMarkers,edge:after.edges[id],referenceAdjustments:expected.referenceAdjustments};
 }
 export const gatewayAnchorCases=[false,true].flatMap(selected=>[0,1,2,3].map(index=>({id:`GV-${selected?'selected':'plain'}-${index}`,name:`${['top','right','bottom','left'][index]} vertex ${selected?'selected':'plain'}`,engine:'local',sample:'Empty diagram',run:(h,page,key)=>workflow(h,page,key,{index,selected})})));
 // Known separate clipboard precision defect: odd selection extents round copied

@@ -30,7 +30,7 @@ test('outside hover outline is visual-only and preserves exact docking, history 
    const fixed=[...m.getContainer().querySelectorAll('.bpmn-xyflow-connect-fixed-anchor')];
    assert.equal(fixed.length,type.endsWith('Gateway')?4:0);
    if(fixed.length) assert.deepEqual(fixed.map(e=>[Number(e.getAttribute('cx')),Number(e.getAttribute('cy'))]),[[n.x+n.width/2,n.y],[n.x+n.width,n.y+n.height/2],[n.x+n.width/2,n.y+n.height],[n.x,n.y+n.height/2]]);
-   for(const e of fixed) assert.equal(e.getAttribute('pointer-events'),'none');
+   for(const e of fixed) assert.equal(e.getAttribute('pointer-events'),'visiblePainted');
    const hit=m.getContainer().querySelector('.bpmn-xyflow-connect-hit');
    assert.equal(Number(hit.getAttribute('r')),5.75/v.zoom,'visual expansion does not enlarge hit region');
    assert.equal(await m.getXML(),before);assert.equal(m.commandStack.size(),history);

@@ -18,3 +18,8 @@ The registered-handler tests preserve these authored coordinates, independently
 check diamond interiors, retain the opposite endpoint, and require exact Cancel
 and three Undo/Redo cycles. The original eight native workflows remain the
 browser acceptance gate.
+
+- `replacement-incoming-refs.bpmn`: unchanged `GV-selected-0` move export
+  from the next native run at `cc247c944e10884277492bc67367c0f74091ee84`.
+  The two incoming references belong to a non-enumerable own moddle property; the
+  expected ParallelGateway must retain them when checking the complete document.

@@ -97,7 +97,7 @@ export function validatePreviewOutline(evidence, shape, zoom, { outlinePolicy, g
     else assert.ok(Math.abs(Math.abs(marker.x-shape.x-shape.width/2)/(shape.width/2)+Math.abs(marker.y-shape.y-shape.height/2)/(shape.height/2)-1)<=1e-7);
     assert.equal(evidence.fixed.length,gatewayPolicy==='vertices'?4:0);
     evidence.fixed.forEach((fixed,i)=>{
-      assert.equal(fixed.visible,true); assert.ok(paintedStroke(fixed), 'fixed indicator has a visible painted stroke'); assert.equal(fixed.pointerEvents,'none'); assert.equal(fixed.attrs['pointer-events'],'none');
+      assert.equal(fixed.visible,true); assert.ok(paintedStroke(fixed), 'fixed indicator has a visible painted stroke'); assert.equal(fixed.pointerEvents,'visiblepainted'); assert.equal(fixed.attrs['pointer-events'],'visiblePainted');
       assert.deepEqual({x:Number(fixed.attrs.cx),y:Number(fixed.attrs.cy)},vertices[i]);
       close(Number(fixed.attrs.r),2/zoom,'fixed indicator CSS radius'); assert.equal(fixed.strokeWidth,evidence.expectedFixedStroke);
     });
