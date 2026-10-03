@@ -85,7 +85,7 @@ export async function previewMotionWorkflow(h, page, key, config, gatewayPolicy,
   }
   const setup = await h.noChange(page, before, 'native approach is model/history neutral');
   assert.deepEqual(setup.selection, before.selection); assert.deepEqual(setup.viewport, before.viewport);
-  const outlineEvidence = await page.evaluate(collectPreviewOutline, { owner: source, zoom: geometry.viewport.zoom });
+  const outlineEvidence = await page.evaluate(collectPreviewOutline, { owner: source, zoom: geometry.viewport.zoom, shape, outlinePolicy });
   await writeFile(`${h.output}/${key}-outline.json`, JSON.stringify({ outlinePolicy, gatewayPolicy, shape, zoom: geometry.viewport.zoom, evidence: outlineEvidence }, null, 2));
   const outlineCheck = validatePreviewOutline(outlineEvidence, shape, geometry.viewport.zoom, { outlinePolicy, gatewayPolicy });
   const installed = await page.evaluate(installPreviewMotionObserver, { owner: source });

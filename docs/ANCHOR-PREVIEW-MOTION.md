@@ -104,10 +104,23 @@ outside the main painted stroke, including half the preview's own stroke.
 The policy is explicit and never inferred from the running implementation.
 
 Expected path geometry comes from the actual outer paint attributes and the
-specified margin. Native `getBBox()` has a separate bound derived from Float32
-operand storage, cumulative coordinate operations and extrema subtraction. The
-raw path operands remain tightly checked; the bound does not permit a pixel-level
-geometry change. Selected 3-unit borders are distinguished from normal 2-unit
+specified margin. The `849b34d` high-zoom StartEvent run exposed an incomplete
+native-bbox premise: the exact radius20.5 path has analytic box x−2.5/width41,
+while Chromium returned x−2.5070784091949463/width41.01416015625. Its exact path,
+marker and margin checks passed; Float32 operand storage alone does not explain
+that native arc bound. This finding does not establish the browser's precise
+arc-conversion algorithm or a production geometry defect.
+
+The observer now constructs an independent expected path from the declared shape,
+actual main paint attributes and explicit margin policy. It never copies the
+actual preview path. A temporary hidden, pointer-inert path in the same SVG parent
+provides the native reference bbox and is removed in `finally`, including on
+measurement failure. Actual and expected native boxes must be finite, positive
+in size and exactly equal. The independent analytic command/operand, paint, gap,
+marker and hit checks remain strict. Evidence records the expected path, analytic
+ideal box and both native boxes. These setup-only layout reads happen before the
+motion observer starts, so they do not contaminate its event/RAF samples. The
+correction is test-only and awaits hosted replay; no epsilon was widened. Selected 3-unit borders are distinguished from normal 2-unit
 borders. Docking stays on the original perimeter, the press radius stays 5.75
 CSSpx, and the expanded outline is pointer-inert. With explicit Gateway `vertices`
 policy, four passive indicators must sit at the original four vertices. Outline

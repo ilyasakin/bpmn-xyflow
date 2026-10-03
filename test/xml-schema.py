@@ -35,7 +35,7 @@ with tempfile.TemporaryDirectory(prefix="bpmn-xml-schema-") as directory:
     subprocess.run(["node", "--test", "test/modeling/global-history.test.mjs"], cwd=ROOT, env=env, check=True)
     subprocess.run(["node", "--test", "test/modeling/import-navigation.test.mjs"], cwd=ROOT, env=env, check=True)
     subprocess.run(["node", "--test", "test/modeling/anchor-docking.test.mjs"], cwd=ROOT, env=env, check=True)
-    subprocess.run(["node", "--test", "test/modeling/gateway-anchors.test.mjs"], cwd=ROOT, env=env, check=True)
+    subprocess.run(["node", "--test", "test/modeling/gateway-anchors.test.mjs", "test/modeling/gateway-native-repair.test.mjs"], cwd=ROOT, env=env, check=True)
     subprocess.run(["node", "--test", "test/modeling/anchor-gestures.test.mjs"], cwd=ROOT, env=env, check=True)
     subprocess.run(["node", "--test", "test/modeling/container-resize.test.mjs"], cwd=ROOT, env=env, check=True)
     subprocess.run(["node", "--test", "test/modeling/group-native-setup.test.mjs"], cwd=ROOT, env=env, check=True)

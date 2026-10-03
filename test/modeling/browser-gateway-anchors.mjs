@@ -17,6 +17,30 @@ const slope=(n,index)=>[
 function fixed(n,p){assert.ok(gatewayVertices(n).some(v=>v.x===p.x&&v.y===p.y),'endpoint must equal one exact Gateway vertex: '+JSON.stringify(p));}
 function orthogonal(points){assert.ok(points.length>=2&&points.every(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)));assert.ok(points.slice(1).every((p,i)=>p.x===points[i].x||p.y===points[i].y));}
 
+// Independent diamond half-plane intersection, including retained interior
+// legs. A correct vertex alone does not make a route through its owner valid.
+export function assertGatewayRouteOutside(points,node){
+ orthogonal(points);if(!/^bpmn:.*Gateway$/.test(node.type))return;
+ const cx=node.x+node.width/2,cy=node.y+node.height/2;
+ for(let i=1;i<points.length;i++){
+  const a=points[i-1],b=points[i];
+  if(a.x===b.x){const inset=1-Math.abs(a.x-cx)/(node.width/2);if(inset<=0)continue;const top=cy-inset*node.height/2,bottom=cy+inset*node.height/2;assert.ok(Math.min(a.y,b.y)>=bottom||Math.max(a.y,b.y)<=top,'route must not cross Gateway interior');}
+  else{const inset=1-Math.abs(a.y-cy)/(node.height/2);if(inset<=0)continue;const left=cx-inset*node.width/2,right=cx+inset*node.width/2;assert.ok(Math.min(a.x,b.x)>=right||Math.max(a.x,b.x)<=left,'route must not cross Gateway interior');}
+ }
+}
+
+export async function assertGatewayMoveGeometry(oracle,beforeXML,afterXML,id,edgeIds){
+ const before=await oracle.fromXML(beforeXML),after=await oracle.fromXML(afterXML);
+ assert.deepEqual(before.warnings,[]);assert.deepEqual(after.warnings,[]);
+ const drawing=parsed=>{const entries=parsed.rootElement.diagrams.flatMap(d=>d.plane.planeElement||[]).filter(di=>di.bpmnElement?.id===id);assert.equal(entries.length,1);return entries[0];};
+ const a=drawing(before),b=drawing(after);assert.ok(/^bpmn:.*Gateway$/.test(a.bpmnElement.$type));
+ const delta={x:b.bounds.x-a.bounds.x,y:b.bounds.y-a.bounds.y};assert.ok(delta.x!==0||delta.y!==0);
+ assert.equal(b.bounds.width,a.bounds.width);assert.equal(b.bounds.height,a.bounds.height);
+ if(a.label){assert.ok(b.label?.bounds);const bounds=a.label.bounds;assert.deepEqual({x:b.label.bounds.x,y:b.label.bounds.y,width:b.label.bounds.width,height:b.label.bounds.height},{x:bounds.x+delta.x,y:bounds.y+delta.y,width:bounds.width,height:bounds.height},'the existing external label translates by exactly the Gateway movement');}
+ else assert.equal(b.label,undefined,'move does not invent label DI');
+ await assertOnlyAnchorGeometry(beforeXML,afterXML,{shapeIds:[id],edgeIds,labelIds:a.label?[id]:[]});
+}
+
 // Self-contained passive page collector; no editor mutations or dispatches.
 export function collectGatewayControl(id){
  const root=document.querySelector(`.bpmn-xyflow-connect-handle[data-connect-source="${id}"]`),dock=document.querySelector(`.bpmn-xyflow-connect-docking[data-connect-source="${id}"] circle`);
@@ -75,7 +99,7 @@ async function reconnect(h,page,key,id,side,target,index,{cancel=false}={}){
  const initial=await h.state(page),n=h.node(initial,target);await revealNative(h,page,[...initial.edges[id].points,slope(n,index)]);
  const from=await endpoint(h,page,id,side),before=await h.state(page),to=h.screen(before,slope(h.node(before,target),index));let live,paint;
  assert.ok((await h.hit(page,to)).owners.includes(target));
- await h.drag(page,from,to,{cancel,capture:async()=>{live=await h.state(page);const points=live.edges[id]?.points;orthogonal(points);assert.notDeepEqual(points,before.edges[id].points);const input=live.input.findLast(e=>e.type==='mousemove');assert.equal(input?.trusted,true);assert.deepEqual(side==='source'?points[0]:points.at(-1),expectedGatewayVertex(h.node(before,target),input.graphPoint));paint=await h.renderEnds(page,id);await h.save(page,key+'-preview',{side,target,points,paint,input});}});
+ await h.drag(page,from,to,{cancel,capture:async()=>{live=await h.state(page);const points=live.edges[id]?.points;orthogonal(points);assert.notDeepEqual(points,before.edges[id].points);const input=live.input.findLast(e=>e.type==='mousemove');assert.equal(input?.trusted,true);assert.deepEqual(side==='source'?points[0]:points.at(-1),expectedGatewayVertex(h.node(before,target),input.graphPoint));for(const owner of [h.node(before,target),h.node(before,before.edges[id][side==='source'?'target':'source'])])assertGatewayRouteOutside(points,owner);paint=await h.renderEnds(page,id);await h.save(page,key+'-preview',{side,target,points,paint,input});}});
  const after=await h.state(page);
  if(cancel){await h.noChange(page,before,'reconnect Escape preserves exact model/history');assert.deepEqual(after.selection,before.selection);return;}
  const e=after.edges[id],release=after.input.findLast(e=>e.type==='mouseup');assert.equal(release?.trusted,true);assert.equal(e[side],target);assert.deepEqual(side==='source'?e.points[0]:e.points.at(-1),expectedGatewayVertex(h.node(before,target),release.graphPoint));assert.deepEqual(e.points,live.edges[id].points);
@@ -87,8 +111,8 @@ async function reconnect(h,page,key,id,side,target,index,{cancel=false}={}){
 async function move(h,page,id,key){
  await h.selectNode(page,id);const before=await h.state(page),n=h.node(before,id),from=h.screen(before,{x:n.x+n.width/2,y:n.y+n.height/2});assert.equal((await h.hit(page,from)).id,id);
  await h.drag(page,from,{x:from.x+45,y:from.y+30});const after=await h.state(page),changed=h.node(after,id);assert.notDeepEqual({x:changed.x,y:changed.y},{x:n.x,y:n.y});const incident=Object.values(after.edges).filter(e=>e.source===id||e.target===id);
- for(const e of incident){fixed(changed,e.source===id?e.points[0]:e.points.at(-1));orthogonal(e.points);await h.renderEnds(page,e.id);}
- await assertOnlyAnchorGeometry(before.xml,after.xml,{shapeIds:[id],edgeIds:incident.map(e=>e.id)});await h.history(page,before,after);await h.save(page,key,{incident,changed});
+ for(const e of incident){fixed(changed,e.source===id?e.points[0]:e.points.at(-1));orthogonal(e.points);for(const owner of [e.source,e.target])assertGatewayRouteOutside(e.points,h.node(after,owner));await h.renderEnds(page,e.id);}
+ await assertGatewayMoveGeometry(h.oracle,before.xml,after.xml,id,incident.map(e=>e.id));await h.history(page,before,after);await h.save(page,key,{incident,changed});
 }
 async function replaceGateway(h,page,id,key){
  await h.selectNode(page,id);const before=await h.state(page);assert.equal(h.node(before,id).type,'bpmn:ExclusiveGateway');

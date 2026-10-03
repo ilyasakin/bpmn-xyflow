@@ -190,11 +190,12 @@ try {
       assert.equal(after.byId[id].$parent.id,'Payment');
     }
     for(const id of ['PaymentFlow1','PaymentFlow2']) assert.deepEqual(after.di(id).waypoint.map(coords),before.di(id).waypoint.map(coords),'internal child route remains exactly unchanged');
-    // Actual pinned resize at these host bounds has the same incident topology.
-    // Its cropper rounds SellerFlow3 to y423/x747; local docking deliberately
-    // retains the exact half-unit outline intersections.
+    // The container resize preserves its exact source crop. The user-requested
+    // Gateway policy repairs the edited target to the left vertex; the old
+    // sloped-diamond expectation predates that explicit local policy.
     assert.deepEqual(after.di('SellerFlow2').waypoint.map(coords),[{x:300,y:415},{x:300,y:415}]);
-    assert.deepEqual(after.di('SellerFlow3').waypoint.map(coords),[{x:690,y:422.5},{x:747.5,y:422.5}]);
+    assert.deepEqual(bounds(after.di('FulfillmentFork').bounds),bounds(before.di('FulfillmentFork').bounds),'the opposite Gateway itself is unchanged');
+    assert.deepEqual(after.di('SellerFlow3').waypoint.map(coords),[{x:690,y:422.5},{x:715,y:422.5},{x:715,y:430},{x:740,y:430}]);
     for(const [id,source,target] of [['SellerFlow2','ValidateOrder','Payment'],['SellerFlow3','Payment','FulfillmentFork']]) {
       assert.equal(after.byId[id].sourceRef.id,source);assert.equal(after.byId[id].targetRef.id,target);
       assert.equal(after.byId[id].$parent.id,'SellerProcess');

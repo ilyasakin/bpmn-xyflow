@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 
 /** Browser-serializable, post-setup only; never called inside motion sampling. */
-export function collectPreviewOutline({ owner, zoom }) {
+export function collectPreviewOutline({ owner, zoom, shape, outlinePolicy }) {
   const root = document.querySelector('#viewer'), gfx = root?.querySelector(`[data-element-id="${owner}"]`);
   const visual = gfx?.querySelector(':scope > circle:not([data-bpmn-hit]), :scope > rect:not([data-bpmn-hit]), :scope > polygon:not([data-bpmn-hit])');
   const outlines = [...(root?.querySelectorAll('.bpmn-xyflow-connect-outline') || [])];
@@ -17,27 +17,42 @@ export function collectPreviewOutline({ owner, zoom }) {
   const read = e => { if (!e) return null; const s = getComputedStyle(e); return { tag: e.tagName.toLowerCase(), attrs: attrs(e), bbox: bbox(e), visible: visible(e),
     strokeWidth: s.strokeWidth, inlineStrokeWidth: e.style.getPropertyValue('stroke-width'), vectorEffect: s.vectorEffect, pointerEvents: s.pointerEvents, stroke: s.stroke, strokeOpacity: s.strokeOpacity }; };
   const canonicalStroke = value => { const style = document.createElement('div').style; style.setProperty('stroke-width', `${value}px`); return style.getPropertyValue('stroke-width'); };
+  // Build a separate analytic expectation from main paint and the declared
+  // policy. Never copy the actual preview d. SVG arc conversion is native
+  // renderer behavior, beyond Float32 operand storage alone.
+  if (!shape || shape.id !== owner || !['baseline', 'outward'].includes(outlinePolicy)) throw Error('Explicit shape and outline policy required');
+  const visualEvidence = read(visual), outlineEvidence = read(outlines[0]);
+  if (!visualEvidence || !outlines[0]?.parentElement) throw Error('Missing outer paint or preview');
+  const a = visualEvidence.attrs, n = key => Number(a[key] || 0);
+  const stroke = Number.parseFloat(visualEvidence.strokeWidth);
+  const border = visualEvidence.vectorEffect === 'non-scaling-stroke' ? stroke / zoom : stroke;
+  const pad = outlinePolicy === 'outward' ? border / 2 + 3 / zoom : 0;
+  let d;
+  if (shape.type.endsWith('Event')) {
+    const cx = shape.x + n('cx'), cy = shape.y + n('cy'), r = n('r') + pad;
+    d = `M${cx},${cy}m0,${-r}a${r},${r},0,1,1,0,${2*r}a${r},${r},0,1,1,0,${-2*r}z`;
+  } else if (shape.type.endsWith('Gateway')) {
+    const px = pad*Math.hypot(1,shape.width/shape.height), py = pad*Math.hypot(1,shape.height/shape.width);
+    const x = shape.x-px, y = shape.y-py, w = shape.width+2*px, h = shape.height+2*py;
+    d = `M${x+w/2},${y}l${w/2},${h/2}l${-w/2},${h/2}l${-w/2},${-h/2}z`;
+  } else {
+    const x = shape.x+n('x')-pad, y = shape.y+n('y')-pad, w = n('width')+2*pad, h = n('height')+2*pad, r = n('rx')+pad;
+    d = `M${x+r},${y}l${w-2*r},0a${r},${r},0,0,1,${r},${r}l0,${h-2*r}a${r},${r},0,0,1,${-r},${r}l${-w+2*r},0a${r},${r},0,0,1,${-r},${-r}l0,${-h+2*r}a${r},${r},0,0,1,${r},${-r}z`;
+  }
+  const reference = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  reference.setAttribute('d', d);
+  reference.style.setProperty('visibility', 'hidden', 'important');
+  reference.style.setProperty('pointer-events', 'none', 'important');
+  let nativeExpectedBBox;
+  try { outlines[0].parentElement.appendChild(reference); nativeExpectedBBox = bbox(reference); }
+  finally { reference.remove(); }
   return { owner, gfxOwner: gfx?.getAttribute('data-element-id'), outlineCount: outlines.length,
-    visual: read(visual), outline: read(outlines[0]), marker: attrs(marker), handleOwner: handle?.getAttribute('data-connect-source'),
+    visual: visualEvidence, outline: outlineEvidence, nativeExpectation: { d, bbox: nativeExpectedBBox }, marker: attrs(marker), handleOwner: handle?.getAttribute('data-connect-source'),
     hit: attrs(handle?.querySelector('.bpmn-xyflow-connect-hit')),
     fixed: [...(handle?.querySelectorAll('.bpmn-xyflow-connect-fixed-anchor') || [])].map(read),
     expectedPreviewStroke: canonicalStroke(1 / zoom), expectedFixedStroke: canonicalStroke(1 / zoom) };
 }
 
-const halfULP32 = value => {
-  if (!Number.isFinite(value)) return Infinity;
-  if (Math.abs(value) < 2 ** -126) return 2 ** -150;
-  return 2 ** (Math.floor(Math.log2(Math.abs(value))) - 24);
-};
-/** Conservative path-storage interval: each operand may round to float32 and
- * each cumulative path addition may round once. Width/height subtract two
- * extrema. This bound scales with actual coordinates and operation count. */
-export function outlineBBoxBounds(numbers, box) {
-  const magnitude = numbers.reduce((sum, n) => sum + Math.abs(n), 0);
-  const coordinate = numbers.reduce((sum, n) => sum + halfULP32(n), 0) + numbers.length * halfULP32(magnitude);
-  return { x: coordinate + halfULP32(box.x), y: coordinate + halfULP32(box.y),
-    width: 2 * coordinate + halfULP32(box.width), height: 2 * coordinate + halfULP32(box.height) };
-}
 const paintedStroke = element => {
   const value=String(element.stroke||'').trim().toLowerCase();
   const alpha=/\/\s*([\d.]+)%?\s*\)$/.exec(value) || /^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\s*\)$/.exec(value);
@@ -105,8 +120,13 @@ export function validatePreviewOutline(evidence, shape, zoom, { outlinePolicy, g
   if(!shape.type.endsWith('Gateway')) assert.equal(evidence.fixed.length,0);
   const actual=tokens(outline.attrs.d); assert.equal(actual.length,expected.length,'outline has the exact expected geometry commands');
   actual.forEach((value,i)=>typeof expected[i]==='string'?assert.equal(value,expected[i]):close(value,expected[i],`outline geometry operand${i}`));
-  const limits=outlineBBoxBounds(expected.filter(v=>typeof v==='number'),box);
-  for(const key of ['x','y','width','height']) assert.ok(Number.isFinite(outline.bbox[key])&&Math.abs(outline.bbox[key]-box[key])<=limits[key],`native SVG bbox ${key} stays within its derived float32 storage/arithmetic bound`);
+  const reference = evidence.nativeExpectation, referenceTokens = tokens(reference?.d);
+  assert.deepEqual(referenceTokens, expected, 'native bbox reference is the independently derived analytic path');
+  for (const key of ['x','y','width','height']) {
+    assert.ok(Number.isFinite(outline.bbox[key]) && Number.isFinite(reference.bbox[key]), 'both native boxes are finite');
+    if (key === 'width' || key === 'height') assert.ok(reference.bbox[key] > 0, 'reference has positive geometry');
+    assert.equal(outline.bbox[key], reference.bbox[key], `native SVG bbox ${key} equals the independent expected path`);
+  }
   if(outlinePolicy==='outward') close(projectedGap,2.5,'visual gap is2.5CSSpx outside main paint including preview half-stroke');
-  return { outlinePolicy,gatewayPolicy,original,box,nativeBBox:outline.bbox,bboxLimits:limits,projectedGapCss:projectedGap,marker };
+  return { outlinePolicy,gatewayPolicy,original,box,nativeBBox:outline.bbox,nativeExpectation:reference,projectedGapCss:projectedGap,marker };
 }

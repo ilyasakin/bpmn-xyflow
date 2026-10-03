@@ -23,7 +23,13 @@ sloping diamond side. Viewport zoom does not alter vertex locations.
 
 Gateway create, reconnect on either end, segment/bend editing and geometry repair
 apply this policy. Moving or replacing a gateway must leave every changed route
-on vertices. Existing resize eligibility remains unchanged: gateways have no
+on vertices. Endpoint reconnect preserves authored interior bends when the
+complete route remains outside both endpoints. If a terminal-only bridge is
+unreachable or the new endpoint covers a retained leg, the existing pinned-anchor
+layouter repairs that route while keeping both chosen dockings. Undo restores the
+full authored route and point metadata.
+
+Existing resize eligibility remains unchanged: gateways have no
 ordinary resize handles. A rigid translation of a conforming route translates
 its vertices exactly. Valid self-loops remain supported, including a deliberate
 activated return to the same vertex; they must not collapse or cross the gateway.

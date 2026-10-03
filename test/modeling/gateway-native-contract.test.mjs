@@ -4,7 +4,7 @@ import { runInNewContext } from 'node:vm';
 import { readFile } from 'node:fs/promises';
 import { BpmnModdle } from 'bpmn-moddle';
 import { setupDOM } from '../helpers/dom.mjs';
-import { gatewayAnchorCases, gatewayClipboardCases, gatewayVertices, expectedGatewayVertex, collectGatewayControl, assertGatewayControl, gatewayReferenceReopenState } from './browser-gateway-anchors.mjs';
+import { gatewayAnchorCases, gatewayClipboardCases, gatewayVertices, expectedGatewayVertex, collectGatewayControl, assertGatewayControl, gatewayReferenceReopenState, assertGatewayMoveGeometry, assertGatewayRouteOutside } from './browser-gateway-anchors.mjs';
 const node={id:'Gateway',type:'bpmn:ExclusiveGateway',x:400,y:200,width:50,height:50};
 
 test('eight core native workflows cover vertices/selection while the strict clipboard defect remains separately open',()=>{
@@ -46,4 +46,26 @@ test('actual pinned reopen adds only the known absent ExclusiveGateway marker de
    assert.equal(await m.getXML(),xml);
   }finally{m.destroy();reference.destroy();}}
  }finally{await dom.cleanup();}
+});
+
+
+test('Gateway movement permits exactly its translated external label and rejects other semantic or DI changes',async()=>{
+ const dom=await setupDOM();let m;
+ try{const {default:Modeler}=await dom.loadModule('/lib/Modeler.js'),oracle=new BpmnModdle();m=new Modeler({container:dom.createContainer(),fitViewOnInit:false,palette:false,snap:false});
+  await m.importXML(await readFile('test/fixtures/gateway-native-repair/crossing-retained-route.bpmn','utf8'));
+  const gateway=m.getGraph().nodes.find(n=>n.type==='bpmn:ExclusiveGateway'&&n.id.endsWith('_1')),other=m.getGraph().nodes.find(n=>n.type==='bpmn:ExclusiveGateway'&&n!==gateway),incident=m.getGraph().edges.filter(e=>e.source===gateway||e.target===gateway).map(e=>e.id),before=await m.getXML();
+  assert.ok(m.moveShape(gateway,{x:31,y:29}));const after=await m.getXML();await assertGatewayMoveGeometry(oracle,before,after,gateway.id,incident);
+  const diagram=p=>p.rootElement.diagrams[0].plane.planeElement,own=p=>diagram(p).find(di=>di.bpmnElement.id===gateway.id),unrelated=p=>diagram(p).find(di=>di.bpmnElement.id===other.id);
+  for(const corrupt of [p=>own(p).label.bounds.x++,p=>own(p).label.bounds.width++,p=>unrelated(p).label.bounds.y++,p=>{p.elementsById[gateway.id].name='unexpected';},p=>diagram(p).reverse(),p=>{const edge=diagram(p).find(di=>di.waypoint&&!incident.includes(di.bpmnElement.id));edge.waypoint[1].x++;}]){
+   const p=await oracle.fromXML(after);corrupt(p);await assert.rejects(assertGatewayMoveGeometry(oracle,before,(await oracle.toXML(p.rootElement,{format:true})).xml,gateway.id,incident));
+  }
+  for(let i=0;i<3;i++){m.undo();assert.equal(await m.getXML(),before);m.redo();assert.equal(await m.getXML(),after);}
+ }finally{m?.destroy();await dom.cleanup();}
+});
+
+test('native Gateway route guard rejects interior crossings despite correct terminal vertices',()=>{
+ const g={type:'bpmn:ExclusiveGateway',x:400,y:100,width:50,height:50};
+ assertGatewayRouteOutside([{x:350,y:125},{x:400,y:125}],g);
+ assertGatewayRouteOutside([{x:425,y:100},{x:425,y:80},{x:470,y:80},{x:470,y:125},{x:450,y:125}],g);
+ for(const points of [[{x:350,y:125},{x:475,y:125},{x:475,y:80},{x:425,y:80},{x:425,y:100}],[{x:425,y:50},{x:425,y:175},{x:470,y:175},{x:470,y:125},{x:450,y:125}]])assert.throws(()=>assertGatewayRouteOutside(points,g));
 });
