@@ -53,7 +53,7 @@ with tempfile.TemporaryDirectory(prefix="bpmn-xml-schema-") as directory:
             raise RuntimeError(f"Unexpected DOCTYPE in {artifact.name}")
         schema.assertValid(document)
         print(f"OK official BPMN20.xsd: {artifact.name}", flush=True)
-    for fixture in sorted([*(ROOT / "test/fixtures/flow-native").glob("*.bpmn"), *(ROOT / "test/fixtures/group-native").glob("*.bpmn"), *(ROOT / "test/fixtures/hover-native").glob("*.bpmn")]):
+    for fixture in sorted([*(ROOT / "test/fixtures/connection-paint").glob("*.bpmn"), *(ROOT / "test/fixtures/flow-native").glob("*.bpmn"), *(ROOT / "test/fixtures/group-native").glob("*.bpmn"), *(ROOT / "test/fixtures/hover-native").glob("*.bpmn")]):
         document = etree.parse(str(fixture), parser)
         if document.docinfo.doctype:
             raise RuntimeError(f"Unexpected DOCTYPE in {fixture.name}")

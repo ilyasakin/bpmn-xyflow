@@ -1,7 +1,8 @@
 # Anchor preview motion baseline
 
 This diagnostic addresses T05, T06 and T10 of the October 3 per-type review.
-It is designed before optimizing production code. Native execution is pending.
+It is designed before optimizing production code. The first hosted baseline ran on `cbd1a0af` (Actions run `37082800733`).
+The setup correction below is prepared and has not yet run natively.
 
 ## Questions and cases
 
@@ -54,3 +55,40 @@ timing and spatial jumps remain evidence to interpret, even when those guards
 pass. Screenshots and XML are captured only after motion observation is stopped.
 The existing isolated whole-case lifecycle bounds setup, action, evidence and
 owned cleanup; failed cases cannot hide later independent cases.
+
+## First hosted observations and setup correction
+
+The 13 cases produced six successful executions, one strict marker-freshness
+failure, and six setup failures. All seven completed motion traces, including the
+failed StartEvent case, retain their original timing, style and spatial evidence.
+
+At DPR 2, a requested native wheel delta of 60 was delivered as a trusted
+`deltaY: 30`, with the camera changing by exactly `2 ** -.06` per tick. The
+shared helper's DPR-1 budget therefore exhausted before the target zoom. The
+diagnostic now owns its wheel setup: one real calibration tick records input and
+camera response, subsequent input magnitude and finite remaining budget use that
+observed gain, and every step preserves exact XML/history/selection. Setup
+evidence is saved even on failure. No shared factory or production code changes.
+The zoom band is now within .001 in log ratio. Booking targets .82737 and requires
+a visibly displaced grab; the original .955 run remained coincident and did not
+exercise the reported placement discontinuity.
+
+The selected StartEvent at zoom .543367 held its marker for seven staircase
+positions in each reversal. At delivered `(894,643) → (894,642)`, the existing
+acquisition rule sees .76837 CSSpx progress toward the displaced grab versus
+.64001 CSSpx tangential movement. The pointer remains within the 1.5 CSSpx outline
+band. The exact registered-handler replay reproduces the hold and its unchanged
+model/history. This explains the behavior but does not approve it as perimeter
+UX: the strict freshness failure remains. True outward travel, explicit resize
+origins and direct grab acquisition must be distinguished before changing that
+source policy.
+
+All recorded computed transition durations were `0s`, animation names `none`,
+and active animations and long tasks were absent. Across these seven traces,
+event-timestamp-to-DOM medians were about 8.4–8.7ms for paced input and
+16.0–16.2ms for fast CDP input. These include native scheduling and do not isolate
+handler cost or prove presentation latency. Spatial jumps were deterministic in
+both phases: a 1 CSSpx input produced maximum grab movements of 17.56 CSSpx for
+selected StartEvent, 12.22 CSSpx for selected Task, and 12.02 CSSpx for unselected
+Gateway. These observations support investigating placement continuity separately
+from animation or delayed DOM. No universal performance pass is claimed.

@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createAnchorHarness } from '../helpers/anchor-ux-browser.mjs';
 import { runFollowupCases, assertFollowupPortClosed, selectFollowupShard } from '../helpers/anchor-followup-lifecycle.mjs';
+import { zoomPreviewMotion } from '../helpers/anchor-preview-zoom.mjs';
 import { installPreviewMotionObserver, collectPreviewMotionStyles, analyzePreviewMotion, assertMotionDelivery } from '../helpers/anchor-preview-motion.mjs';
 
 const conditions = [
@@ -53,9 +54,14 @@ export async function previewMotionWorkflow(h, page, key, config, gatewayPolicy)
     assert.ok(start, 'visible empty sample starts with one StartEvent');
     await h.selectNode(page, start.id); await page.keyboard.press('Delete'); await h.settle(page);
     assert.equal((await h.raw(page)).nodes.some(n => n.id === start.id), false);
-    await h.zoom(page, config.zoom);
+    source = null;
+  }
+  const zoomEvidence = {};
+  try { await zoomPreviewMotion(h, page, config.zoom, zoomEvidence); }
+  finally { await writeFile(`${h.output}/${key}-zoom-setup.json`, JSON.stringify(zoomEvidence, null, 2)); }
+  if (!source) {
     source = await h.palette(page, config.label, { x: 900, y: 650 });
-  } else await h.zoom(page, config.zoom);
+  }
   await h.blank(page, { click: true });
   if (config.selected) await h.selectNode(page, source);
   const before = await h.state(page), shape = h.node(before, source);
@@ -68,6 +74,14 @@ export async function previewMotionWorkflow(h, page, key, config, gatewayPolicy)
   assert.ok(control, 'native approach exposes the requested source before observation');
   const environment = await styleSnapshot(page, source);
   assert.equal(environment.dpr, config.dpr); assert.equal(environment.reducedMotion, config.reducedMotion);
+  if (config.source) {
+    const marker = environment.elements.find(e => e.selector === '.bpmn-xyflow-connect-docking-point');
+    const grab = environment.elements.find(e => e.selector === '.bpmn-xyflow-connect-port');
+    const center = e => ({ x: e.box.x + e.box.width / 2, y: e.box.y + e.box.height / 2 });
+    assert.ok(marker?.box && grab?.box, 'boundary motion records both visible control locations');
+    assert.ok(Math.hypot(center(marker).x - center(grab).x, center(marker).y - center(grab).y) > 8.75,
+      'boundary risk pair exercises a visibly displaced grab, not the previous coincident .955 setup');
+  }
   const setup = await h.noChange(page, before, 'native approach is model/history neutral');
   assert.deepEqual(setup.selection, before.selection); assert.deepEqual(setup.viewport, before.viewport);
   const installed = await page.evaluate(installPreviewMotionObserver, { owner: source });
@@ -106,7 +120,7 @@ export async function previewMotionWorkflow(h, page, key, config, gatewayPolicy)
   }
   const summaries = analyzePreviewMotion(trace, geometry, { gatewayPolicy });
   return { diagnosticOnly: true, performanceAccepted: false, source, config, gatewayPolicy, geometry,
-    environment, installed, summaries, phases, trace,
+    environment, installed, summaries, phases, trace, zoomEvidence,
     limitations: ['RAF is not compositor presentation', 'shared factory performs CTM reads on mousemove',
       'CDP throughput is not physical input sampling', 'layout metric deltas are process totals, not per-handler attribution'] };
 }
@@ -116,7 +130,7 @@ export function previewMotionCases(gatewayPolicy = 'continuous') {
   const cases = ['Task', 'Start', 'Gateway'].flatMap(label => conditions.map(config => ({ ...config, label,
     id: `MOTION-${label}`, name: config.name, engine: 'local', sample: 'Empty diagram',
     run: (h, page, key) => previewMotionWorkflow(h, page, key, { ...config, label }, gatewayPolicy) })));
-  const boundary = { name: 'selected-booking-boundary', selected: true, zoom: .85, dpr: 1, reducedMotion: false, source: 'FlightTimeout' };
+  const boundary = { name: 'selected-booking-boundary', selected: true, zoom: .82737, dpr: 1, reducedMotion: false, source: 'FlightTimeout' };
   cases.push({ ...boundary, id: 'MOTION-Boundary', engine: 'local', sample: 'Booking, timeout and compensation',
     run: (h, page, key) => previewMotionWorkflow(h, page, key, boundary, gatewayPolicy) });
   return cases;

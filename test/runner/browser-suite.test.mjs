@@ -189,3 +189,9 @@ test('motion shards cover all thirteen bounded native cases', () => {
     assert.ok(BROWSER_SUITE_TIMEOUTS[`test:browser:preview-motion-${shard}`] < 35*60000);
   }
 });
+
+test('six connection paint cases have a complete independent budget', () => {
+ assert.equal(BROWSER_SUITES['test:browser:connection-paint'],'test/modeling/browser-connection-paint.mjs');
+ assert.equal(BROWSER_SUITE_TIMEOUTS['test:browser:connection-paint'],6*215000+90000);
+ assert.ok(BROWSER_SUITE_TIMEOUTS['test:browser:connection-paint']<30*60000);
+});
