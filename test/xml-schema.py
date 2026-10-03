@@ -35,6 +35,7 @@ with tempfile.TemporaryDirectory(prefix="bpmn-xml-schema-") as directory:
     subprocess.run(["node", "--test", "test/modeling/global-history.test.mjs"], cwd=ROOT, env=env, check=True)
     subprocess.run(["node", "--test", "test/modeling/import-navigation.test.mjs"], cwd=ROOT, env=env, check=True)
     subprocess.run(["node", "--test", "test/modeling/anchor-docking.test.mjs"], cwd=ROOT, env=env, check=True)
+    subprocess.run(["node", "--test", "test/modeling/gateway-anchors.test.mjs"], cwd=ROOT, env=env, check=True)
     subprocess.run(["node", "--test", "test/modeling/anchor-gestures.test.mjs"], cwd=ROOT, env=env, check=True)
     subprocess.run(["node", "--test", "test/modeling/container-resize.test.mjs"], cwd=ROOT, env=env, check=True)
     subprocess.run(["node", "--test", "test/modeling/group-native-setup.test.mjs"], cwd=ROOT, env=env, check=True)
@@ -53,7 +54,7 @@ with tempfile.TemporaryDirectory(prefix="bpmn-xml-schema-") as directory:
             raise RuntimeError(f"Unexpected DOCTYPE in {artifact.name}")
         schema.assertValid(document)
         print(f"OK official BPMN20.xsd: {artifact.name}", flush=True)
-    for fixture in sorted([*(ROOT / "test/fixtures/connection-paint").glob("*.bpmn"), *(ROOT / "test/fixtures/flow-native").glob("*.bpmn"), *(ROOT / "test/fixtures/group-native").glob("*.bpmn"), *(ROOT / "test/fixtures/hover-native").glob("*.bpmn")]):
+    for fixture in sorted([*(ROOT / "test/fixtures/anchor-motion").glob("*.bpmn"), *(ROOT / "test/fixtures/connection-paint").glob("*.bpmn"), *(ROOT / "test/fixtures/flow-native").glob("*.bpmn"), *(ROOT / "test/fixtures/group-native").glob("*.bpmn"), *(ROOT / "test/fixtures/hover-native").glob("*.bpmn")]):
         document = etree.parse(str(fixture), parser)
         if document.docinfo.doctype:
             raise RuntimeError(f"Unexpected DOCTYPE in {fixture.name}")

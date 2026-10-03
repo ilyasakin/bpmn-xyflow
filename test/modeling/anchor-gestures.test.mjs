@@ -402,13 +402,13 @@ test('AX-05: deliberate activated same-anchor loops remain visible, valid and un
   } finally { h.close(); }
 });
 
-test('AX-02/09/10: ports follow rounded corners, event circles and diamond sides', async () => {
+test('AX-02/09/10: ports preserve rounded/circular outlines and expose the requested gateway vertices', async () => {
   const h=await fixture(),{m}=h;
   try {
     const task=m.getElement('Task_1'),event=m.getElement('StartEvent_1'),gateway=m.addShape('bpmn:ExclusiveGateway',{x:700,y:350});
     h.move({x:task.x,y:task.y},task);const corner=portPoint(h);assert.ok(corner.x>task.x&&corner.y>task.y);assert.ok(Math.abs(Math.hypot(corner.x-task.x-10,corner.y-task.y-10)-10)<1e-8);
     h.move({x:event.x+3,y:event.y+3},event);const circle=portPoint(h);assert.ok(Math.abs(Math.hypot(circle.x-event.x-18,circle.y-event.y-18)-18)<1e-8);
-    h.move({x:gateway.x+8,y:gateway.y+8},gateway);const diamondMarker=m.getContainer().querySelector('.bpmn-xyflow-connect-docking-point'),diamond={x:Number(diamondMarker.getAttribute('cx')),y:Number(diamondMarker.getAttribute('cy'))};assert.ok(diamond.x>gateway.x&&diamond.y>gateway.y);assert.ok(Math.abs(Math.abs(diamond.x-gateway.x-25)+Math.abs(diamond.y-gateway.y-25)-25)<1e-8);
+    h.move({x:gateway.x+8,y:gateway.y+8},gateway);const diamondMarker=m.getContainer().querySelector('.bpmn-xyflow-connect-docking-point'),diamond={x:Number(diamondMarker.getAttribute('cx')),y:Number(diamondMarker.getAttribute('cy'))};assert.deepEqual(diamond,{x:gateway.x+25,y:gateway.y},'top/left pointer tie chooses the top fixed vertex');
   } finally { h.close(); }
 });
 

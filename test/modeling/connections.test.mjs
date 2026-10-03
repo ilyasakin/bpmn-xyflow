@@ -76,7 +76,7 @@ for (const zoom of [0.55, 1, 1.8]) test(`explicit create docking and preview agr
   } finally { h.close(); }
 });
 
-test('circle and diamond explicit docking preserves actual perimeter fractions', async () => {
+test('circle perimeter fractions remain exact while gateway drops adopt the fixed vertex policy', async () => {
   const h = await fixture(), { m } = h;
   try {
     const event = m.addShape('bpmn:IntermediateThrowEvent', { x: 400, y: 400 });
@@ -85,7 +85,7 @@ test('circle and diamond explicit docking preserves actual perimeter fractions',
     const end = { x: 787.5, y: 487.5 };
     const edge = m.connect(event, gateway, { connectionStart: start, connectionEnd: end });
     assert.ok(edge); assert.ok(Math.hypot(edge.waypoints[0].x - start.x, edge.waypoints[0].y - start.y) < 1e-9);
-    assert.deepEqual(xy([edge.waypoints.at(-1)]), [end]); assert.ok(orthogonal(edge.waypoints)); await valid(m);
+    assert.deepEqual(xy([edge.waypoints.at(-1)]), [{ x: 800, y: 475 }]); assert.ok(orthogonal(edge.waypoints)); await valid(m);
   } finally { h.close(); }
 });
 

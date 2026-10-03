@@ -195,3 +195,9 @@ test('six connection paint cases have a complete independent budget', () => {
  assert.equal(BROWSER_SUITE_TIMEOUTS['test:browser:connection-paint'],6*215000+90000);
  assert.ok(BROWSER_SUITE_TIMEOUTS['test:browser:connection-paint']<30*60000);
 });
+
+test('eight Gateway workflows have a complete independent budget', () => {
+ assert.equal(BROWSER_SUITES['test:browser:gateway-anchors'],'test/modeling/browser-gateway-anchors.mjs');
+ assert.equal(BROWSER_SUITE_TIMEOUTS['test:browser:gateway-anchors'],8*215000+90000);
+ assert.ok(BROWSER_SUITE_TIMEOUTS['test:browser:gateway-anchors']<40*60000);
+});

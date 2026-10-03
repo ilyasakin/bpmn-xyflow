@@ -75,7 +75,30 @@ camera gain, including DPR 2, instead of assuming requested and delivered deltas
 are identical. Requested/delivered ticks and camera evidence are saved even if
 setup fails. The original shared factory stays unchanged.
 
-The native six-case suite is prepared and unrun locally. Structural DOM checks
+Hosted revision `7dcc2a9` passed four of the six native cases. Both Gateway
+cases reached forward-paint creation checks; the remaining failures exposed two
+test assumptions, not an observed paint regression:
+
+- PAINT-3 completed reconnect and exact history, then pinned upstream import
+  added `isMarkerVisible="true"` to the explicitly named ExclusiveGateway DI
+  where the local export omitted that property. A full installed upstream
+  Modeler probe proves that this is the entire model difference. The expected
+  reference model now adds only this absent flag on that one gateway. Explicit
+  true/false input cannot use the allowance, and unrelated geometry, metadata,
+  labels, semantics and ordering still participate in complete equality.
+  Local XML is pasted unchanged and local history stays byte-exact
+- PAINT-4 completed both creation paths and history before the reconnect input
+  guard expected x906 while the trusted move/release delivered x907, y884. The
+  original fractional request was not persisted, so its exact browser
+  conversion is not claimed. The corrected test chooses an integer CSS
+  destination before dispatch and requires exact trusted delivery. It records
+  the original fractional request, chosen point, delivered event and CTM. Model
+  coordinates remain fractional; the endpoint still must equal independent
+  projection through the actual double-precision viewport, and preview must
+  equal commit. The browser's Float32 SVG CTM remains evidence, not a replacement
+  for the more precise model transform
+
+The corrected six-case suite requires a new hosted run. Structural DOM checks
 do not certify browser rasterization or native gesture acceptance. Gateway
 vertex selection and source-affordance motion are separate changes. Historical
 F23 intermittency remains the unresolved finding documented in

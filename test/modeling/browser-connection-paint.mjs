@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { endpoint } from '../helpers/anchor-followup-controls.mjs';
 import { assertOnlyAnchorGeometry } from '../helpers/anchor-model-guard.mjs';
 import { zoomPreviewMotion } from '../helpers/anchor-preview-zoom.mjs';
+import { paintReferenceExpectation, paintReleasePoint } from '../helpers/connection-paint-oracles.mjs';
 import { runViewportSourceCases } from './browser-viewport-source-grabs.mjs';
 
 /** Independent paint contract, deliberately not the production corner algorithm. */
@@ -47,6 +48,11 @@ export function collectConnectionPaint(id = null) {
 }
 
 async function workflow(h, page, key, config) {
+  const inputEvidence=[];
+  const recordRelease=async(phase,requested,chosen,delivered,state)=>{
+    inputEvidence.push({phase,requested,chosen,delivered,viewport:state.viewport,container:state.container});
+    await writeFile(`${h.output}/${key}-native-input.json`,JSON.stringify(inputEvidence,null,2));
+  };
   await page.setViewport({ width:1800, height:1200, deviceScaleFactor:config.dpr });
   assert.equal(await page.evaluate(() => devicePixelRatio), config.dpr);
   const zoomEvidence = {};
@@ -61,10 +67,11 @@ async function workflow(h, page, key, config) {
   for (const cancel of [true, false]) {
     const port = await h.sourcePort(page, source, sourceSide, .5, { selected:true });
     const before = await h.state(page), targetNode = h.node(before, target);
-    const to = h.screen(before, h.side(targetNode, targetSide));
+    const requested = h.screen(before, h.side(targetNode, targetSide));
     // An exact delivered integer along the source's axis is the aligned
     // control; +1/+8 CSS pixels deliberately retain the user's chosen offset.
-    to[cross] = Math.round(h.screen(before, port.anchor)[cross]) + config.offset;
+    requested[cross] = Math.round(h.screen(before, port.anchor)[cross]) + config.offset;
+    const to = paintReleasePoint(requested);
     assert.equal((await h.hit(page, to)).id, target, 'unobstructed visible target receives the drop');
     await h.drag(page, port.point, to, {cancel, capture:async () => {
       preview = await page.evaluate(collectConnectionPaint);
@@ -86,7 +93,8 @@ async function workflow(h, page, key, config) {
     assert.equal(edge.source, source); assert.equal(edge.target, target);
     assert.deepEqual(edge.points[0], port.anchor);
     const delivered = after.input.findLast(e => e.type === 'mouseup'); assert.equal(delivered.trusted, true);
-    assert.deepEqual({x:delivered.x,y:delivered.y}, {x:Math.trunc(to.x),y:Math.trunc(to.y)});
+    await recordRelease('create',requested,to,delivered,after);
+    assert.deepEqual({x:delivered.x,y:delivered.y}, to, 'trusted release equals the preselected integer CSS destination');
     const expected = h.projected(targetNode, h.graph(after, delivered));
     h.near(edge.points.at(-1), expected, 1e-7, 'chosen target survives the exact delivered native input');
     if (!config.offset && config.sourceLabel === 'Task') assert.equal(edge.points[0][cross], edge.points.at(-1)[cross]);
@@ -94,10 +102,10 @@ async function workflow(h, page, key, config) {
     assert.equal(paint.d, preview.d); assert.equal(paint.hitD, paint.d); assert.equal(paint.dpr,config.dpr);
     assertForwardPaint(paint.d, edge.points[0], edge.points.at(-1));
     await h.creationOnly(before,after,edge); await h.history(page,before,after);
-    created=edge; sourceEvidence={port,delivered,paint,preview};
+    created=edge; sourceEvidence={port,requested,to,delivered,paint,preview};
   }
   const from = await endpoint(h,page,created.id,'target'), before = await h.state(page);
-  const to = {...from,[cross]:from[cross]+7};
+  const requested = {...from,[cross]:from[cross]+7}, to = paintReleasePoint(requested);
   assert.ok((await h.hit(page,to)).owners.includes(target), 'same-target reconnect retains visible target hit');
   let routePreview;
   await h.drag(page,from,to,{capture:async()=>{
@@ -107,7 +115,8 @@ async function workflow(h, page, key, config) {
   const reconnected=await h.state(page), edge=reconnected.edges[created.id];
   assert.deepEqual(edge.points[0],created.points[0]);
   const release=reconnected.input.findLast(event=>event.type==='mouseup');assert.equal(release.trusted,true);
-  assert.deepEqual({x:release.x,y:release.y},{x:Math.trunc(to.x),y:Math.trunc(to.y)});
+  await recordRelease('reconnect',requested,to,release,reconnected);
+  assert.deepEqual({x:release.x,y:release.y},to,'trusted reconnect release equals the preselected integer CSS destination');
   h.near(edge.points.at(-1),h.projected(h.node(before,target),h.graph(reconnected,release)),1e-7,
     'reconnect endpoint equals the independent projection of delivered input');
   const painted=await page.evaluate(collectConnectionPaint,edge.id);
@@ -134,8 +143,11 @@ async function workflow(h, page, key, config) {
     assertForwardPaint(resizedPaint.d,resized.edges[edge.id].points[0],resized.edges[edge.id].points.at(-1));
     await assertOnlyAnchorGeometry(beforeResize.xml,resized.xml,{shapeIds:[target],edgeIds:[edge.id]});await h.history(page,beforeResize,resized);
   }
-  const final=await h.state(page);await h.reopenThroughVisibleReference(page,final,key);
-  return {config,source,target,zoomEvidence,sourceEvidence,reconnect:{from,to,release,routePreview,painted},finalEdge:final.edges[created.id]};
+  const final=await h.state(page);
+  const referenceExpectation=config.sourceLabel==='Gateway' ? await paintReferenceExpectation(final.xml,source) : null;
+  await h.reopenThroughVisibleReference(page,referenceExpectation ? {...final,canonical:referenceExpectation.canonical} : final,key);
+  return {config,source,target,zoomEvidence,sourceEvidence,reconnect:{from,requested,to,release,routePreview,painted},
+    referenceAdjustment:referenceExpectation?.adjustment||null,finalEdge:final.edges[created.id]};
 }
 
 export const connectionPaintCases = [

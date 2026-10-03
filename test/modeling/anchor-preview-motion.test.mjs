@@ -145,5 +145,5 @@ test('native runner only uses installed APIs and preserves the guarded green fac
     for (const m of source.matchAll(new RegExp(`\\b${kind}\\.(\\w+)\\s*\\(`, 'g'))) assert.equal(typeof prototype[m[1]], 'function', `${kind}.${m[1]}`);
   assert.doesNotMatch(source, /\.setViewport\(\s*\{\s*x:|modeler\.(?:addShape|select|importXML|setViewport)|dispatchEvent/);
   const factory = await readFile(new URL('../helpers/anchor-ux-browser.mjs', import.meta.url));
-  assert.equal(createHash('sha256').update(factory).digest('hex'), 'c128050f658b7d2a9a2492431dd48b43f0dbdb5694d93213a25fe40d23f07082');
+  assert.equal(createHash('sha256').update(factory).digest('hex'), 'b09654d86e453316fd3c5a109b2e40eab88c296d4559fe906d5d52d27632efaf');
 });

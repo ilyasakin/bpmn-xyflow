@@ -132,7 +132,7 @@ test("task anchors retain chosen side fractions rather than reset to center", ()
   close(projectDocking(source, { x: start.x, y: start.y + 5 }), start);
 });
 
-test("event, gateway, and task-corner explicit anchor coordinates survive routing", () => {
+test("event/task perimeter precision and the requested fixed gateway vertex policy coexist", () => {
   const event = shape("StartEvent", 100, 100, 36, 36),
     gateway = shape("ExclusiveGateway", 300, 220, 50, 50);
   const start = { x: 118 + 18 / Math.sqrt(2), y: 118 - 18 / Math.sqrt(2) },
@@ -143,7 +143,7 @@ test("event, gateway, and task-corner explicit anchor coordinates survive routin
     preserveDocking: "both",
   });
   close(result[0], start);
-  close(result.at(-1), end);
+  assert.deepEqual(xy([result.at(-1)]), [{ x: 325, y: 220 }]); // top/left tie uses top vertex
   assert.ok(orthogonal(result));
   const task = shape("Task", 100, 100),
     corner = projectDocking(task, { x: 100, y: 100 });

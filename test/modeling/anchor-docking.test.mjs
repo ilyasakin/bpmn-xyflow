@@ -102,7 +102,7 @@ test('actual pinned move repairs opposite circle docking with interior originals
   } finally { upstream.destroy(); }
 });
 
-test('fresh/reopened circle and diamond routes redock across moved endpoints and retain authored waypoint metadata', async () => {
+test('fresh/reopened circle-perimeter and gateway-vertex routes retain their per-type policy and waypoint metadata', async () => {
   for (const kind of ['bpmn:IntermediateThrowEvent', 'bpmn:ExclusiveGateway']) for (const reverse of [false, true]) {
     const m = await editor(await readFile('test/fixtures/bpmn/basic.bpmn', 'utf8'));
     try {
@@ -111,13 +111,15 @@ test('fresh/reopened circle and diamond routes redock across moved endpoints and
       const source = reverse ? endpoint : task, target = reverse ? task : endpoint;
       const start = reverse ? dock : { x: 500, y: 400 + offset }, end = reverse ? { x: 500, y: 400 + offset } : dock;
       const edge = m.connect(source, target, { connectionStart: start, connectionEnd: end }); assert.ok(edge);
-      assert.deepEqual(xy([edge.waypoints[0], edge.waypoints.at(-1)]), [start, end]);
+      const chosen = kind.endsWith('Gateway') ? { x: endpoint.x, y: endpoint.y + endpoint.height / 2 } : dock;
+      assert.deepEqual(xy([edge.waypoints[0], edge.waypoints.at(-1)]), reverse ? [chosen,end] : [start,chosen]);
       edge.waypoints[reverse ? 0 : edge.waypoints.length - 1].original.note = 'logical metadata';
       edge.waypoints[reverse ? edge.waypoints.length - 1 : 0].original.note = 'moved logical metadata';
       const before = await m.getXML(), original = structuredClone(edge.waypoints), id = edge.id, taskId = task.id;
       m.moveShape(task, { x: 400, y: 0 });
       const after = await save(m), fixed = edge.waypoints[reverse ? 0 : edge.waypoints.length - 1];
       onOutline(fixed, endpoint); assert.ok(fixed.x > 650, 'opposite endpoint changes to its right outline');
+      if(kind.endsWith('Gateway')) assert.deepEqual({x:fixed.x,y:fixed.y},{x:endpoint.x+endpoint.width,y:endpoint.y+endpoint.height/2});
       assert.equal(fixed.original.note, 'logical metadata');
       assert.equal(edge.waypoints[reverse ? edge.waypoints.length - 1 : 0].original.note, 'moved logical metadata');
       assert.ok(edge.waypoints[reverse ? edge.waypoints.length - 1 : 0].x < task.x + task.width, 'Task exits on its left facing side');

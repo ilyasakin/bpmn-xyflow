@@ -92,3 +92,31 @@ both phases: a 1 CSSpx input produced maximum grab movements of 17.56 CSSpx for
 selected StartEvent, 12.22 CSSpx for selected Task, and 12.02 CSSpx for unselected
 Gateway. These observations support investigating placement continuity separately
 from animation or delayed DOM. No universal performance pass is claimed.
+
+## Explicit visual-outline check outside the timing loop
+
+The same 13 cases now collect the actual outer Task rectangle, Event circle or
+Gateway polygon after setup, together with computed stroke, the preview path,
+native SVG bounding box, marker, hit radius and fixed indicators. This is outside
+the motion sampling loop. `BPMN_MOTION_OUTLINE_POLICY=baseline` records and checks
+the original centerline outline; `outward` requires the new 2.5 CSSpx clear gap
+outside the main painted stroke, including half the preview's own stroke.
+The policy is explicit and never inferred from the running implementation.
+
+Expected path geometry comes from the actual outer paint attributes and the
+specified margin. Native `getBBox()` has a separate bound derived from Float32
+operand storage, cumulative coordinate operations and extrema subtraction. The
+raw path operands remain tightly checked; the bound does not permit a pixel-level
+geometry change. Selected 3-unit borders are distinguished from normal 2-unit
+borders. Docking stays on the original perimeter, the press radius stays 5.75
+CSSpx, and the expanded outline is pointer-inert. With explicit Gateway `vertices`
+policy, four passive indicators must sit at the original four vertices. Outline
+and relevant source hashes are saved before validation, including failed cases.
+
+The calibrated baseline at `7dcc2a9` reached every requested zoom. It recorded
+8/13 successful executions and five strict freshness failures: two selected Task,
+two selected StartEvent and one selected Booking Boundary case. Task traces
+revealed a coincident port retaining a prior resize-pointer offset. Event traces
+revealed along-ring choice being treated as displaced-grab travel. Registered
+source regressions explain these findings; they do not replace the next exact
+source native run or weaken the existing freshness assertions.

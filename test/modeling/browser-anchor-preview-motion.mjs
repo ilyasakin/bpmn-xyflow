@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createAnchorHarness } from '../helpers/anchor-ux-browser.mjs';
 import { runFollowupCases, assertFollowupPortClosed, selectFollowupShard } from '../helpers/anchor-followup-lifecycle.mjs';
+import { collectPreviewOutline, validatePreviewOutline } from '../helpers/anchor-preview-outline.mjs';
 import { zoomPreviewMotion } from '../helpers/anchor-preview-zoom.mjs';
 import { installPreviewMotionObserver, collectPreviewMotionStyles, analyzePreviewMotion, assertMotionDelivery } from '../helpers/anchor-preview-motion.mjs';
 
@@ -44,7 +45,7 @@ async function stopAndRead(page) {
   });
 }
 
-export async function previewMotionWorkflow(h, page, key, config, gatewayPolicy) {
+export async function previewMotionWorkflow(h, page, key, config, gatewayPolicy, outlinePolicy = 'baseline') {
   await page.setViewport({ width: 1800, height: 1200, deviceScaleFactor: config.dpr });
   await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: config.reducedMotion ? 'reduce' : 'no-preference' }]);
   await h.settle(page);
@@ -84,6 +85,9 @@ export async function previewMotionWorkflow(h, page, key, config, gatewayPolicy)
   }
   const setup = await h.noChange(page, before, 'native approach is model/history neutral');
   assert.deepEqual(setup.selection, before.selection); assert.deepEqual(setup.viewport, before.viewport);
+  const outlineEvidence = await page.evaluate(collectPreviewOutline, { owner: source, zoom: geometry.viewport.zoom });
+  await writeFile(`${h.output}/${key}-outline.json`, JSON.stringify({ outlinePolicy, gatewayPolicy, shape, zoom: geometry.viewport.zoom, evidence: outlineEvidence }, null, 2));
+  const outlineCheck = validatePreviewOutline(outlineEvidence, shape, geometry.viewport.zoom, { outlinePolicy, gatewayPolicy });
   const installed = await page.evaluate(installPreviewMotionObserver, { owner: source });
   const phases = [];
   let trace;
@@ -120,32 +124,37 @@ export async function previewMotionWorkflow(h, page, key, config, gatewayPolicy)
   }
   const summaries = analyzePreviewMotion(trace, geometry, { gatewayPolicy });
   return { diagnosticOnly: true, performanceAccepted: false, source, config, gatewayPolicy, geometry,
-    environment, installed, summaries, phases, trace, zoomEvidence,
+    environment, installed, summaries, phases, trace, zoomEvidence, outlineCheck,
     limitations: ['RAF is not compositor presentation', 'shared factory performs CTM reads on mousemove',
       'CDP throughput is not physical input sampling', 'layout metric deltas are process totals, not per-handler attribution'] };
 }
 
-export function previewMotionCases(gatewayPolicy = 'continuous') {
+export function previewMotionCases(gatewayPolicy = 'continuous', outlinePolicy = 'baseline') {
+  assert.ok(['baseline', 'outward'].includes(outlinePolicy), 'explicit visual outline policy');
   assert.ok(['continuous', 'vertices'].includes(gatewayPolicy), 'explicit gateway policy');
   const cases = ['Task', 'Start', 'Gateway'].flatMap(label => conditions.map(config => ({ ...config, label,
-    id: `MOTION-${label}`, name: config.name, engine: 'local', sample: 'Empty diagram',
-    run: (h, page, key) => previewMotionWorkflow(h, page, key, { ...config, label }, gatewayPolicy) })));
+    id: `MOTION-${label}`, name: config.name, gatewayPolicy, outlinePolicy, engine: 'local', sample: 'Empty diagram',
+    run: (h, page, key) => previewMotionWorkflow(h, page, key, { ...config, label }, gatewayPolicy, outlinePolicy) })));
   const boundary = { name: 'selected-booking-boundary', selected: true, zoom: .82737, dpr: 1, reducedMotion: false, source: 'FlightTimeout' };
-  cases.push({ ...boundary, id: 'MOTION-Boundary', engine: 'local', sample: 'Booking, timeout and compensation',
-    run: (h, page, key) => previewMotionWorkflow(h, page, key, boundary, gatewayPolicy) });
+  cases.push({ ...boundary, id: 'MOTION-Boundary', gatewayPolicy, outlinePolicy, engine: 'local', sample: 'Booking, timeout and compensation',
+    run: (h, page, key) => previewMotionWorkflow(h, page, key, boundary, gatewayPolicy, outlinePolicy) });
   return cases;
 }
 
 export async function runPreviewMotion({ gatewayPolicy = process.env.BPMN_MOTION_GATEWAY_POLICY || 'continuous',
-  shardIndex = 0, shardCount = 1, output = 'test-artifacts/anchor-preview-motion', basePort = 5410 } = {}) {
-  const cases = selectFollowupShard(previewMotionCases(gatewayPolicy), { shardIndex, shardCount });
+  outlinePolicy = process.env.BPMN_MOTION_OUTLINE_POLICY || 'baseline', shardIndex = 0, shardCount = 1, output = 'test-artifacts/anchor-preview-motion', basePort = 5410 } = {}) {
+  const cases = selectFollowupShard(previewMotionCases(gatewayPolicy, outlinePolicy), { shardIndex, shardCount });
   if (shardCount > 1) output += `-${shardIndex + 1}-of-${shardCount}`;
   await mkdir(output, { recursive: true });
   const source = { head: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
     changed: execFileSync('git', ['status', '--short'], { encoding: 'utf8' }), sha256: {} };
   for (const path of ['lib/Modeler.js', 'lib/Viewer.js', 'lib/modeling/ConnectGrabPlacement.js', 'test/helpers/anchor-ux-browser.mjs'])
     source.sha256[path] = createHash('sha256').update(await readFile(path)).digest('hex');
-  await writeFile(`${output}/source.json`, JSON.stringify({ ...source, gatewayPolicy, shardIndex, shardCount }, null, 2));
+  for (const path of ['lib/modeling/ConnectOutline.js', 'lib/modeling/ConnectionAnchors.js']) {
+    try { source.sha256[path] = createHash('sha256').update(await readFile(path)).digest('hex'); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; source.sha256[path] = null; }
+  }
+  await writeFile(`${output}/source.json`, JSON.stringify({ ...source, gatewayPolicy, outlinePolicy, shardIndex, shardCount }, null, 2));
   const persist = (name, value, signal) => writeFile(`${output}/${name}`, JSON.stringify(value, null, 2), { signal });
   const results = await runFollowupCases(cases, {
     createHarness: (_c, i) => createAnchorHarness({ port: basePort + i, output }),

@@ -1,6 +1,7 @@
 /** Batch B of ANCHOR-UX-FOLLOWUP.md. Prepared native cases, all unrun.
  * Model APIs are used only by the shared read-only evidence collectors. */
 import assert from "node:assert/strict";
+import { assertGatewayVertex } from "../helpers/gateway-native-oracle.mjs";
 import { selectedBendpoint } from "../helpers/native-bendpoint-control.mjs";
 import { projectRoundedTask } from "../helpers/anchor-ownership-browser.mjs";
 import {
@@ -602,10 +603,9 @@ for (const engine of engines)
       const distance =
         Math.abs(p.x - gateway.x - gateway.width / 2) / (gateway.width / 2) +
         Math.abs(p.y - gateway.y - gateway.height / 2) / (gateway.height / 2);
-      assert.ok(
-        Math.abs(distance - 1) < (engine === "local" ? 1e-6 : 0.06),
-        "docking lies on a diamond side",
-      );
+      if (engine === "local") assertGatewayVertex(gateway, p);
+      else assert.ok(Math.abs(distance - 1) < 0.06,
+        "pinned reference docking lies on its diamond side");
       assert.equal(r.after.parsed.elementsById.ApprovalDecision.default.id, "RejectFlow");
       assert.equal(
         r.after.parsed.elementsById.ApproveFlow.conditionExpression.body,
@@ -1038,6 +1038,10 @@ for (const engine of engines)
             edge,
             observation.findLast((event) => event.type === "connect.end"),
           );
+        if (engine === "local" && kind === "Gateway") {
+          assertGatewayVertex(n, edge.points[0]);
+          assertGatewayVertex(n, edge.points.at(-1));
+        }
         assert.ok(edge.points.length >= 4);
         assert.ok(
           edge.points.some(

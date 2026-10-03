@@ -1,0 +1,92 @@
+{
+  "sourceCommit": "7dcc2a9",
+  "case": "MOTION-Task-local-selected-normal-retina-reduced",
+  "geometry": {
+    "shape": {
+      "id": "Task_murors04_1",
+      "type": "bpmn:Task",
+      "x": -347,
+      "y": -178,
+      "width": 100,
+      "height": 80,
+      "hidden": false,
+      "label": false
+    },
+    "viewport": {
+      "x": 1196.51953125,
+      "y": 739.5,
+      "zoom": 0.9999999999999998
+    },
+    "container": {
+      "x": 0,
+      "y": 48,
+      "width": 1800,
+      "height": 1152
+    }
+  },
+  "points": [
+    {
+      "sequence": 126,
+      "x": 901,
+      "y": 610,
+      "targetClass": "bpmn-xyflow-resize-handle",
+      "connectOwner": null
+    },
+    {
+      "sequence": 130,
+      "x": 902,
+      "y": 610,
+      "targetClass": "bpmn-xyflow-resize-handle",
+      "connectOwner": null
+    },
+    {
+      "sequence": 134,
+      "x": 903,
+      "y": 610,
+      "targetClass": "bpmn-xyflow-resize-handle",
+      "connectOwner": null
+    },
+    {
+      "sequence": 138,
+      "x": 904,
+      "y": 610,
+      "targetClass": "bpmn-xyflow-resize-handle",
+      "connectOwner": null
+    },
+    {
+      "sequence": 142,
+      "x": 905,
+      "y": 610,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "Task_murors04_1"
+    },
+    {
+      "sequence": 146,
+      "x": 906,
+      "y": 610,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "Task_murors04_1"
+    },
+    {
+      "sequence": 150,
+      "x": 907,
+      "y": 610,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "Task_murors04_1"
+    },
+    {
+      "sequence": 154,
+      "x": 908,
+      "y": 610,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "Task_murors04_1"
+    },
+    {
+      "sequence": 158,
+      "x": 909,
+      "y": 610,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "Task_murors04_1"
+    }
+  ]
+}

@@ -1,0 +1,210 @@
+{
+  "sourceCommit": "257d9bfc6faec11c3424528b3d7d3cf17cd7bf43",
+  "case": "MOTION-Boundary-local-selected-booking-boundary",
+  "geometry": {
+    "shape": {
+      "id": "FlightTimeout",
+      "type": "bpmn:BoundaryEvent",
+      "name": "One hour timeout",
+      "x": 670,
+      "y": 282,
+      "width": 36,
+      "height": 36,
+      "hidden": false,
+      "label": false
+    },
+    "viewport": {
+      "x": 614.6560100519653,
+      "y": 394.60734546201627,
+      "zoom": 0.8273700017573635
+    },
+    "container": {
+      "x": 0,
+      "y": 48,
+      "width": 1800,
+      "height": 1152
+    }
+  },
+  "initialInput": {
+    "x": 1169,
+    "y": 693
+  },
+  "initialInputSource": "first recorded coordinate prepares owned control",
+  "points": [
+    {
+      "sequence": 2,
+      "x": 1169,
+      "y": 693,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 6,
+      "x": 1169,
+      "y": 692,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 10,
+      "x": 1169,
+      "y": 691,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 14,
+      "x": 1169,
+      "y": 690,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 18,
+      "x": 1169,
+      "y": 689,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 22,
+      "x": 1169,
+      "y": 688,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 26,
+      "x": 1169,
+      "y": 687,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 30,
+      "x": 1170,
+      "y": 687,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 34,
+      "x": 1170,
+      "y": 686,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 38,
+      "x": 1170,
+      "y": 685,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 42,
+      "x": 1170,
+      "y": 684,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 46,
+      "x": 1171,
+      "y": 684,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 50,
+      "x": 1171,
+      "y": 683,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 54,
+      "x": 1171,
+      "y": 684,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 58,
+      "x": 1170,
+      "y": 684,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 62,
+      "x": 1170,
+      "y": 685,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 66,
+      "x": 1170,
+      "y": 686,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 70,
+      "x": 1170,
+      "y": 687,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 74,
+      "x": 1169,
+      "y": 687,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 78,
+      "x": 1169,
+      "y": 688,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 82,
+      "x": 1169,
+      "y": 689,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 86,
+      "x": 1169,
+      "y": 690,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 90,
+      "x": 1169,
+      "y": 691,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 94,
+      "x": 1169,
+      "y": 692,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 98,
+      "x": 1169,
+      "y": 693,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    }
+  ]
+}

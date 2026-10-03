@@ -11,13 +11,12 @@ function route(node, start, end) {
   return layoutConnection({ type: 'bpmn:SequenceFlow', businessObject: moddle.create('bpmn:SequenceFlow'), source: node, target: node, waypoints: [] }, { connectionStart: start, connectionEnd: end, preserveDocking: 'both' }, renderer);
 }
 const xy = p => ({ x: p.x, y: p.y });
-test('native gateway loop retains distinct right and lower-left diamond anchors', () => {
+test('gateway loop keeps valid semantics while the new policy maps its old sloped drop to the bottom vertex', () => {
   const node = shape('ExclusiveGateway', -288, -142, 50, 50);
   const drop = { x: -271.05030850274386, y: -100.13468929992416 };
   const result = route(node, { x: -238, y: -117 }, drop);
-  const projectedX = (drop.x + drop.y - 171) / 2;
   assert.deepEqual(xy(result[0]), { x: -238, y: -117 });
-  assert.ok(Math.hypot(result.at(-1).x - projectedX, result.at(-1).y - projectedX - 171) < 1e-7);
+  assert.deepEqual(xy(result.at(-1)), { x: -263, y: -92 });
   assert.ok(result.length >= 4);
   assert.ok(result.some(p => p.x > -238 || p.y > -92));
 });

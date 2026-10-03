@@ -12,6 +12,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import puppeteer from "puppeteer";
 import { BpmnModdle } from "bpmn-moddle";
+import { nearestGatewayVertex, assertGatewayVertex } from "../helpers/gateway-native-oracle.mjs";
 import {
   assertSourcePortApproach,
   referenceTaskTopConnectExpectation,
@@ -581,6 +582,7 @@ async function sourcePort(page, id, which, f = 0.5, { selected = false } = {}) {
     const grab = screenPoint(port),
       actual = grab && document.elementFromPoint(grab.x, grab.y);
     return {
+      input: window.anchorInput.findLast((event) => event.type === "mousemove"),
       owner: handle?.getAttribute("data-connect-source"),
       anchor: point(marker),
       markerScreen: screenPoint(marker),
@@ -603,6 +605,12 @@ async function sourcePort(page, id, which, f = 0.5, { selected = false } = {}) {
   );
   assert.equal(evidence.grabVisible, true);
   assert.equal(evidence.hit, true, "the visible source grab handle is actually hittable");
+  if (node(before, id).type.endsWith("Gateway")) {
+    assert.equal(evidence.input?.trusted, true);
+    assert.deepEqual(evidence.anchor,
+      nearestGatewayVertex(node(before, id), evidence.input.graphPoint),
+      "Gateway marker follows the nearest vertex to the actual delivered pointer");
+  } else
   near(
     evidence.markerScreen,
     requestedScreen,
@@ -727,6 +735,7 @@ function projected(n, p) {
     cy = n.y + n.height / 2,
     dx = p.x - cx,
     dy = p.y - cy;
+  if (n.type.endsWith("Gateway")) return nearestGatewayVertex(n, p);
   assert.ok(dx || dy);
   if (n.type.endsWith("Event")) {
     const t = n.width / 2 / Math.hypot(dx, dy);
@@ -1059,6 +1068,13 @@ async function create(
       epsilon,
       "committed target follows delivered native pointer on the outline",
     );
+  if (before.engine === "local") {
+    const sourceNode = node(before, source);
+    if (sourceNode.type.endsWith("Gateway")) assertGatewayVertex(sourceNode, edge.points[0]);
+    if (targetNode.type.endsWith("Gateway"))
+      assert.deepEqual(edge.points.at(-1), expectedTarget,
+        "Gateway target is the exact nearest vertex to the delivered release");
+  }
   const rendered = await renderEnds(page, edge.id);
   near(rendered.start, screen(after, edge.points[0]), 0.05, "painted source and DI coincide");
   near(rendered.end, screen(after, edge.points.at(-1)), 0.05, "painted target and DI coincide");

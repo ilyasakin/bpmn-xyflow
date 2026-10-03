@@ -15,18 +15,18 @@ import {
 } from "../helpers/anchor-ownership-browser.mjs";
 const digest = (s) => createHash("sha256").update(s).digest("hex");
 
-test("the published green39 script and copied d462 shared behavior retain exact bytes", async () => {
+test("the reviewed Gateway native39 script and copied shared behavior retain exact bytes", async () => {
   const original = await readFile(new URL("./browser-anchor-ux.mjs", import.meta.url), "utf8"),
     factory = await readFile(new URL("../helpers/anchor-ux-browser.mjs", import.meta.url), "utf8");
   assert.equal(
     digest(original),
-    "d72578ae9c9900367734faaba7ad73ea40bec1df274197d3dde4996ff54a7c23",
+    "41c18108118ddff7b9316d74693eda7593d7f1ed7ec9ad1f68adff0c299a83c8",
   );
   const block = original.slice(
     original.indexOf("const xy ="),
     original.indexOf("\ntry {\n  await mkdir(output"),
   );
-  assert.equal(digest(block), "c18a6ca91f6514b9fed118d829ca5c1ebc1c04cfce16427dc3c02240da14d45d");
+  assert.equal(digest(block), "76a33a377801f49889d8d7c0aae742ed1e93df96ea18888636c889ad26107dc8");
   assert.equal(
     factory.slice(factory.indexOf("const xy ="), factory.indexOf("\nasync function start()")),
     block,

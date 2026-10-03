@@ -23,7 +23,9 @@ import {
 import { registeredAnchorFollowups } from "./browser-anchor-followup.mjs";
 const digest = (text) => createHash("sha256").update(text).digest("hex");
 
-test("the shared extraction preserves the current d462 green39 helpers byte-for-byte", async () => {
+// The October 3 user-requested Gateway policy changes only reviewed local
+// endpoint oracles; gateway-native-oracle.test.mjs guards every other prior byte.
+test("the shared extraction preserves the reviewed four-vertex Gateway native helpers byte-for-byte", async () => {
   const source = await readFile(
     new URL("../helpers/anchor-ux-browser.mjs", import.meta.url),
     "utf8",
@@ -32,7 +34,7 @@ test("the shared extraction preserves the current d462 green39 helpers byte-for-
     source.indexOf("const xy ="),
     source.indexOf("\nasync function start()"),
   );
-  assert.equal(digest(body), "c18a6ca91f6514b9fed118d829ca5c1ebc1c04cfce16427dc3c02240da14d45d");
+  assert.equal(digest(body), "76a33a377801f49889d8d7c0aae742ed1e93df96ea18888636c889ad26107dc8");
   const h = createAnchorHarness({ port: 5254, output: "test-artifacts/anchor-followup" });
   for (const key of ["state", "raw", "sourcePort", "drag", "history", "run", "start", "stop"])
     assert.equal(typeof h[key], "function");
@@ -40,9 +42,9 @@ test("the shared extraction preserves the current d462 green39 helpers byte-for-
 });
 // Published 1d3fe967 added stronger tangent-acquisition checks to ownership24.
 // Preserve those exact accepted bytes when adding this separate workflow suite.
-test("the green39 and ownership24 runners remain byte-identical while follow-ups are added", async () => {
+test("the reviewed Gateway native39 and unchanged ownership24 runners retain their exact bytes", async () => {
   for (const [file, hash] of [
-    ["browser-anchor-ux.mjs", "d72578ae9c9900367734faaba7ad73ea40bec1df274197d3dde4996ff54a7c23"],
+    ["browser-anchor-ux.mjs", "41c18108118ddff7b9316d74693eda7593d7f1ed7ec9ad1f68adff0c299a83c8"],
     [
       "browser-anchor-ownership.mjs",
       "b41e2b2d457a5ca2ed502c0d2025b82eb7a2fe9198195cb1d1afbbf568ba30b6",

@@ -65,8 +65,8 @@ test('diagnostic server keeps every normal route/plugin/root and factory default
   const restored=factory
     .replace('export function createAnchorHarness({ port, output, serverEntry = "lib/demo/serve.mjs" }) {\nassert.ok(["lib/demo/serve.mjs", "test/helpers/boundary-diagnostic-server.mjs"].includes(serverEntry), "known owned test server entry");','export function createAnchorHarness({ port, output }) {')
     .replace('[serverEntry], {','["lib/demo/serve.mjs"], {');
-  assert.equal(sha(restored),'aea11672e6030610abeb3c404942dc63bed01d24080d94602fd4bebb37181c7a','all original factory gesture/assertion/lifecycle bytes retained');
-  assert.equal(sha(await read('test/modeling/browser-anchor-ux.mjs')),'d72578ae9c9900367734faaba7ad73ea40bec1df274197d3dde4996ff54a7c23','original native39 bytes retained');
+  assert.equal(sha(restored),'0e0a5858d710a75aaf22c4f0173f5d0b1a99b5896734ccc462645a91c46dfa09','all original factory gesture/assertion/lifecycle bytes retained');
+  assert.equal(sha(await read('test/modeling/browser-anchor-ux.mjs')),'41c18108118ddff7b9316d74693eda7593d7f1ed7ec9ad1f68adff0c299a83c8','reviewed Gateway native39 bytes retained');
   const {createAnchorHarness}=await import('../helpers/anchor-ux-browser.mjs');
   assert.throws(()=>createAnchorHarness({port:1,output:'unused',serverEntry:'/unowned/server.mjs'}),/known owned/);
 });

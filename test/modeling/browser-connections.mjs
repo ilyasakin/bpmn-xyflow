@@ -5,6 +5,7 @@ import { mkdir,readFile,writeFile } from 'node:fs/promises';
 import puppeteer from 'puppeteer';
 import { BpmnModdle } from 'bpmn-moddle';
 import { selectedBendpoint } from '../helpers/native-bendpoint-control.mjs';
+import { assertGatewayVertex } from '../helpers/gateway-native-oracle.mjs';
 const port=Number(process.env.BPMN_CONNECTIONS_PORT||5235),base=`http://localhost:${port}`;
 const child=spawn(process.execPath,['lib/demo/serve.mjs'],{env:{...process.env,PORT:String(port)},stdio:['ignore','pipe','inherit']});child.stdout.on('data',()=>{});
 const oracle=new BpmnModdle(),results=[];let browser;
@@ -156,6 +157,8 @@ async function createByGesture(page,name,source,target,sourcePort,targetPort,mod
   }
   near(live.end,targetPort,tolerance,'live preview endpoint follows pointer');
   near(edge.points.at(-1),targetPort,tolerance,'final DI preserves chosen target side/port');
+  if(source.type.endsWith('Gateway'))assertGatewayVertex(source,edge.points[0]);
+  if(target.type.endsWith('Gateway'))assertGatewayVertex(target,edge.points.at(-1));
   await undo(page,before.xml);await redo(page,after.xml);
   await reopenCreatedConnection(page,name,after,edge.id);
   } finally {

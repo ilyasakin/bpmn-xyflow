@@ -10,3 +10,13 @@ curved down to y233, then painted back to y232 before the next curve.
 
 The endpoint offset is intentional evidence of delivered input; the paint
 correction must not flatten it, change its anchors or alter imported XML.
+
+`gateway-one-pixel-reconnected.bpmn` is the unchanged local export saved by the
+hosted PAINT-3 failure at revision `7dcc2a9`. Its source artifact is
+`bpmn-connection-paint-evidence/connection-paint/PAINT-3-local-gateway-horizontal-one-pixel-failure.bpmn`
+from the verified run archive. Creation, reconnect and raw-exact history had
+already passed. The failure is the later independent upstream import adding
+the absent `isMarkerVisible=true` property on `ExclusiveGateway_murosu17_1_di`.
+The full installed upstream service test reproduces only that model difference;
+the local reimport preserves the model and only adds existing explicit Point
+type declarations. No fixture geometry or serialized bytes were corrected.
