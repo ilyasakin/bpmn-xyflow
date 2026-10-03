@@ -1,70 +1,447 @@
 name: CI
-on: [ push, pull_request ]
+on: [push, pull_request]
+permissions:
+  contents: read
 jobs:
-  build_browsers:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      # The runner's official Chrome installation has the supported AppArmor
+      # profile; downloaded Chrome for Testing does not on Ubuntu 24.04.
+      - name: Select installed sandbox-capable Chrome
+        run: |
+          CHROME_PATH="$(command -v google-chrome)"
+          test -x "$CHROME_PATH"
+          "$CHROME_PATH" --version
+          readlink -f "$CHROME_PATH"
+          echo "PUPPETEER_EXECUTABLE_PATH=$CHROME_PATH" >> "$GITHUB_ENV"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install independent XML schema validator
+        run: python -m pip install lxml==6.1.1
+      - name: Verify source and semantic parity
+        run: pnpm run lint && pnpm run test:schema && pnpm run test:unit
+      - name: Verify remaining independent browser suites
+        run: |
+          status=0
+          for suite in test:smoke test:react test:multi test:browser:viewer test:browser:scenarios test:browser:actions test:browser:connections test:browser:touch test:browser:core test:browser:advanced test:browser:labels test:browser:io test:browser:flow test:browser:groups test:browser:hover; do
+            echo "::group::$suite"
+            if ! node test/run-browser-suite.mjs "$suite"; then
+              status=1
+            fi
+            echo "::endgroup::"
+          done
+          exit "$status"
+      - name: Build distributable
+        if: ${{ !cancelled() }}
+        run: pnpm run build
+      - name: Verify packed package consumers
+        if: ${{ !cancelled() }}
+        run: pnpm run test:package
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bpmn-browser-evidence
+          path: test-artifacts/
+          if-no-files-found: ignore
+          retention-days: 14
 
+  anchor-ux:
+    name: Native anchor interaction matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Select installed sandbox-capable Chrome
+        run: |
+          CHROME_PATH="$(command -v google-chrome)"
+          test -x "$CHROME_PATH"
+          "$CHROME_PATH" --version
+          readlink -f "$CHROME_PATH"
+          echo "PUPPETEER_EXECUTABLE_PATH=$CHROME_PATH" >> "$GITHUB_ENV"
+      - name: Exercise visible anchor workflows and pinned reference
+        run: node test/run-browser-suite.mjs test:browser:anchor-ux
+      - name: Upload anchor evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bpmn-anchor-ux-evidence
+          path: test-artifacts/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  anchor-ownership:
+    name: Native source ownership and resize
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Select installed sandbox-capable Chrome
+        run: |
+          CHROME_PATH="$(command -v google-chrome)"
+          test -x "$CHROME_PATH"
+          "$CHROME_PATH" --version
+          readlink -f "$CHROME_PATH"
+          echo "PUPPETEER_EXECUTABLE_PATH=$CHROME_PATH" >> "$GITHUB_ENV"
+      - name: Exercise same-pointer source intent and explicit resize
+        run: node test/run-browser-suite.mjs test:browser:anchor-ownership
+      - name: Upload source ownership evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bpmn-anchor-ownership-evidence
+          path: test-artifacts/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  hit-priority:
+    name: Native hit priority
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Select installed sandbox-capable Chrome
+        run: |
+          CHROME_PATH="$(command -v google-chrome)"
+          test -x "$CHROME_PATH"
+          "$CHROME_PATH" --version
+          readlink -f "$CHROME_PATH"
+          echo "PUPPETEER_EXECUTABLE_PATH=$CHROME_PATH" >> "$GITHUB_ENV"
+      - name: Exercise native shape, edge and source-control hit priority
+        run: node test/run-browser-suite.mjs test:browser:hits
+      - name: Upload hit-priority evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bpmn-hit-priority-evidence
+          path: test-artifacts/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  anchor-followups:
+    name: Native workflow ${{ matrix.suffix }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-latest ]
-        browser: [ Firefox, ChromeHeadless ]
-
-    runs-on: ${{ matrix.os }}
-
+        include:
+          - { suffix: a-local }
+          - { suffix: a-upstream }
+          - { suffix: b-local-1 }
+          - { suffix: b-local-2 }
+          - { suffix: b-local-3 }
+          - { suffix: b-upstream-1 }
+          - { suffix: b-upstream-2 }
+          - { suffix: b-upstream-3 }
+          - { suffix: c-local }
     steps:
-    - name: Checkout
-      uses: actions/checkout@v6
-    - name: Use Node.js
-      uses: actions/setup-node@v6
-      with:
-        node-version: 24
-        cache: 'npm'
-    - name: Install dependencies
-      run: npm ci
-    - name: Setup project
-      uses: bpmn-io/actions/setup@latest
-    - name: Build (with coverage)
-      if: matrix.browser == 'ChromeHeadless'
-      env:
-        COVERAGE: 1
-        TEST_BROWSERS: ${{ matrix.browser }}
-      run: npm run all
-    - name: Build
-      if: matrix.browser == 'Firefox'
-      env:
-        TEST_BROWSERS: ${{ matrix.browser }}
-      run: xvfb-run npm run all
-    - name: Upload coverage
-      if: matrix.browser == 'ChromeHeadless'
-      uses: codecov/codecov-action@v6
-      with:
-        fail_ci_if_error: true
-      env:
-        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Select installed sandbox-capable Chrome
+        run: |
+          CHROME_PATH="$(command -v google-chrome)"
+          test -x "$CHROME_PATH"
+          "$CHROME_PATH" --version
+          readlink -f "$CHROME_PATH"
+          echo "PUPPETEER_EXECUTABLE_PATH=$CHROME_PATH" >> "$GITHUB_ENV"
+      - name: Exercise independent visible workflows
+        run: node test/run-browser-suite.mjs test:browser:anchor-followup-${{ matrix.suffix }}
+      - name: Upload workflow evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bpmn-anchor-followup-${{ matrix.suffix }}
+          path: test-artifacts/
+          if-no-files-found: ignore
+          retention-days: 14
 
-  build_os:
+  viewport-source:
+    name: Native viewport source affordances
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Select installed sandbox-capable Chrome
+        run: |
+          CHROME_PATH="$(command -v google-chrome)"
+          test -x "$CHROME_PATH"
+          "$CHROME_PATH" --version
+          readlink -f "$CHROME_PATH"
+          echo "PUPPETEER_EXECUTABLE_PATH=$CHROME_PATH" >> "$GITHUB_ENV"
+      - name: Exercise source controls at visible viewport boundaries and chrome
+        run: node test/run-browser-suite.mjs test:browser:viewport-source
+      - name: Upload viewport source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bpmn-viewport-source-evidence
+          path: test-artifacts/
+          if-no-files-found: ignore
+          retention-days: 14
 
+  container-resize:
+    name: Native container resize modifier policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Select installed sandbox-capable Chrome
+        run: |
+          CHROME_PATH="$(command -v google-chrome)"
+          test -x "$CHROME_PATH"
+          "$CHROME_PATH" --version
+          readlink -f "$CHROME_PATH"
+          echo "PUPPETEER_EXECUTABLE_PATH=$CHROME_PATH" >> "$GITHUB_ENV"
+      - name: Exercise actual local and reference Ctrl-lane resize
+        run: node test/run-browser-suite.mjs test:browser:container-resize
+      - name: Upload container resize evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bpmn-container-resize-evidence
+          path: test-artifacts/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  boundary-acquisition:
+    name: Native boundary source lifecycle diagnostic
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Select installed sandbox-capable Chrome
+        run: |
+          CHROME_PATH="$(command -v google-chrome)"
+          test -x "$CHROME_PATH"
+          "$CHROME_PATH" --version
+          readlink -f "$CHROME_PATH"
+          echo "PUPPETEER_EXECUTABLE_PATH=$CHROME_PATH" >> "$GITHUB_ENV"
+      - name: Repeat the unchanged boundary workflow with passive diagnostics
+        run: node test/run-browser-suite.mjs test:browser:boundary-acquisition
+      - name: Upload boundary lifecycle evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bpmn-boundary-acquisition-evidence
+          path: test-artifacts/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  advertised-corner:
+    name: Native advertised corner source acquisition
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Select installed sandbox-capable Chrome
+        run: |
+          CHROME_PATH="$(command -v google-chrome)"
+          test -x "$CHROME_PATH"
+          "$CHROME_PATH" --version
+          readlink -f "$CHROME_PATH"
+          echo "PUPPETEER_EXECUTABLE_PATH=$CHROME_PATH" >> "$GITHUB_ENV"
+      - name: Exercise all advertised corner approaches at low and high zoom
+        run: node test/run-browser-suite.mjs test:browser:advertised-corner
+      - name: Upload advertised corner evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bpmn-advertised-corner-evidence
+          path: test-artifacts/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  boundary-stationary-exit:
+    name: Native stationary boundary exit comparison
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Select installed sandbox-capable Chrome
+        run: |
+          CHROME_PATH="$(command -v google-chrome)"
+          test -x "$CHROME_PATH"
+          "$CHROME_PATH" --version
+          readlink -f "$CHROME_PATH"
+          echo "PUPPETEER_EXECUTABLE_PATH=$CHROME_PATH" >> "$GITHUB_ENV"
+      - name: Compare one full-page capture, one viewport capture and one genuine canvas exit
+        run: node test/run-browser-suite.mjs test:browser:boundary-stationary-exit
+      - name: Upload stationary boundary exit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bpmn-boundary-stationary-exit-evidence
+          path: test-artifacts/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  preview-motion:
+    name: Native preview motion ${{ matrix.shard }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
-        os: [ macos-latest, windows-latest ]
-        browser: [ ChromeHeadless ]
-
-    runs-on: ${{ matrix.os }}
-
+        shard: [a, b]
     steps:
-    - name: Checkout
-      uses: actions/checkout@v6
-    - name: Use Node.js
-      uses: actions/setup-node@v6
-      with:
-        node-version: 24
-        cache: 'npm'
-    - name: Install dependencies
-      run: npm ci
-    - name: Setup project
-      uses: bpmn-io/actions/setup@latest
-    - name: Build
-      env:
-        TEST_BROWSERS: ${{ matrix.browser }}
-      run: npm run all
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Select installed sandbox-capable Chrome
+        run: |
+          CHROME_PATH="$(command -v google-chrome)"
+          test -x "$CHROME_PATH"
+          "$CHROME_PATH" --version
+          readlink -f "$CHROME_PATH"
+          echo "PUPPETEER_EXECUTABLE_PATH=$CHROME_PATH" >> "$GITHUB_ENV"
+      - name: Record native pointer and frame behavior
+        run: node test/run-browser-suite.mjs test:browser:preview-motion-${{ matrix.shard }}
+      - name: Upload preview motion evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bpmn-preview-motion-${{ matrix.shard }}
+          path: test-artifacts/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  connection-paint:
+    name: Native connection paint geometry
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Select installed sandbox-capable Chrome
+        run: |
+          CHROME_PATH="$(command -v google-chrome)"
+          test -x "$CHROME_PATH"
+          "$CHROME_PATH" --version
+          readlink -f "$CHROME_PATH"
+          echo "PUPPETEER_EXECUTABLE_PATH=$CHROME_PATH" >> "$GITHUB_ENV"
+      - name: Verify aligned and fractional connection paint without route mutation
+        run: node test/run-browser-suite.mjs test:browser:connection-paint
+      - name: Upload native connection paint evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bpmn-connection-paint-evidence
+          path: test-artifacts/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  gateway-anchors:
+    name: Native fixed Gateway anchors
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Select installed sandbox-capable Chrome
+        run: |
+          CHROME_PATH="$(command -v google-chrome)"
+          test -x "$CHROME_PATH"
+          "$CHROME_PATH" --version
+          readlink -f "$CHROME_PATH"
+          echo "PUPPETEER_EXECUTABLE_PATH=$CHROME_PATH" >> "$GITHUB_ENV"
+      - name: Exercise four Gateway vertices in both selection states
+        run: node test/run-browser-suite.mjs test:browser:gateway-anchors
+      - name: Upload fixed Gateway anchor evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bpmn-gateway-anchors-evidence
+          path: test-artifacts/
+          if-no-files-found: ignore
+          retention-days: 14

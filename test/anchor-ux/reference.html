@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Pinned BPMN reference interaction page</title>
+<style>html,body{margin:0;height:100%;font:14px system-ui}body{display:flex;flex-direction:column}header{display:flex;gap:10px;align-items:center;padding:10px;border-bottom:1px solid #ccc}#viewer{flex:1;min-height:0;position:relative}#xml-out{max-height:160px;overflow:auto;white-space:pre-wrap}dialog{width:min(850px,85vw)}textarea{box-sizing:border-box;width:100%;height:300px}#status{margin-left:auto}</style></head>
+<body><header><strong>bpmn-js 18.30.1 reference</strong><select id="sample-select" aria-label="Sample"></select><button id="undo-btn">Undo</button><button id="redo-btn">Redo</button><button id="export-btn">Export XML</button><button id="import-btn">Import XML</button><span id="status" role="status"></span></header>
+<div id="viewer"></div><pre id="xml-out" hidden></pre>
+<dialog id="import-dialog"><label for="import-xml">BPMN XML</label><textarea id="import-xml"></textarea><p id="import-error" role="alert"></p><button id="import-submit">Import</button><button id="import-cancel">Cancel</button></dialog>
+<script type="module" src="./reference.js"></script></body></html>

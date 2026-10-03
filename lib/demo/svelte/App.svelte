@@ -17,10 +17,18 @@
   let selection = $state([]);
   let viewer;
 
+  let loadSequence = 0;
   async function loadSample(i) {
+    const sequence = ++loadSequence;
     status = 'Fetching ' + SAMPLES[i].label + '...';
-    const res = await fetch(FIXTURE_BASE + SAMPLES[i].path);
-    xml = await res.text();
+    try {
+      const response = await fetch(FIXTURE_BASE + SAMPLES[i].path);
+      if (!response.ok) throw new Error(`HTTP ${ response.status }`);
+      const text = await response.text();
+      if (sequence === loadSequence) xml = text;
+    } catch (error) {
+      if (sequence === loadSequence) status = 'Error: ' + error.message;
+    }
   }
 
   onMount(() => loadSample(idx));

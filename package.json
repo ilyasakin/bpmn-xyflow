@@ -7,7 +7,9 @@
   "files": [
     "lib",
     "!lib/**/*.spec.ts",
-    "!lib/demo"
+    "!lib/demo",
+    "dist",
+    "types"
   ],
   "scripts": {
     "lint": "oxlint",
@@ -15,10 +17,51 @@
     "start": "node lib/demo/serve.mjs",
     "dev": "vite",
     "build": "vite build",
-    "test": "pnpm run test:smoke && pnpm run test:react && pnpm run test:multi",
+    "test": "pnpm run test:smoke && pnpm run test:react && pnpm run test:multi && pnpm run test:browser:viewer && pnpm run test:browser:scenarios && pnpm run test:browser:actions && pnpm run test:browser:connections && pnpm run test:browser:touch && pnpm run test:browser:core && pnpm run test:browser:advanced && pnpm run test:browser:hits && pnpm run test:browser:labels && pnpm run test:browser:io && pnpm run test:browser:flow && pnpm run test:browser:groups && pnpm run test:browser:hover && pnpm run test:browser:anchor-ux && pnpm run test:browser:anchor-ownership && pnpm run test:browser:anchor-followup-a-local && pnpm run test:browser:anchor-followup-a-upstream && pnpm run test:browser:anchor-followup-b-local-1 && pnpm run test:browser:anchor-followup-b-local-2 && pnpm run test:browser:anchor-followup-b-local-3 && pnpm run test:browser:anchor-followup-b-upstream-1 && pnpm run test:browser:anchor-followup-b-upstream-2 && pnpm run test:browser:anchor-followup-b-upstream-3 && pnpm run test:browser:anchor-followup-c-local && pnpm run test:browser:viewport-source && pnpm run test:browser:container-resize && pnpm run test:browser:boundary-acquisition && pnpm run test:browser:advertised-corner && pnpm run test:browser:boundary-stationary-exit && pnpm run test:browser:preview-motion-a && pnpm run test:browser:preview-motion-b && pnpm run test:browser:connection-paint && pnpm run test:browser:gateway-anchors",
     "test:smoke": "node lib/demo/modeler/smoke-test.mjs",
     "test:react": "node lib/demo/react/smoke-test.mjs",
-    "test:multi": "node lib/demo/multi-framework-smoke-test.mjs"
+    "test:multi": "node lib/demo/multi-framework-smoke-test.mjs",
+    "test:xml": "node test/xml-parity.mjs",
+    "test:unit": "node --test --test-concurrency=1 test/modeling/*.test.mjs test/geometry/*.test.mjs test/rules/*.test.mjs test/viewer/*.test.mjs test/runner/*.test.mjs",
+    "check": "pnpm run lint && pnpm run test:schema && pnpm run test:unit && pnpm test && pnpm run build && pnpm run test:package",
+    "prepack": "pnpm run build",
+    "test:browser:viewer": "node test/viewer/browser-parity.mjs",
+    "test:browser:scenarios": "node test/scenarios/browser.mjs",
+    "test:schema": "python3 test/xml-schema.py",
+    "test:xml-modeler": "node test/xml-modeler-parity.mjs",
+    "test:package": "node test/package/consumer-smoke.mjs",
+    "test:xml-security": "node test/xml-security.mjs",
+    "test:browser:actions": "node test/modeling/browser-actions.mjs",
+    "test:browser:connections": "node test/modeling/browser-connections.mjs",
+    "test:browser:touch": "node test/modeling/browser-touch.mjs",
+    "test:browser:core": "node test/modeling/browser-core-controls.mjs",
+    "test:browser:advanced": "node test/modeling/browser-advanced-interactions.mjs",
+    "test:browser:hits": "node test/modeling/browser-hit-priority.mjs",
+    "test:browser:labels": "node test/modeling/browser-label-resize.mjs",
+    "test:browser:io": "node test/modeling/browser-io-replacement.mjs",
+    "test:browser:flow": "node test/modeling/browser-flow-annotations.mjs",
+    "test:browser:groups": "node test/modeling/browser-group-labels.mjs",
+    "test:browser:hover": "node test/modeling/browser-hover-connections.mjs",
+    "test:browser:anchor-ux": "node test/modeling/browser-anchor-ux.mjs",
+    "test:browser:anchor-ownership": "node test/modeling/browser-anchor-ownership.mjs",
+    "test:browser:anchor-followup-a-local": "node test/modeling/browser-anchor-followup-a-local.mjs",
+    "test:browser:anchor-followup-a-upstream": "node test/modeling/browser-anchor-followup-a-upstream.mjs",
+    "test:browser:anchor-followup-b-local-1": "node test/modeling/browser-anchor-followup-b-local-1.mjs",
+    "test:browser:anchor-followup-b-local-2": "node test/modeling/browser-anchor-followup-b-local-2.mjs",
+    "test:browser:anchor-followup-b-local-3": "node test/modeling/browser-anchor-followup-b-local-3.mjs",
+    "test:browser:anchor-followup-b-upstream-1": "node test/modeling/browser-anchor-followup-b-upstream-1.mjs",
+    "test:browser:anchor-followup-b-upstream-2": "node test/modeling/browser-anchor-followup-b-upstream-2.mjs",
+    "test:browser:anchor-followup-b-upstream-3": "node test/modeling/browser-anchor-followup-b-upstream-3.mjs",
+    "test:browser:anchor-followup-c-local": "node test/modeling/browser-anchor-followup-c-local.mjs",
+    "test:browser:viewport-source": "node test/modeling/browser-viewport-source-grabs.mjs",
+    "test:browser:container-resize": "node test/modeling/browser-container-resize.mjs",
+    "test:browser:boundary-acquisition": "node test/modeling/browser-boundary-acquisition.mjs",
+    "test:browser:advertised-corner": "node test/modeling/browser-advertised-corner-grabs.mjs",
+    "test:browser:boundary-stationary-exit": "node test/modeling/browser-boundary-stationary-exit.mjs",
+    "test:browser:preview-motion-a": "node test/modeling/browser-anchor-preview-motion-a.mjs",
+    "test:browser:preview-motion-b": "node test/modeling/browser-anchor-preview-motion-b.mjs",
+    "test:browser:connection-paint": "node test/modeling/browser-connection-paint.mjs",
+    "test:browser:gateway-anchors": "node test/modeling/browser-gateway-anchors.mjs"
   },
   "engines": {
     "node": ">=20"
@@ -26,7 +69,7 @@
   "packageManager": "pnpm@10.0.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-org/bpmn-xyflow"
+    "url": "https://github.com/ilyasakin/bpmn-xyflow"
   },
   "keywords": [
     "bpmn",
@@ -37,7 +80,7 @@
     "modeling",
     "process modeling"
   ],
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "sideEffects": [
     "*.css"
   ],
@@ -68,12 +111,19 @@
     "inherits-browser": "^0.1.0",
     "min-dash": "^5.0.0",
     "min-dom": "^5.3.0",
+    "saxen": "11.2.0",
     "tiny-svg": "^4.1.4"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.1.1",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^5.0.0",
     "@vitejs/plugin-vue": "^6.0.0",
+    "@xmldom/xmldom": "0.9.12",
+    "bpmn-js": "18.30.1",
+    "bpmn-moddle": "10.3.1",
+    "happy-dom": "20.11.2",
     "oxfmt": "*",
     "oxlint": "^1.0.0",
     "puppeteer": "^24.42.0",
@@ -83,5 +133,36 @@
     "typescript": "^5.9.3",
     "vite": "^8.0.0",
     "vue": "^3.5.34"
+  },
+  "types": "./types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "import": "./lib/index.js",
+      "default": "./lib/index.js"
+    },
+    "./lib/react": {
+      "types": "./types/react.d.ts",
+      "import": "./lib/react/index.js",
+      "default": "./lib/react/index.js"
+    },
+    "./lib/vue": {
+      "types": "./types/vue.d.ts",
+      "import": "./lib/vue/index.js",
+      "default": "./lib/vue/index.js"
+    },
+    "./lib/svelte": {
+      "types": "./types/svelte.d.ts",
+      "import": "./lib/svelte/index.js",
+      "default": "./lib/svelte/index.js"
+    },
+    "./lib/svelte/BpmnViewer.svelte": {
+      "types": "./types/svelte-component.d.ts",
+      "import": "./lib/svelte/BpmnViewer.svelte",
+      "default": "./lib/svelte/BpmnViewer.svelte"
+    },
+    "./lib/*": "./lib/*",
+    "./dist/*": "./dist/*",
+    "./package.json": "./package.json"
   }
 }

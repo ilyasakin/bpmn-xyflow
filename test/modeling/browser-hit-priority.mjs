@@ -1,0 +1,315 @@
+/**
+ * Native hit-order differential against pinned bpmn-js 18.30.1. Setup imports
+ * identical XML; selection/drag actions use real Chromium mouse input only.
+ * This records shared overlaps instead of assuming a different paint policy.
+ */
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+import puppeteer from 'puppeteer';
+import { BpmnModdle } from 'bpmn-moddle';
+import { installNativeSourceHitCapture, visibleSourceProbe, assertVisibleSourceProbe } from '../helpers/native-source-hit-policy.mjs';
+
+const require=createRequire(import.meta.url),oracle=new BpmnModdle();
+assert.equal(require('bpmn-js/package.json').version,'18.30.1','native comparison uses the pinned upstream release');
+const port=Number(process.env.BPMN_HIT_PRIORITY_PORT||5241),base=`http://localhost:${port}`;
+const results=[];let browser,server,serverOutput='';
+const rect=b=>({x:b.x,y:b.y,width:b.width,height:b.height});
+const xy=p=>({x:p.x,y:p.y});
+const shape=(id,type,x,y,width,height)=>({id,type,x,y,width,height});
+function fixture(crossing) {
+  const nodes=[shape('Source','task',180,200,100,80),shape('Target','task',660,200,100,80),crossing];
+  return `<?xml version="1.0" encoding="UTF-8"?><bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" id="HitDefinitions" targetNamespace="https://bpmn.io/schema/bpmn"><bpmn:process id="Process_1">${nodes.map(n=>`<bpmn:${n.type} id="${n.id}"${n.name?` name="${n.name}"`:''}/>`).join('')}<bpmn:sequenceFlow id="Flow" sourceRef="Source" targetRef="Target"/></bpmn:process><bpmndi:BPMNDiagram id="Diagram_1"><bpmndi:BPMNPlane id="Plane_1" bpmnElement="Process_1">${nodes.map(n=>`<bpmndi:BPMNShape id="${n.id}_di" bpmnElement="${n.id}"${n.type==='subProcess'?' isExpanded="true"':''}><dc:Bounds x="${n.x}" y="${n.y}" width="${n.width}" height="${n.height}"/>${n.label?`<bpmndi:BPMNLabel><dc:Bounds x="${n.label.x}" y="${n.label.y}" width="${n.label.width}" height="${n.label.height}"/></bpmndi:BPMNLabel>`:''}</bpmndi:BPMNShape>`).join('')}<bpmndi:BPMNEdge id="Flow_di" bpmnElement="Flow"><di:waypoint x="280" y="240"/><di:waypoint x="660" y="240"/></bpmndi:BPMNEdge></bpmndi:BPMNPlane></bpmndi:BPMNDiagram></bpmn:definitions>`;
+}
+async function bookingOverlap() {
+  // Reproduce the real post-reattach geometry without executing the action
+  // under test through an API. Original business semantics stay in the fixture.
+  const parsed=await oracle.fromXML(await readFile('test/fixtures/scenarios/booking-timeout-compensation.bpmn','utf8'));
+  assert.deepEqual(parsed.warnings,[]);
+  const byId=parsed.elementsById,di=parsed.rootElement.diagrams[0].plane.planeElement;
+  const event=byId.FlightTimeout,shape=di.find(d=>d.bpmnElement===event);
+  event.attachedToRef=byId.ReserveHotel;Object.assign(shape.bounds,{x:462,y:242});
+  shape.label=oracle.create('bpmndi:BPMNLabel',{bounds:oracle.create('dc:Bounds',{x:435,y:278,width:90,height:20})});
+  const timeout=di.find(d=>d.bpmnElement===byId.TimeoutFlow);
+  timeout.waypoint=[{x:498,y:260},{x:790,y:260},{x:790,y:405}].map(p=>oracle.create('dc:Point',p));
+  return(await oracle.toXML(parsed.rootElement,{format:true})).xml;
+}
+async function setup(engine,xml,zoom) {
+  const page=await browser.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));
+  page.setDefaultTimeout(10000);page.setDefaultNavigationTimeout(30000);
+  try {
+  await page.setViewport({width:1800,height:1250});
+  await page.goto(`${base}/modeler/`,{waitUntil:'networkidle0'});await page.waitForFunction(()=>!!window.modeler?.getGraph());
+  if(engine==='upstream') {
+    await page.addScriptTag({path:require.resolve('bpmn-js/dist/bpmn-modeler.development.js')});
+    for(const name of ['diagram-js.css','bpmn-js.css'])await page.addStyleTag({path:require.resolve(`bpmn-js/dist/assets/${name}`)});
+  }
+  const warnings=await page.evaluate(async({engine,xml,zoom})=>{
+    const container=document.querySelector('#viewer');let result;
+    if(engine==='upstream') {
+      window.modeler.destroy();container.replaceChildren();
+      const m=new window.BpmnJS({container});window.upstream=m;result=await m.importXML(xml);
+      const canvas=m.get('canvas');canvas.viewbox({x:-140/zoom,y:-100/zoom,width:container.clientWidth/zoom,height:container.clientHeight/zoom});
+      window.hitEngine={container,node:id=>m.get('elementRegistry').get(id),selection:()=>m.get('selection').get().map(n=>n.id),
+        xml:async()=>(await m.saveXML({format:true})).xml,svg:async()=>(await m.saveSVG()).svg,
+        viewport:()=>{const v=canvas.viewbox();return{x:-v.x*v.scale,y:-v.y*v.scale,zoom:v.scale};}};
+    } else {
+      const m=window.modeler;result=await m.importXML(xml);m.setViewport({x:140,y:100,zoom});
+      window.hitEngine={container,node:id=>m.getElement(id),selection:()=>m.getSelection(),xml:()=>m.getXML(),svg:async()=>(await m.saveSVG()).svg,viewport:()=>m.getViewport()};
+    }
+    return result.warnings.map(w=>w.message);
+  },{engine,xml,zoom});assert.deepEqual(warnings,[],`${engine} setup warnings`);
+  await page.evaluate(installNativeSourceHitCapture);
+  return{page,errors};
+  }catch(error){await page.close().catch(()=>{});throw error;}
+}
+async function screen(page,p) {return page.evaluate(p=>{const e=window.hitEngine,v=e.viewport(),r=e.container.getBoundingClientRect();return{x:r.left+v.x+p.x*v.zoom,y:r.top+v.y+p.y*v.zoom};},p);}
+async function hit(page,p) {return page.evaluate(p=>{const e=document.elementFromPoint(p.x,p.y),r=window.hitEngine.container.getBoundingClientRect();return{inside:p.x>=Math.max(0,r.left)&&p.x<Math.min(innerWidth,r.right)&&p.y>=Math.max(0,r.top)&&p.y<Math.min(innerHeight,r.bottom),id:e?.closest('[data-element-id]')?.getAttribute('data-element-id')||null,tag:e?.tagName,classes:e?.getAttribute('class'),bend:e?.closest('[data-bend-index]')?.getAttribute('data-bend-index'),port:!!e?.closest('.bpmn-xyflow-connect-handle')};},p);}
+async function state(page) {
+  const xml=await page.evaluate(()=>window.hitEngine.xml()),parsed=await oracle.fromXML(xml);assert.deepEqual(parsed.warnings,[],'independent XML oracle');
+  const di=parsed.rootElement.diagrams.flatMap(d=>d.plane.planeElement||[]);
+  return{xml,di:Object.fromEntries(di.map(d=>[d.bpmnElement.id,{...(d.bounds?{bounds:rect(d.bounds)}:{}),...(d.waypoint?{points:d.waypoint.map(xy)}:{})}])),
+    flows:Object.values(parsed.elementsById).filter(o=>o.$type==='bpmn:SequenceFlow').map(o=>({id:o.id,source:o.sourceRef.id,target:o.targetRef.id}))};
+}
+async function clearSelection(page) {
+  const blank=await page.evaluate(()=>{const r=window.hitEngine.container.getBoundingClientRect();return{x:r.right-300,y:r.bottom-100};});
+  await page.mouse.click(blank.x,blank.y);await settle(page);assert.deepEqual(await page.evaluate(()=>window.hitEngine.selection()),[],'native background click clears previous selection overlays');
+}
+async function settle(page){await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));}
+async function history(page) {return page.evaluate(()=>window.upstream?{index:window.upstream.get('commandStack')._stackIdx,undo:window.upstream.get('commandStack').canUndo(),redo:window.upstream.get('commandStack').canRedo()}:{size:window.modeler.commandStack.size(),undo:window.modeler.canUndo(),redo:window.modeler.canRedo()});}
+async function sample(page,center,offset,id) {
+  // Remove selection handles through native input before every probe.
+  await clearSelection(page);
+  const selectionBefore=await page.evaluate(()=>window.hitEngine.selection()),historyBefore=await history(page);
+  await page.evaluate(()=>{window.nativeHitCapture.events.length=0;});
+  const p=await screen(page,center);p.y+=offset;
+  await page.mouse.move(p.x,p.y);const target=await hit(page,p);
+  assert.equal(target.inside,true,`native probe is inside the visible canvas: ${JSON.stringify(p)}`);
+  await page.mouse.click(p.x,p.y);
+  await settle(page);
+  const selection=await page.evaluate(()=>window.hitEngine.selection());
+  const native=await page.evaluate(()=>{const c=window.nativeHitCapture,input=c.events.slice(),down=input.find(e=>e.type==='mousedown');return{input,restoredControl:down?c.control(document.elementFromPoint(down.point.x,down.point.y),down.point):null};});
+  return{offset,point:p,target,selection,expectedShape:id,selectionBefore,historyBefore,historyAfter:await history(page),...native};
+}
+async function diagnoseBookingEndpoint(page) {
+  // Diagnostic evidence only. Keep the original strict paired probes above;
+  // these do not turn a known mismatch into a passing parity classification.
+  const before=await state(page);
+  const history=()=>page.evaluate(()=>window.upstream?{index:window.upstream.get('commandStack')._stackIdx,undo:window.upstream.get('commandStack').canUndo(),redo:window.upstream.get('commandStack').canRedo()}:{size:window.modeler.commandStack.size(),undo:window.modeler.canUndo(),redo:window.modeler.canRedo()});
+  const originalHistory=await history(),observations=[];
+  for(const entry of ['inherited','reset','route-hover','fresh'])for(const dx of [-.1,0,.1])for(const offset of [-6,0,6]) {
+    if(entry==='fresh') {
+      const warnings=await page.evaluate(async({xml})=>{
+        const v=window.hitEngine.viewport(),m=window.upstream||window.modeler,result=await m.importXML(xml);
+        if(window.upstream){const c=m.get('canvas'),container=window.hitEngine.container;c.viewbox({x:-v.x/v.zoom,y:-v.y/v.zoom,width:container.clientWidth/v.zoom,height:container.clientHeight/v.zoom});}
+        else await m.setViewport(v,{duration:0});
+        return result.warnings.map(w=>w.message);
+      },{xml:before.xml});assert.deepEqual(warnings,[],'fresh diagnostic fixture import');
+    }
+    if(entry!=='inherited')await clearSelection(page);
+    if(entry==='route-hover') {
+      const interior=await screen(page,{x:490,y:260});
+      await page.mouse.move(interior.x,interior.y);await settle(page);
+      assert.equal((await hit(page,interior)).id,'ReservationFlow2','diagnostic hover is activated on the actual route');
+    }
+    const inherited=await page.evaluate(()=>({selection:window.hitEngine.selection(),hovered:[...document.querySelectorAll('#viewer .hover,#viewer .is-hovered')].map(el=>({id:el.closest('[data-element-id]')?.getAttribute('data-element-id')||null,classes:el.getAttribute('class')}))}));
+    const p=await screen(page,{x:480+dx,y:260});p.y+=offset;
+    await page.mouse.move(p.x,p.y);await settle(page);
+    const geometry=await page.evaluate(p=>{
+      const target=document.elementFromPoint(p.x,p.y),viewport=document.querySelector('#viewer .bpmn-xyflow-viewport,#viewer .viewport');
+      const matrix=m=>m&&Object.fromEntries(['a','b','c','d','e','f'].map(k=>[k,m[k]]));
+      const inspect=el=>{
+        const ctm=el.getScreenCTM?.(),local=ctm?new DOMPoint(p.x,p.y).matrixTransform(ctm.inverse()):null,style=getComputedStyle(el);
+        return{tag:el.tagName,id:el.closest('[data-element-id]')?.getAttribute('data-element-id'),class:el.getAttribute('class'),dom:el.outerHTML,
+          screenCTM:matrix(ctm),localPoint:local&&{x:local.x,y:local.y},pointerEvents:style.pointerEvents,display:style.display,visibility:style.visibility,
+          strokeWidth:style.strokeWidth,lineCap:style.strokeLinecap,stroke:style.stroke,opacity:style.opacity,
+          inStroke:local&&el.isPointInStroke?el.isPointInStroke(local):null,inFill:local&&el.isPointInFill?el.isPointInFill(local):null};
+      };
+      const selectors=['[data-element-id="ReservationFlow2"] .djs-hit','[data-element-id="ReservationFlow2"] .bpmn-xyflow-connection-hit',
+        '.djs-bendpoints[data-element-id="ReservationFlow2"] circle','.bpmn-xyflow-bendpoints [data-element-id="ReservationFlow2"]',
+        '[data-element-id="FlightTimeout"] .djs-hit','[data-element-id="FlightTimeout"] .bpmn-xyflow-shape-hit'];
+      return{viewport:window.hitEngine.viewport(),viewportCTM:matrix(viewport?.getScreenCTM()),target:target&&inspect(target),
+        stack:document.elementsFromPoint(p.x,p.y).slice(0,12).map(el=>({id:el.closest('[data-element-id]')?.getAttribute('data-element-id')||null,tag:el.tagName,classes:el.getAttribute('class')})),
+        candidates:[...new Set(selectors.flatMap(selector=>[...document.querySelectorAll(selector)]))].map(inspect)};
+    },p);
+    await page.mouse.click(p.x,p.y);await settle(page);
+    observations.push({entry,inherited,graphDx:dx,screenDy:offset,point:p,geometry,selection:await page.evaluate(()=>window.hitEngine.selection())});
+    assert.equal((await state(page)).xml,before.xml,'endpoint diagnostic input is selection only');
+    assert.deepEqual(await history(),originalHistory,'endpoint diagnostic input adds no command');
+  }
+  return{status:'diagnostic-only',observations};
+}
+async function evidence(page,name,engine,data) {
+  await writeFile(`test-artifacts/browser-hit-${name}-${engine}.json`,JSON.stringify(data,null,2));
+  await writeFile(`test-artifacts/browser-hit-${name}-${engine}.bpmn`,await page.evaluate(()=>window.hitEngine.xml()));
+  await writeFile(`test-artifacts/browser-hit-${name}-${engine}.svg`,await page.evaluate(()=>window.hitEngine.svg()));
+  await page.screenshot({path:`test-artifacts/browser-hit-${name}-${engine}.png`,fullPage:true});
+}
+async function paired(name,xml,zoom,center,id,{ring,label=false,connections=['Flow']}={}) {
+  const pair={},pages=[];
+  try {
+    for(const engine of ['upstream','local']) {
+      console.log(`START native hit priority ${name} ${engine}`);
+      const context=await setup(engine,xml,zoom);pages.push({...context,engine});const {page,errors}=context,before=await state(page),probes=[];
+      for(const offset of new Set([0,-6,6,-10,10,-10*zoom,10*zoom])){console.log(`PROBE native hit priority ${name} ${engine} offset ${offset}`);probes.push(await sample(page,center,offset,id));}
+      if(ring)probes.push({...await sample(page,ring,0,id),ring:true});
+      if(label) {
+        await clearSelection(page);
+        const glyph=await page.evaluate(id=>{
+          const group=document.querySelector(`[data-element-id="${id}_label"]`),text=group?.querySelector('text'),r=text?.getBoundingClientRect();
+          if(!r?.width)throw Error('Missing visible external label');
+          const point={x:r.left+r.width/2,y:r.top+r.height/2};
+          return{point,textRect:{x:r.x,y:r.y,width:r.width,height:r.height},group:group.outerHTML,
+            stack:document.elementsFromPoint(point.x,point.y).map(e=>({id:e.closest('[data-element-id]')?.getAttribute('data-element-id')||null,tag:e.tagName,classes:e.getAttribute('class')}))};
+        },id);
+        const point=glyph.point;
+        const target=await hit(page,point);await page.mouse.click(point.x,point.y);await settle(page);const selection=await page.evaluate(()=>window.hitEngine.selection());
+        if(label==='select')assert.deepEqual(selection,[id+'_label'],'unobstructed external label is natively selectable');
+        else{assert.equal(selection.length,1);assert.ok([id+'_label',...connections].includes(selection[0]),'overlapped visible glyph must select its label or crossing route');assert.equal(target.id,selection[0]);}
+        probes.push({label:true,point,target,selection,glyph});
+      }
+      assert.equal((await state(page)).xml,before.xml,'native selection probes do not mutate semantic XML or DI');assert.deepEqual(errors,[]);
+      pair[engine]=probes;await evidence(page,name,engine,{zoom,center,id,probes});
+      if(name==='booking-attached-boundary') {
+        const diagnostics=await diagnoseBookingEndpoint(page);
+        await writeFile(`test-artifacts/browser-hit-${name}-${engine}-diagnostics.json`,JSON.stringify(diagnostics,null,2));
+      }
+    }
+    // Selection matches except the exact imported-label order baseline and
+    // fixed measured points that visibly hit the local source Connect tool.
+    // Invisible padding over the owner or an unrelated shape is never allowed.
+    const candidates=[id,id+'_label',...connections];
+    for(const engine of ['upstream','local']) {
+      const probe=pair[engine][0];
+      assert.equal(probe.selection.length,1,`${engine} center must select one real fixture element, not background`);
+      assert.ok(candidates.includes(probe.selection[0]),`${engine} center selected an unrelated element: ${JSON.stringify(probe)}`);
+      assert.equal(probe.target.id,probe.selection[0],`${engine} sampled center hit must be the element selected by native input`);
+    }
+    let intentionalDifferences=0;
+    for(let i=0;i<pair.upstream.length;i++) {
+      const u=pair.upstream[i],l=pair.local[i];
+      if(visibleSourceProbe(name,u)) {
+        assertVisibleSourceProbe(name,u,l);intentionalDifferences++;
+      } else if(name==='external-label-over-route') {
+        // Exact observed baseline at each point, not a blanket allowance for
+        // either selection or any upstream-edge/local-shape mismatch.
+        const onRoute=u.label||Math.abs(u.offset)<=7.5*zoom;
+        assert.deepEqual(u.selection,[onRoute?'Flow':id+'_label'],'pinned imported label/flow order');
+        assert.deepEqual(l.selection,[id+'_label'],'local imported label remains consistently selectable');
+        assert.equal(u.target.id,u.selection[0]);assert.equal(l.target.id,l.selection[0]);
+        if(onRoute)intentionalDifferences++;
+      } else {
+        if(u.ring){assert.deepEqual(u.selection,[id],'upstream ring point actually selects boundary');assert.deepEqual(l.selection,[id],'local ring point actually selects boundary');}
+        assert.deepEqual(l.selection,u.selection,`same native selection at offset ${u.offset??'glyph'}`);
+        assert.deepEqual(l.historyAfter,l.historyBefore,'ordinary shape/edge selection adds no command');
+      }
+    }
+    if(name==='external-label-over-route')assert.ok(intentionalDifferences>0,'intentional difference must be observed, never counted as equality');
+    results.push({name,status:intentionalDifferences?'intentional-difference':'passed',intentionalDifferences,upstream:pair.upstream,local:pair.local});console.log(`PASS native hit priority ${name}`);
+  } catch(error) {
+    results.push({name,status:'failed',error:error.stack||String(error),...pair});console.error(`FAIL native hit priority ${name}: ${error.stack||error}`);
+    // Completed engine captures already contain the exact mismatch. Avoid a
+    // redundant screenshot of its now-background tab (which can stall Chrome).
+    for(const {page,engine}of pages)if(!pair[engine]){await page.bringToFront().catch(()=>{});await page.screenshot({path:`test-artifacts/browser-hit-${name}-${engine}-failure.png`,fullPage:true}).catch(()=>{});}
+  } finally {await writeFile('test-artifacts/browser-hit-priority-results.json',JSON.stringify(results,null,2));for(const {page}of pages)await page.close().catch(()=>{});}
+}
+
+async function unrelatedTargetOutsidePaint(kind) {
+  const name=`source-halo-${kind}-pass-through`,expected=kind==='neighbor'?'Neighbor':'HaloFlow';let page;
+  let xml=fixture(shape('Neighbor','task',236,150,100,80));
+  if(kind==='edge') {
+    xml=fixture(shape('Other','task',450,450,100,80))
+      .replace('<bpmn:task id="Source"','<bpmn:task id="EdgeSource"/><bpmn:task id="Source"')
+      .replace('</bpmn:process>','<bpmn:sequenceFlow id="HaloFlow" sourceRef="EdgeSource" targetRef="Target"/></bpmn:process>')
+      .replace('<bpmndi:BPMNShape id="Source_di"','<bpmndi:BPMNShape id="EdgeSource_di" bpmnElement="EdgeSource"><dc:Bounds x="100" y="146" width="100" height="80"/></bpmndi:BPMNShape><bpmndi:BPMNShape id="Source_di"')
+      .replace('</bpmndi:BPMNPlane>','<bpmndi:BPMNEdge id="HaloFlow_di" bpmnElement="HaloFlow"><di:waypoint x="200" y="186"/><di:waypoint x="400" y="186"/><di:waypoint x="400" y="240"/><di:waypoint x="660" y="240"/></bpmndi:BPMNEdge></bpmndi:BPMNPlane>');
+  }
+  try {
+    const context=await setup('local',xml,1);page=context.page;
+    const before=await state(page),beforeHistory=await history(page),body=await screen(page,{x:230,y:240});
+    await page.mouse.click(body.x,body.y);await settle(page);assert.deepEqual(await page.evaluate(()=>window.hitEngine.selection()),['Source']);
+    const outline=await screen(page,{x:230,y:200});await page.mouse.move(outline.x,outline.y,{steps:8});await settle(page);
+    const grab=await page.evaluate(()=>{const p=document.querySelector('.bpmn-xyflow-connect-handle[data-connect-source="Source"] .bpmn-xyflow-connect-port');assertPort();function assertPort(){if(!p)throw Error('Missing selected Source grab');}const r=p.getBoundingClientRect();return{x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)};});
+    await page.mouse.move(grab.x,grab.y);await settle(page);
+    const acquired=await page.evaluate(grab=>{const c=window.nativeHitCapture;return c.control(document.elementFromPoint(grab.x,grab.y),grab);},grab);
+    assert.equal(acquired?.owner,'Source','native approach reaches the actual displaced Source tool');
+    const point={x:grab.x+7,y:grab.y};
+    const prior=await page.evaluate(point=>{const c=window.nativeHitCapture,p=document.querySelector('.bpmn-xyflow-connect-handle[data-connect-source="Source"] .bpmn-xyflow-connect-port');return c.control(p,point);},point);
+    await page.evaluate(()=>{window.nativeHitCapture.events.length=0;});
+    await page.mouse.move(point.x,point.y);await settle(page);
+    const observed=await page.evaluate(point=>{const c=window.nativeHitCapture,p=document.querySelector('.bpmn-xyflow-connect-handle[data-connect-source="Source"] .bpmn-xyflow-connect-port');return{target:c.describe(document.elementFromPoint(point.x,point.y)),port:c.control(p,point),input:c.events.slice()};},point);
+    assert.equal(observed.target.id,expected);assert.equal(observed.target.owner,null);
+    assert.deepEqual(prior.center,acquired.center,'test the exact displayed grab before the native move');
+    if(kind==='neighbor'){assert.equal(observed.port?.owner,'Source');assert.deepEqual(observed.port.center,acquired.center,'neighbor approach retains the same displayed grab');}
+    else assert.equal(observed.port,null,'real edge hover removes the obsolete source tool');
+    const distance=Math.hypot(prior.localPoint.x-prior.center.x,prior.localPoint.y-prior.center.y)*prior.zoom;
+    assert.ok(distance>5.75&&distance<8,'native point is exclusively inside the former invisible halo');
+    assert.equal(prior.inFill||prior.inStroke,false);
+    await page.mouse.click(point.x,point.y);await settle(page);
+    const input=await page.evaluate(()=>window.nativeHitCapture.events.slice()),down=input.find(e=>e.type==='mousedown');
+    assert.equal(down?.trusted,true);assert.deepEqual(down.point,point);assert.equal(down.target.id,expected);assert.equal(down.target.owner,null);
+    assert.deepEqual(await page.evaluate(()=>window.hitEngine.selection()),[expected]);
+    assert.equal((await state(page)).xml,before.xml);assert.deepEqual(await history(page),beforeHistory);assert.deepEqual(context.errors,[]);
+    await evidence(page,name,'local',{grab,point,acquired,prior,observed,input,distance});results.push({name,status:'passed'});
+  }catch(error){results.push({name,status:'failed',error:error.stack||String(error)});console.error(`FAIL native hit priority ${name}: ${error.stack||error}`);if(page)await evidence(page,name,'local',{error:error.stack,input:await page.evaluate(()=>window.nativeHitCapture?.events)}).catch(()=>{});}
+  finally{await writeFile('test-artifacts/browser-hit-priority-results.json',JSON.stringify(results,null,2));await page?.close().catch(()=>{});}
+}
+async function selectedEndpointPriority() {
+  const name='selected-endpoint-versus-create-port';let page;
+  try {
+    console.log(`START native hit priority ${name}`);
+    const context=await setup('local',fixture(shape('Other','task',450,450,100,80)),1);page=context.page;
+    const p=await screen(page,{x:430,y:240});assert.equal((await hit(page,p)).id,'Flow');await page.mouse.click(p.x,p.y);
+    const before=await state(page),source=await screen(page,{x:230,y:220});await page.mouse.move(source.x,source.y);
+    const from=await screen(page,{x:280,y:240}),target=await hit(page,from);
+    assert.equal(target.bend,'0','selected source endpoint remains above the coincident hover create port');assert.equal(target.port,false);
+    const to=await screen(page,{x:280,y:263});
+    try {await page.mouse.move(from.x,from.y);await page.mouse.down();await page.mouse.move(to.x,to.y,{steps:12});await page.mouse.up();}finally{await page.mouse.up().catch(()=>{});}
+    const after=await state(page);assert.deepEqual(after.flows,before.flows,'redocking edits the same edge without creating another');
+    assert.ok(Math.abs(after.di.Flow.points[0].x-280)<1.5&&Math.abs(after.di.Flow.points[0].y-263)<1.5,'chosen source redocking follows native pointer');
+    assert.deepEqual(after.di.Flow.points.at(-1),before.di.Flow.points.at(-1),'opposite anchor stays fixed');
+    await page.click('#undo-btn');assert.equal((await state(page)).xml,before.xml,'native Undo restores exact XML');
+    // A selected route must not globally disable unrelated visible create ports.
+    const other=await screen(page,{x:500,y:490});await page.mouse.move(other.x,other.y);
+    // The source affordance now follows the requested outline point. Approach
+    // that visible position instead of assuming center hover creates a fixed right port.
+    const port=await screen(page,{x:550,y:490});await page.mouse.move(port.x,port.y,{steps:8});await settle(page);
+    assert.equal((await hit(page,port)).port,true,'nonoverlapping unrelated create port is still usable');
+    const end=await screen(page,{x:660,y:270});assert.equal((await hit(page,end)).id,'Target');
+    try{await page.mouse.move(port.x,port.y);await page.mouse.down();await page.mouse.move(end.x,end.y,{steps:12});await page.mouse.up();}finally{await page.mouse.up().catch(()=>{});}
+    const created=await state(page);assert.equal(created.flows.length,before.flows.length+1);assert.ok(created.flows.some(f=>f.source==='Other'&&f.target==='Target'));
+    await page.click('#undo-btn');assert.equal((await state(page)).xml,before.xml);assert.deepEqual(context.errors,[]);
+    await evidence(page,name,'local',{before,after,created});results.push({name,status:'passed'});console.log(`PASS native hit priority ${name}`);
+  }catch(error){results.push({name,status:'failed',error:error.stack||String(error)});console.error(`FAIL native hit priority ${name}: ${error.stack||error}`);if(page)await page.screenshot({path:`test-artifacts/browser-hit-${name}-failure.png`,fullPage:true}).catch(()=>{});}
+  finally{await writeFile('test-artifacts/browser-hit-priority-results.json',JSON.stringify(results,null,2));await page?.close().catch(()=>{});}
+}
+
+try {
+  server=spawn(process.execPath,['lib/demo/serve.mjs'],{env:{...process.env,PORT:String(port)},stdio:['ignore','pipe','inherit']});
+  server.stdout.on('data',chunk=>{serverOutput+=String(chunk);});
+  const deadline=Date.now()+60000;while(true){
+    const actual=serverOutput.match(/demo listening on http:\/\/localhost:(\d+)/);
+    if(actual&&Number(actual[1])!==port)throw Error(`Hit-priority server bound unexpected port ${actual[1]}`);
+    if(actual)try{if((await fetch(`${base}/modeler/`,{signal:AbortSignal.timeout(5000)})).ok)break;}catch{}
+    if(server.exitCode!==null||Date.now()>deadline)throw Error('Hit-priority demo server startup timeout');
+    await new Promise(resolve=>setTimeout(resolve,150));
+  }
+  browser=await puppeteer.launch({headless:'shell',protocolTimeout:30000});await mkdir('test-artifacts',{recursive:true});
+  for(const zoom of [.2,.65,1,1.4,3])for(const crossing of [shape('Crossing','task',380,200,100,80),shape('Crossing','intermediateCatchEvent',412,222,36,36),shape('Crossing','exclusiveGateway',405,215,50,50),shape('Crossing','subProcess',370,180,140,120)]) {
+    await paired(`${crossing.type}-crossing-${zoom}`,fixture(crossing),zoom,{x:430,y:240},'Crossing');
+  }
+  for(const zoom of [.65,1.4])await paired(`target-endpoint-interior-${zoom}`,fixture(shape('Other','task',450,450,100,80)).replace('<di:waypoint x="280" y="240"/>','<di:waypoint x="280" y="200"/>'),zoom,{x:660.25,y:237},'Target');
+  const overlapping=fixture(shape('Other','task',450,450,100,80)).replace('<dc:Bounds x="660"','<dc:Bounds x="230"').replace('<di:waypoint x="660"','<di:waypoint x="230"');
+  await paired('overlapping-endpoint-interiors',overlapping,1,{x:255,y:244},'Target');
+  const booking=await bookingOverlap();
+  await paired('booking-attached-boundary',booking,.9,{x:480,y:260},'FlightTimeout',{ring:{x:480,y:246},connections:['ReservationFlow2','TimeoutFlow']});
+  const labelled={...shape('Crossing','intermediateCatchEvent',412,380,36,36),name:'MMMMMMMM',label:{x:385,y:232,width:90,height:20}};
+  await paired('external-label-over-route',fixture(labelled),1,{x:430,y:240},'Crossing',{label:'record'});
+  await paired('external-label-unobstructed',fixture({...labelled,label:{...labelled.label,y:200}}),1,{x:430,y:210},'Crossing',{label:'select'});
+  await selectedEndpointPriority();
+  await unrelatedTargetOutsidePaint('neighbor');
+  await unrelatedTargetOutsidePaint('edge');
+  await writeFile('test-artifacts/browser-hit-priority-results.json',JSON.stringify(results,null,2));
+  const failures=results.filter(r=>r.status==='failed');assert.equal(failures.length,0,failures.map(r=>`${r.name}: ${r.error}`).join('\n'));console.log(`PASS ${results.length} native hit-priority groups (${results.filter(r=>r.status==='intentional-difference').length} explicit intentional difference)`);
+}finally{await browser?.close();server?.kill('SIGTERM');}

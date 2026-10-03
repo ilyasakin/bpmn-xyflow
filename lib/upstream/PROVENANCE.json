@@ -1,0 +1,48 @@
+{
+  "upstream": "bpmn-io/bpmn-js",
+  "version": "18.30.1",
+  "purpose": "Pure contextual predicates and connection attachment geometry; the XYFlow engine remains unchanged.",
+  "files": {
+    "rules/BpmnRules.js": "f6d231883613b4ebc4ecfaa8742636ed08e1adf2467f2cf2bffc5622f5313014",
+    "modeling/util/ModelingUtil.js": "459b9c18c163b9d0fe162a407dec4b51f7e11dee5ae6a4a4a5dee8bdd001b33f",
+    "snapping/BpmnSnappingUtil.js": "cd7b9604625dc487d27c63bd4ec654f4c9d7ab293098f73b6c19aac4152c6cc6"
+  },
+  "additionalSources": {
+    "modeling/behavior/util/ConnectionLayoutUtil.js": {
+      "source": "lib/features/modeling/behavior/util/ConnectionLayoutUtil.js",
+      "sha256": "21fd0e29792f14e372a74d3cb6d1cf26372a09f0a3df67d727f7e10c34a9a9d3"
+    },
+    "modeling/behavior/util/LayoutUtil.js": {
+      "source": "lib/features/modeling/behavior/util/LayoutUtil.js",
+      "sha256": "646b82ae4d47c953809a018c3282bda6309d3cb98c96007dc09765c24c06fffe"
+    },
+    "modeling/behavior/util/LineAttachmentUtil.js": {
+      "source": "lib/features/modeling/behavior/util/LineAttachmentUtil.js",
+      "sha256": "3f2e47dd8e2fb1c67e7e66ad8c7a0673129a7d4d6a0096e8aabccca94ad3b4ef"
+    },
+    "modeling/behavior/util/GeometricUtil.js": {
+      "source": "lib/features/modeling/behavior/util/GeometricUtil.js",
+      "sha256": "38738a254c403f642a8941ce3a361aaf35e0e44d25245690fd6052b5b4ab6528"
+    },
+    "modeling/cmd/UpdateCategoryValueRefsHandler.js": {
+      "source": "lib/features/modeling/cmd/UpdateCategoryValueRefsHandler.js",
+      "sha256": "c57b722b5f22dc9da3b07c5f32710f82dd2e5b2b50b4e906f75f241497672eb5"
+    },
+    "modeling/behavior/util/CategoryUtil.js": {
+      "source": "lib/features/modeling/behavior/util/CategoryUtil.js",
+      "sha256": "c6dcf9367a69623469348eccb49ae0ff0457b94df5c0c0234f7c291334a52200"
+    },
+    "LineUtil.js": {
+      "source": "lib/util/LineUtil.js",
+      "sha256": "ce5d1cb2d34d07378a975c4c9c4615f1eb75dd7c4c900a451eaef9004e06f145"
+    },
+    "modeling/behavior/ResizeBehavior.js": {
+      "source": "lib/features/modeling/behavior/ResizeBehavior.js",
+      "sha256": "ecdbfdf2caf94a2cf400413f63e4d38d3e5f4bd8e159a6d6903b2e1b8a990c8a"
+    },
+    "modeling/util/LaneUtil.js": {
+      "source": "lib/features/modeling/util/LaneUtil.js",
+      "sha256": "95e892798abe12bbf789d946347808c7a58fc5695d73021f90c9e93787dc852e"
+    }
+  }
+}

@@ -1,0 +1,643 @@
+{
+  "sourceCommit": "257d9bfc6faec11c3424528b3d7d3cf17cd7bf43",
+  "case": "MOTION-Start-local-selected-normal-retina-reduced",
+  "geometry": {
+    "shape": {
+      "id": "StartEvent_muros5v5_1",
+      "type": "bpmn:StartEvent",
+      "x": -315,
+      "y": -156,
+      "width": 36,
+      "height": 36,
+      "hidden": false,
+      "label": false
+    },
+    "viewport": {
+      "x": 1196.51953125,
+      "y": 739.5,
+      "zoom": 0.9999999999999998
+    },
+    "container": {
+      "x": 0,
+      "y": 48,
+      "width": 1800,
+      "height": 1152
+    }
+  },
+  "initialInput": {
+    "x": 883,
+    "y": 643
+  },
+  "initialInputSource": "first recorded coordinate prepares owned control",
+  "points": [
+    {
+      "sequence": 2,
+      "x": 883,
+      "y": 643,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 6,
+      "x": 883,
+      "y": 642,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 10,
+      "x": 883,
+      "y": 641,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 14,
+      "x": 884,
+      "y": 641,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 18,
+      "x": 884,
+      "y": 640,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 22,
+      "x": 885,
+      "y": 639,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 26,
+      "x": 886,
+      "y": 638,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 30,
+      "x": 886,
+      "y": 637,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 34,
+      "x": 887,
+      "y": 637,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 38,
+      "x": 887,
+      "y": 636,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 42,
+      "x": 888,
+      "y": 636,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 46,
+      "x": 889,
+      "y": 635,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 50,
+      "x": 890,
+      "y": 634,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 54,
+      "x": 891,
+      "y": 634,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 58,
+      "x": 892,
+      "y": 633,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 62,
+      "x": 893,
+      "y": 633,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 66,
+      "x": 894,
+      "y": 632,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 70,
+      "x": 895,
+      "y": 632,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 74,
+      "x": 896,
+      "y": 632,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 78,
+      "x": 897,
+      "y": 632,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 82,
+      "x": 898,
+      "y": 632,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 86,
+      "x": 899,
+      "y": 632,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 90,
+      "x": 900,
+      "y": 632,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 94,
+      "x": 901,
+      "y": 632,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 98,
+      "x": 902,
+      "y": 632,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 102,
+      "x": 903,
+      "y": 632,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 106,
+      "x": 904,
+      "y": 632,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 110,
+      "x": 905,
+      "y": 632,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 114,
+      "x": 906,
+      "y": 633,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 118,
+      "x": 907,
+      "y": 633,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 122,
+      "x": 908,
+      "y": 634,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 126,
+      "x": 909,
+      "y": 634,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 130,
+      "x": 910,
+      "y": 635,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 134,
+      "x": 911,
+      "y": 636,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 138,
+      "x": 912,
+      "y": 636,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 142,
+      "x": 912,
+      "y": 637,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 146,
+      "x": 913,
+      "y": 637,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 150,
+      "x": 913,
+      "y": 638,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 154,
+      "x": 914,
+      "y": 639,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 158,
+      "x": 915,
+      "y": 640,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 162,
+      "x": 915,
+      "y": 641,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 166,
+      "x": 916,
+      "y": 641,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 170,
+      "x": 916,
+      "y": 642,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 174,
+      "x": 916,
+      "y": 643,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 178,
+      "x": 916,
+      "y": 642,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 182,
+      "x": 916,
+      "y": 641,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 186,
+      "x": 915,
+      "y": 641,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 190,
+      "x": 915,
+      "y": 640,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 194,
+      "x": 914,
+      "y": 639,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 198,
+      "x": 913,
+      "y": 638,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 202,
+      "x": 913,
+      "y": 637,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 206,
+      "x": 912,
+      "y": 637,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 210,
+      "x": 912,
+      "y": 636,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 214,
+      "x": 911,
+      "y": 636,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 218,
+      "x": 910,
+      "y": 635,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 222,
+      "x": 909,
+      "y": 634,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 226,
+      "x": 908,
+      "y": 634,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 230,
+      "x": 907,
+      "y": 633,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 234,
+      "x": 906,
+      "y": 633,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 238,
+      "x": 905,
+      "y": 632,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 242,
+      "x": 904,
+      "y": 632,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 246,
+      "x": 903,
+      "y": 632,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 250,
+      "x": 902,
+      "y": 632,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 254,
+      "x": 901,
+      "y": 632,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 258,
+      "x": 900,
+      "y": 632,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 262,
+      "x": 899,
+      "y": 632,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 266,
+      "x": 898,
+      "y": 632,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 270,
+      "x": 897,
+      "y": 632,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 274,
+      "x": 896,
+      "y": 632,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 278,
+      "x": 895,
+      "y": 632,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 282,
+      "x": 894,
+      "y": 632,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 286,
+      "x": 893,
+      "y": 633,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 290,
+      "x": 892,
+      "y": 633,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 294,
+      "x": 891,
+      "y": 634,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 298,
+      "x": 890,
+      "y": 634,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 302,
+      "x": 889,
+      "y": 635,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 306,
+      "x": 888,
+      "y": 636,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 310,
+      "x": 887,
+      "y": 636,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 314,
+      "x": 887,
+      "y": 637,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 318,
+      "x": 886,
+      "y": 637,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 322,
+      "x": 886,
+      "y": 638,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 326,
+      "x": 885,
+      "y": 639,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 330,
+      "x": 884,
+      "y": 640,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 334,
+      "x": 884,
+      "y": 641,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 338,
+      "x": 883,
+      "y": 641,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 342,
+      "x": 883,
+      "y": 642,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    },
+    {
+      "sequence": 346,
+      "x": 883,
+      "y": 643,
+      "targetClass": "bpmn-xyflow-connect-hit",
+      "connectOwner": "StartEvent_muros5v5_1"
+    }
+  ]
+}

@@ -24,11 +24,11 @@ function App() {
     let cancelled = false;
     setStatus('Fetching ' + SAMPLES[idx].label + '...');
     fetch(FIXTURE_BASE + SAMPLES[idx].path)
-      .then(r => r.text())
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${ r.status }`); return r.text(); })
       .then(text => {
         if (cancelled) return;
         setXml(text);
-      });
+      }).catch(error => { if (!cancelled) setStatus('Error: ' + error.message); });
     return () => { cancelled = true; };
   }, [ idx ]);
 

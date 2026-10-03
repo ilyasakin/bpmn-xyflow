@@ -1,0 +1,7 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Two independent BPMN editors</title>
+<style>html,body{margin:0;font:14px system-ui;height:100%}body{display:flex;flex-direction:column}h1{font-size:16px;margin:8px}main{display:grid;grid-template-columns:1fr 1fr;gap:12px;flex:1;min-height:0;padding:8px}section{border:2px solid #999;display:flex;flex-direction:column;min-width:0}section[data-active=true]{border-color:#2463bc}header{display:flex;align-items:center;gap:8px;padding:8px;flex-wrap:wrap}.canvas{flex:1;min-height:0;position:relative}.status{font-size:12px;width:100%}pre{max-height:100px;overflow:auto}</style></head>
+<body><h1>Two editor instances: every palette, sample and history belongs to its panel</h1><main>
+<section data-editor="a"><header><strong>Editor A</strong><button data-inspect="a">Inspect A</button><select aria-label="Sample A"></select><button data-undo="a">Undo A</button><button data-redo="a">Redo A</button><span class="status" role="status"></span></header><div id="viewer" class="canvas"></div></section>
+<section data-editor="b"><header><strong>Editor B</strong><button data-inspect="b">Inspect B</button><select aria-label="Sample B"></select><button data-undo="b">Undo B</button><button data-redo="b">Redo B</button><span class="status" role="status"></span></header><div id="viewer-inactive" class="canvas"></div></section>
+</main><script type="module" src="./two-editors.js"></script></body></html>

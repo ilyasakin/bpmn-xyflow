@@ -10,3 +10,4 @@ lib/**/*.d.ts
 # (default OUT_DIR=/tmp; this guards manual overrides).
 /editor-*.png
 /xyflow-*.png
+/test-artifacts/

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:v="urn:bpmn-xyflow:hover-test" id="HoverDefinitions" targetNamespace="urn:bpmn-xyflow:hover-test">
+  <bpmn:process id="HoverProcess">
+    <bpmn:extensionElements><v:record>Hover <!-- hover-owner-marker -->controls<?hover preserve?></v:record></bpmn:extensionElements>
+    <bpmn:task id="SourceA"><bpmn:outgoing>FlowA</bpmn:outgoing></bpmn:task>
+    <bpmn:task id="TargetA"><bpmn:incoming>FlowA</bpmn:incoming></bpmn:task>
+    <bpmn:task id="SourceB"><bpmn:outgoing>FlowB</bpmn:outgoing></bpmn:task>
+    <bpmn:task id="TargetB"><bpmn:incoming>FlowB</bpmn:incoming></bpmn:task>
+    <bpmn:task id="SpareSource"/>
+    <bpmn:task id="SpareTarget"/>
+    <bpmn:sequenceFlow id="FlowA" sourceRef="SourceA" targetRef="TargetA" v:sentinel="KEEP_FLOW_A"/>
+    <bpmn:sequenceFlow id="FlowB" sourceRef="SourceB" targetRef="TargetB"/>
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="HoverDiagram"><bpmndi:BPMNPlane id="HoverPlane" bpmnElement="HoverProcess">
+    <bpmndi:BPMNShape id="SourceA_di" bpmnElement="SourceA"><dc:Bounds x="180" y="200" width="100" height="80"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="TargetA_di" bpmnElement="TargetA"><dc:Bounds x="700" y="200" width="100" height="80"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="SourceB_di" bpmnElement="SourceB"><dc:Bounds x="180" y="520" width="100" height="80"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="TargetB_di" bpmnElement="TargetB"><dc:Bounds x="700" y="520" width="100" height="80"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="SpareSource_di" bpmnElement="SpareSource"><dc:Bounds x="180" y="40" width="100" height="80"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNShape id="SpareTarget_di" bpmnElement="SpareTarget"><dc:Bounds x="940" y="360" width="100" height="80"/></bpmndi:BPMNShape>
+    <bpmndi:BPMNEdge id="FlowA_di" bpmnElement="FlowA" v:sentinel="KEEP_DI_A"><di:waypoint x="280" y="240"/><di:waypoint x="430" y="240"/><di:waypoint x="430" y="380"/><di:waypoint x="620" y="380"/><di:waypoint x="620" y="240"/><di:waypoint x="700" y="240"/></bpmndi:BPMNEdge>
+    <bpmndi:BPMNEdge id="FlowB_di" bpmnElement="FlowB"><di:waypoint x="280" y="560"/><di:waypoint x="700" y="560"/></bpmndi:BPMNEdge>
+  </bpmndi:BPMNPlane></bpmndi:BPMNDiagram>
+</bpmn:definitions>

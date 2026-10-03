@@ -1,0 +1,419 @@
+{
+  "sourceCommit": "257d9bfc6faec11c3424528b3d7d3cf17cd7bf43",
+  "case": "MOTION-Start-local-selected-low",
+  "geometry": {
+    "shape": {
+      "id": "StartEvent_muros03r_1",
+      "type": "bpmn:StartEvent",
+      "x": -945,
+      "y": -533,
+      "width": 36,
+      "height": 36,
+      "hidden": false,
+      "label": false
+    },
+    "viewport": {
+      "x": 1363.259765625,
+      "y": 859.25,
+      "zoom": 0.49999999999999983
+    },
+    "container": {
+      "x": 0,
+      "y": 48,
+      "width": 1800,
+      "height": 1152
+    }
+  },
+  "initialInput": {
+    "x": 892,
+    "y": 647
+  },
+  "initialInputSource": "minimal reconstruction matching recorded pre-phase marker; earlier preparation inputs truncated",
+  "points": [
+    {
+      "sequence": 2,
+      "x": 891,
+      "y": 647,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 6,
+      "x": 891,
+      "y": 646,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 10,
+      "x": 892,
+      "y": 646,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 14,
+      "x": 892,
+      "y": 645,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 18,
+      "x": 893,
+      "y": 644,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 22,
+      "x": 893,
+      "y": 643,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 26,
+      "x": 894,
+      "y": 643,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 30,
+      "x": 895,
+      "y": 642,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 34,
+      "x": 896,
+      "y": 642,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 38,
+      "x": 896,
+      "y": 641,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 42,
+      "x": 897,
+      "y": 641,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 46,
+      "x": 898,
+      "y": 641,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 50,
+      "x": 899,
+      "y": 641,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 54,
+      "x": 900,
+      "y": 641,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 58,
+      "x": 901,
+      "y": 641,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 62,
+      "x": 902,
+      "y": 641,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 66,
+      "x": 903,
+      "y": 641,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 70,
+      "x": 903,
+      "y": 642,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 74,
+      "x": 904,
+      "y": 642,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 78,
+      "x": 905,
+      "y": 642,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 82,
+      "x": 905,
+      "y": 643,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 86,
+      "x": 906,
+      "y": 643,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 90,
+      "x": 906,
+      "y": 644,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 94,
+      "x": 907,
+      "y": 644,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 98,
+      "x": 907,
+      "y": 645,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 102,
+      "x": 908,
+      "y": 645,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 106,
+      "x": 908,
+      "y": 646,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 110,
+      "x": 908,
+      "y": 647,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 114,
+      "x": 908,
+      "y": 646,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 118,
+      "x": 908,
+      "y": 645,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 122,
+      "x": 907,
+      "y": 645,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 126,
+      "x": 907,
+      "y": 644,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 130,
+      "x": 906,
+      "y": 644,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 134,
+      "x": 906,
+      "y": 643,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 138,
+      "x": 905,
+      "y": 643,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 142,
+      "x": 905,
+      "y": 642,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 146,
+      "x": 904,
+      "y": 642,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 150,
+      "x": 903,
+      "y": 642,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 154,
+      "x": 903,
+      "y": 641,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 158,
+      "x": 902,
+      "y": 641,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 162,
+      "x": 901,
+      "y": 641,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 166,
+      "x": 900,
+      "y": 641,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 170,
+      "x": 899,
+      "y": 641,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 174,
+      "x": 898,
+      "y": 641,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 178,
+      "x": 897,
+      "y": 641,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 182,
+      "x": 896,
+      "y": 641,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 186,
+      "x": 896,
+      "y": 642,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 190,
+      "x": 895,
+      "y": 642,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 194,
+      "x": 894,
+      "y": 643,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 198,
+      "x": 893,
+      "y": 643,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 202,
+      "x": 893,
+      "y": 644,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 206,
+      "x": 892,
+      "y": 645,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 210,
+      "x": 892,
+      "y": 646,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 214,
+      "x": 891,
+      "y": 646,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    },
+    {
+      "sequence": 218,
+      "x": 891,
+      "y": 647,
+      "targetClass": "bpmn-xyflow-shape-hit",
+      "connectOwner": null
+    }
+  ]
+}
