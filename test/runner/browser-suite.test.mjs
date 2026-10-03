@@ -180,3 +180,12 @@ test('three stationary exit controls have a dedicated whole-case budget', () => 
   assert.equal(BROWSER_SUITE_TIMEOUTS['test:browser:boundary-stationary-exit'], 3 * 215000 + 90000);
   assert.ok(BROWSER_SUITE_TIMEOUTS['test:browser:boundary-stationary-exit'] < 20 * 60000);
 });
+
+
+test('motion shards cover all thirteen bounded native cases', () => {
+  for (const [shard,count] of [['a',7],['b',6]]) {
+    assert.equal(BROWSER_SUITES[`test:browser:preview-motion-${shard}`], `test/modeling/browser-anchor-preview-motion-${shard}.mjs`);
+    assert.equal(BROWSER_SUITE_TIMEOUTS[`test:browser:preview-motion-${shard}`], count*215000+90000);
+    assert.ok(BROWSER_SUITE_TIMEOUTS[`test:browser:preview-motion-${shard}`] < 35*60000);
+  }
+});

@@ -348,3 +348,38 @@ jobs:
           path: test-artifacts/
           if-no-files-found: ignore
           retention-days: 14
+
+  preview-motion:
+    name: Native preview motion ${{ matrix.shard }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [a, b]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Select installed sandbox-capable Chrome
+        run: |
+          CHROME_PATH="$(command -v google-chrome)"
+          test -x "$CHROME_PATH"
+          "$CHROME_PATH" --version
+          readlink -f "$CHROME_PATH"
+          echo "PUPPETEER_EXECUTABLE_PATH=$CHROME_PATH" >> "$GITHUB_ENV"
+      - name: Record native pointer and frame behavior
+        run: node test/run-browser-suite.mjs test:browser:preview-motion-${{ matrix.shard }}
+      - name: Upload preview motion evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bpmn-preview-motion-${{ matrix.shard }}
+          path: test-artifacts/
+          if-no-files-found: ignore
+          retention-days: 14
