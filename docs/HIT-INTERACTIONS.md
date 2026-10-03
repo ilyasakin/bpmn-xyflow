@@ -68,6 +68,37 @@ remain selectable while the grab stays fixed; actual edge hover removes the
 obsolete source tool and the subsequent click must select that edge. Both retain
 exact XML and history. These assertions await the hosted run of this correction.
 
+## Explicit actionable Gateway marker difference
+
+The requested direct-vertex controls add two precisely measured outcomes in
+`exclusiveGateway-crossing-0.2`: offsets−6 and+6 CSS pixels. On published
+`0b2b14c`, both exact-head native runs dispatched those stationary presses to
+Crossing's painted fixed marker. The pinned reference instead hit and selected
+Crossing's underlying shape. Locally the existing empty selection was preserved,
+with unchanged XML and zero history, as required for an inactive Connect press.
+
+The fixture Gateway has bounds405,215,50×50. Its top/bottom vertex is graph
+430,215 or430,265, nominal screen226,191 or226,201. The trusted presses at
+226,190 and226,202 are one CSS pixel from those vertices, inside the existing
+2 CSS-pixel filled marker. The half-stroke extends its painted radius to2.5 CSS
+pixels. The center still selects Flow in both engines; offsets−2/+2 select
+Crossing and−10/+10 remain background. Those ordinary paired outcomes stay exact.
+
+The earlier observer always measured the displaced5px grab, even when the native
+target was a fixed marker. Its `paintedAtPoint:false` therefore described the
+wrong control. The test-only observer correction samples the actually dispatched
+fixed circle, including its typed index, model vertex, native transform and
+fill/stroke membership. Both the press and restored marker must have the exact
+owned vertex,2px radius,1px stroke and `visiblePainted` input. Native client/local
+mapping, stationary trusted release, empty selection and unchanged history remain
+mandatory. The existing whole-case XML assertion remains unchanged.
+
+This is a requested interaction-policy difference, not an invisible-halo waiver.
+Only those two named probes may use it, and missing, hidden, oversized, wrong-owner
+or unpainted control evidence fails. All other probes retain paired equality or
+the earlier explicitly documented exceptions. The three-file correction has
+focused contract coverage; hosted rerun with the richer marker evidence is pending.
+
 ## Prepared native gate
 
 `pnpm test:browser:hits` contains 29 independent groups: twenty task/event/gateway/

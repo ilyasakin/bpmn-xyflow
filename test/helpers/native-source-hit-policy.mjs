@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 export function visibleSourceProbe(name, probe) {
   if (name === 'target-endpoint-interior-0.65' && !probe.ring && [-6, 6, -10, 10, -6.5, 6.5].includes(probe.offset)) return 'Target';
   if (name === 'target-endpoint-interior-1.4' && !probe.ring && [6, -10, 10, -14, 14].includes(probe.offset)) return 'Target';
+  if (name === 'exclusiveGateway-crossing-0.2' && !probe.ring && [-6, 6].includes(probe.offset)) return 'Crossing';
   if (name === 'booking-attached-boundary' && probe.ring === true && probe.offset === 0) return 'FlightTimeout';
   return null;
 }
@@ -27,8 +28,10 @@ export function installNativeSourceHitCapture() {
   };
   const control = (target, point) => {
     const handle = target?.closest?.('.bpmn-xyflow-connect-handle');
-    const port = handle?.querySelector('.bpmn-xyflow-connect-port');
-    const hit = handle?.querySelector('.bpmn-xyflow-connect-hit');
+    if (!handle) return null;
+    const fixed = target?.closest?.('.bpmn-xyflow-connect-fixed-anchor');
+    const port = fixed || handle?.querySelector('.bpmn-xyflow-connect-port');
+    const hit = fixed || handle?.querySelector('.bpmn-xyflow-connect-hit');
     if (!port || !hit) return null;
     const matrix = port.getScreenCTM(), style = getComputedStyle(port);
     const local = new DOMPoint(point.x, point.y).matrixTransform(matrix.inverse());
@@ -43,9 +46,13 @@ export function installNativeSourceHitCapture() {
     // detached canonical representation of the exact prescribed stroke.
     // tiny-svg writes numeric stroke widths as px lengths, not unitless values.
     const expectedStyle = document.createElementNS('http://www.w3.org/2000/svg', 'circle').style;
-    expectedStyle.strokeWidth = `${1.5 / engine.viewport().zoom}px`;
+    expectedStyle.strokeWidth = `${(fixed ? 1 : 1.5) / engine.viewport().zoom}px`;
+    const owner = handle.getAttribute('data-connect-source'), node = fixed && engine.node(owner);
     return {
-      owner: handle.getAttribute('data-connect-source'), zoom: engine.viewport().zoom,
+      owner, zoom: engine.viewport().zoom, kind: fixed ? 'fixed-marker' : 'grab',
+      ...(fixed ? { index: Number(fixed.getAttribute('data-anchor-index')), tag: fixed.tagName.toLowerCase(),
+        ownerShape: { id: node.id, type: node.type, x: node.x, y: node.y, width: node.width, height: node.height },
+        screenMatrix: Object.fromEntries(['a','b','c','d','e','f'].map(key => [key, matrix[key]])) } : {}),
       center: { x: Number(port.getAttribute('cx')), y: Number(port.getAttribute('cy')) },
       hitCenter: { x: Number(hit.getAttribute('cx')), y: Number(hit.getAttribute('cy')) },
       localPoint: { x: local.x, y: local.y },
@@ -88,6 +95,34 @@ function assertPaintedControl(control, owner) {
   assert.ok(control.inFill || control.inStroke, 'native SVG paint query must agree');
 }
 
+function assertPaintedFixedMarker(control, index, point) {
+  assert.ok(control, 'native marker press exposes its own paint rather than displaced-grab geometry');
+  assert.equal(control.kind, 'fixed-marker'); assert.equal(control.tag, 'circle');
+  assert.equal(control.owner, 'Crossing'); assert.equal(control.zoom, .2); assert.equal(control.index, index);
+  assert.deepEqual(control.ownerShape, { id: 'Crossing', type: 'bpmn:ExclusiveGateway', x: 405, y: 215, width: 50, height: 50 });
+  const center = { x: 430, y: index === 0 ? 215 : 265 };
+  assert.deepEqual(control.center, center); assert.deepEqual(control.hitCenter, center);
+  assert.equal(control.radius, 2 / control.zoom, 'fixed marker retains its two-CSS-pixel fill radius');
+  assert.equal(control.hitRadius, control.radius, 'the hit-tested element is the painted marker itself');
+  assert.equal(control.hitPointerEvents, 'visiblepainted');
+  assert.equal(control.strokeWidthCSS, control.expectedStrokeWidthCSS);
+  assert.equal(control.strokeWidth, 1 / control.zoom, 'fixed marker stroke is exactly one CSS pixel');
+  assert.equal(control.visible, true); assert.equal(control.paintedAtPoint, true);
+  assert.ok(control.inFill || control.inStroke, 'actual native SVG paint contains the delivered point');
+  assert.ok(control.fill && !['none','transparent'].includes(control.fill));
+  assert.ok(control.stroke && !['none','transparent'].includes(control.stroke));
+  const p = control.localPoint, matrix = control.screenMatrix;
+  assert.ok(p && Number.isFinite(p.x) && Number.isFinite(p.y));
+  for (const key of ['a','b','c','d','e','f']) assert.ok(Number.isFinite(matrix?.[key]));
+  assert.ok(matrix.a*matrix.d-matrix.b*matrix.c !== 0, 'native transform is invertible');
+  for (const [axis, terms] of [['x',[matrix.a*p.x,matrix.c*p.y,matrix.e]],['y',[matrix.b*p.x,matrix.d*p.y,matrix.f]]]) {
+    const projected = terms.reduce((a,b)=>a+b,0), roundoff = 32*Number.EPSILON*Math.max(1,...terms.map(Math.abs),Math.abs(point[axis]));
+    assert.ok(Math.abs(projected-point[axis]) <= roundoff, 'native local paint query belongs to the exact delivered client point');
+  }
+  assert.ok(Math.hypot(p.x-center.x,p.y-center.y) <= control.radius+control.strokeWidth/2,
+    'marker press lies inside its painted2.5CSS extent, never a widened approach region');
+}
+
 export function assertVisibleSourceProbe(name, upstream, local) {
   const owner = visibleSourceProbe(name, upstream);
   assert.ok(owner, 'only a named measured visible-tool probe can differ');
@@ -101,11 +136,16 @@ export function assertVisibleSourceProbe(name, upstream, local) {
   const down = downs[0], up = ups[0];
   assert.equal(down.trusted, true); assert.equal(up.trusted, true);
   assert.deepEqual(up.point, down.point, 'stationary native release uses the delivered press coordinates');
-  assert.equal(down.target.owner, owner); assert.equal(down.target.classes, 'bpmn-xyflow-connect-hit');
+  const fixed = name === 'exclusiveGateway-crossing-0.2';
+  if (fixed) assert.deepEqual(down.point, { x: 226, y: upstream.offset === -6 ? 190 : 202 }, 'exact measured fixed-marker native press');
+  assert.equal(down.target.owner, owner); assert.equal(down.target.classes, fixed ? 'bpmn-xyflow-connect-fixed-anchor' : 'bpmn-xyflow-connect-hit');
   assert.deepEqual(down.queried, down.target, 'actual dispatched press and elementFromPoint agree');
-  assertPaintedControl(down.control, owner);
+  const assertControl = control => fixed
+    ? assertPaintedFixedMarker(control, upstream.offset === -6 ? 0 : 2, down.point)
+    : assertPaintedControl(control, owner);
+  assertControl(down.control);
   // Pending Connect removes its control on press. Release can therefore target
   // the underlying shape; the same visible control must be restored afterward.
-  assertPaintedControl(local.restoredControl, owner);
+  assertControl(local.restoredControl);
   assert.deepEqual(local.restoredControl.center, down.control.center);
 }

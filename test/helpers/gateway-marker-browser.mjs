@@ -15,9 +15,11 @@ export function collectGatewayMarker({id,index}) {
  const screen=new DOMPoint(anchor.x,anchor.y).matrixTransform(matrix),press={x:Math.round(screen.x),y:Math.round(screen.y)},local=new DOMPoint(press.x,press.y).matrixTransform(matrix.inverse());
  const hit=document.elementFromPoint(press.x,press.y),style=getComputedStyle(marker),zoom=window.modeler.getViewport().zoom,expectedStyle=document.createElement('span').style;expectedStyle.strokeWidth=String(1/zoom)+'px';
  let visible=marker.isConnected;for(let n=marker;n;n=n.parentElement){const s=getComputedStyle(n);if(s.display==='none'||s.visibility==='hidden'||Number(s.opacity)<=0)visible=false;}
+ const toolbar=hit?.closest('.bpmn-xyflow-editor-actions'),box=toolbar?.getBoundingClientRect();
+ const obstruction=box?{kind:'editor-actions',receiver:{tag:hit.tagName,class:hit.getAttribute('class')},bounds:{left:box.left,top:box.top,right:box.right,bottom:box.bottom}}:null;
  const ink=color=>color&&color!=='none'&&color!=='transparent'&&!/rgba\([^)]*,\s*0\s*\)/.test(color)&&!/[/]\s*0%?\s*\)/.test(color);
  const painted=visible&&((ink(style.fill)&&Number(style.fillOpacity)>0)||(ink(style.stroke)&&Number(style.strokeOpacity)>0&&parseFloat(style.strokeWidth)>0));
- return {id,index,anchor,grab,press,zoom,painted,
+ return {id,index,anchor,grab,press,zoom,painted,obstruction,
   radius:Number(marker.getAttribute('r')),strokeWidth:marker.style.strokeWidth,computedStrokeWidth:style.strokeWidth,expectedStrokeWidth:expectedStyle.strokeWidth,
   pointerEvents:style.pointerEvents.toLowerCase(),paintContainsPress:marker.isPointInFill(local)||marker.isPointInStroke(local),
   actual:{marker:hit===marker,activePort:root.contains(hit)&&(hit===port||hit?.classList.contains('bpmn-xyflow-connect-hit')),owner:hit?.closest('.bpmn-xyflow-connect-handle')?.getAttribute('data-connect-source'),index:hit?.getAttribute('data-anchor-index')},
@@ -42,17 +44,41 @@ export function observeGatewayMarkerInput() {
  },true);
 }
 async function exactNoChange(h,page,before,label) {const after=await h.noChange(page,before,label);assert.deepEqual(after.selection,before.selection);assert.deepEqual(after.viewport,before.viewport);assert.deepEqual(after.nodes,before.nodes,'all live node and route geometry remains exact');assert.deepEqual(after.edges,before.edges,'all live edge references and routes remain exact');}
+/** Expose the same vertex through one visible pan when the measured toolbar owns it. */
+export async function exposeGatewayMarker(h,page,evidence) {
+ const obstacle=evidence.obstruction;
+ assert.equal(obstacle?.kind,'editor-actions');
+ const {left,top,right,bottom}=obstacle.bounds,point=evidence.press;
+ assert.ok([left,top,right,bottom,point.x,point.y].every(Number.isFinite));
+ assert.ok(right>left&&bottom>top&&point.x>=left&&point.x<=right&&point.y>=top&&point.y<=bottom,'the actual toolbar covers this exact marker point');
+ const before=await h.state(page),start=await h.blank(page),dy=Math.ceil(bottom+12-point.y);
+ assert.ok(dy>0,'pan below the measured toolbar, retaining the vertex and zoom');
+ await page.mouse.move(start.x,start.y);await page.mouse.down({button:'middle'});
+ try{await page.mouse.move(start.x,start.y+dy,{steps:6});}finally{await page.mouse.up({button:'middle'});}
+ await h.settle(page);
+ const after=await h.noChange(page,before,'toolbar exposure changes only the camera');
+ assert.deepEqual(after.selection,before.selection);assert.deepEqual(after.nodes,before.nodes);assert.deepEqual(after.edges,before.edges);assert.equal(after.viewport.zoom,before.viewport.zoom);assert.notDeepEqual(after.viewport,before.viewport);
+ return {obstruction:obstacle,press:point,pan:{from:start,to:{x:start.x,y:start.y+dy}},before:before.viewport,after:after.viewport};
+}
 async function marker(h,page,id,index,selected,low) {
- await h.blank(page,{click:true});if(selected)await h.selectNode(page,id);
- const before=await h.state(page),node=h.node(before,id),other=gatewayVertices(node)[(index+2)%4],center={x:node.x+node.width/2,y:node.y+node.height/2};
- // Advertise the source from its body, then go straight to the chosen visible
- // vertex. No movement to an outward grab is used anywhere in this path.
- const request=h.screen(before,{x:(other.x+center.x)/2,y:(other.y+center.y)/2});await page.mouse.move(Math.round(request.x),Math.round(request.y));await h.settle(page);
- let evidence=await page.evaluate(collectGatewayMarker,{id,index});assert.ok(evidence?.painted);
+ let before,node,evidence;const exposure=[];
+ for(let approach=0;approach<2;approach++){
+  await h.blank(page,{click:true});if(selected)await h.selectNode(page,id);
+  before=await h.state(page);node=h.node(before,id);const other=gatewayVertices(node)[(index+2)%4],center={x:node.x+node.width/2,y:node.y+node.height/2};
+  // Advertise from the body, then press the chosen literal visible vertex.
+  // A measured HTML toolbar obstruction is removed with native background pan;
+  // no movement to the outward grab, model mutation or unknown-overlay waiver.
+  const request=h.screen(before,{x:(other.x+center.x)/2,y:(other.y+center.y)/2});await page.mouse.move(Math.round(request.x),Math.round(request.y));await h.settle(page);
+  evidence=await page.evaluate(collectGatewayMarker,{id,index});assert.ok(evidence?.painted);
+  if(!evidence.obstruction)break;
+  assert.equal(approach,0,'one measured native pan exposes the same chosen vertex');
+  exposure.push(await exposeGatewayMarker(h,page,evidence));
+ }
+ assert.equal(evidence.obstruction,null,'the chosen vertex is outside the measured toolbar');
  await page.mouse.move(evidence.press.x,evidence.press.y);await h.settle(page);
  evidence=await page.evaluate(collectGatewayMarker,{id,index});assertDirectGatewayMarker(evidence,node,index,{displaced:low});
  assert.equal(evidence.delivered?.trusted,true);assert.equal(evidence.delivered.x,evidence.press.x);assert.equal(evidence.delivered.y,evidence.press.y);
- await exactNoChange(h,page,before,'direct marker acquisition keeps the complete model and selection');return evidence;
+ await exactNoChange(h,page,before,'direct marker acquisition keeps the complete model and selection');return {...evidence,exposure};
 }
 async function assertPress(page,evidence) {
  const press=await page.evaluate(()=>window.gatewayMarkerInput.findLast(e=>e.type==='mousedown'));
@@ -63,6 +89,7 @@ export async function directGatewayMarkerWorkflow(h,page,key,{source,target,inde
  await h.zoom(page,zoom);let s=await h.state(page);await revealNative(h,page,[...gatewayVertices(h.node(s,source)),{x:h.node(s,target).x,y:h.node(s,target).y}]);
  s=await h.state(page);assert.ok(Math.abs(Math.log(s.viewport.zoom/zoom))<.15,'requested zoom band remains visible');
  const low=zoom<.5;let control=await marker(h,page,source,index,selected,low),before=await h.state(page);
+ const exposure=control.exposure;if(exposure.length)await h.save(page,key+'-exposed',{control});
  const vector=[{x:0,y:-4},{x:4,y:0},{x:0,y:4},{x:-4,y:0}][index];
  await page.mouse.down();await assertPress(page,control);await exactNoChange(h,page,before,'marker press before activation');await page.mouse.move(control.press.x+vector.x,control.press.y+vector.y);await exactNoChange(h,page,before,'held four CSS pixel marker jitter');await page.mouse.up();await h.settle(page);
  assert.equal(await h.preview(page),null);await exactNoChange(h,page,before,'four CSS pixel marker jitter is a no-op');
@@ -79,7 +106,7 @@ export async function directGatewayMarkerWorkflow(h,page,key,{source,target,inde
  const after=await h.state(page),added=Object.values(after.edges).filter(e=>!before.edges[e.id]);assert.equal(added.length,1);const edge=added[0],release=after.input.findLast(e=>e.type==='mouseup');
  assert.equal(release?.trusted,true);assert.deepEqual({x:release.x,y:release.y},to);assert.equal(edge.source,source);assert.equal(edge.target,target);assert.equal(edge.type,'bpmn:SequenceFlow');assert.deepEqual(edge.points[0],control.anchor);
  h.near(edge.points.at(-1),h.projected(task,release.graphPoint),.05/after.viewport.zoom);const paint=await h.renderEnds(page,edge.id);h.near(paint.start,preview.screenStart,.05);h.near(paint.end,preview.screenEnd,.05);
- assert.deepEqual(h.node(after,source),h.node(before,source),'direct marker gesture never moves its source');await h.creationOnly(before,after,edge);await h.history(page,before,after);await h.save(page,key+'-commit',{control,edge,release});return{zoom:after.viewport.zoom,index,selected,edge:edge.id,markerReceiver:control.actual};
+ assert.deepEqual(h.node(after,source),h.node(before,source),'direct marker gesture never moves its source');await h.creationOnly(before,after,edge);await h.history(page,before,after);await h.save(page,key+'-commit',{control,edge,release});return{zoom:after.viewport.zoom,index,selected,edge:edge.id,markerReceiver:control.actual,exposure};
 }
 export async function gatewayContextEntry(h,page,key,id,mode,target) {
  await h.blank(page,{click:true});await h.selectNode(page,id);
